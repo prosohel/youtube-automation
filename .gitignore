@@ -1,0 +1,13 @@
+node_modules
+.env
+client_secret.json
+token.json
+output
+history.json
+footage/*.mp4
+music/
+assets/
+web/node_modules
+web/dist
+redis-data/
+.superpowers/

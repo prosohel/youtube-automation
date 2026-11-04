@@ -1,0 +1,34 @@
+{
+  "name": "yt-automation",
+  "version": "1.0.0",
+  "description": "AI pipeline: topic finding -> script -> voice -> video -> YouTube upload",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "auth": "node src/auth.js",
+    "topics": "node src/index.js --only=topics",
+    "dry": "node src/index.js --no-upload",
+    "render:test": "node src/dev-render.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.4.0",
+    "@remotion/animated-emoji": "4.0.540",
+    "@remotion/bundler": "4.0.540",
+    "@remotion/google-fonts": "4.0.540",
+    "@remotion/light-leaks": "4.0.540",
+    "@remotion/lottie": "4.0.540",
+    "@remotion/motion-blur": "4.0.540",
+    "@remotion/renderer": "4.0.540",
+    "@remotion/sfx": "4.0.540",
+    "@remotion/transitions": "4.0.540",
+    "dotenv": "^18.0.9",
+    "googleapis": "^189.0.0",
+    "lucide-react": "^1.68.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "remotion": "4.0.540"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

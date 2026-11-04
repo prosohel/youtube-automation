@@ -1,0 +1,116 @@
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { spawn } = require('child_process');
+const cfg = require('./config');
+const { parseJson } = require('./util');
+
+const SYSTEM =
+  'You are a professional YouTube content writer and strategist. You return the requested data only, ' +
+  'with no commentary, following every rule in the request exactly.';
+
+/**
+ * Ask the model for JSON matching `schema`.
+ *   LLM_PROVIDER=claude-code (default): runs the local `claude` CLI headless, billed to your Claude plan.
+ *   LLM_PROVIDER=api: Anthropic API with ANTHROPIC_API_KEY.
+ */
+async function askJson({ prompt, schema, name, description, maxTokens = 8000 }) {
+  return cfg.llmProvider === 'api'
+    ? viaApi({ prompt, schema, name, description, maxTokens })
+    : viaClaudeCode({ prompt, schema });
+}
+
+/* ---------- Claude Code headless (your Claude plan, no API key) ---------- */
+
+function viaClaudeCode({ prompt, schema }) {
+  // Run in an empty folder so it never reads this project's files or a CLAUDE.md.
+  const cwd = path.join(os.tmpdir(), 'yt-automation-claude');
+  fs.mkdirSync(cwd, { recursive: true });
+
+  // IMPORTANT: drop API credentials so the CLI uses your logged-in Claude plan instead of
+  // silently billing the API key that dotenv loaded from .env.
+  const env = { ...process.env };
+  for (const k of ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT']) delete env[k];
+
+  const args = [
+    '-p',
+    '--output-format', 'json',
+    '--model', cfg.model,
+    '--json-schema', JSON.stringify(schema), // CLI validates the answer against the schema
+    '--system-prompt', SYSTEM,
+    '--tools', '', // no file/shell/web tools: it only writes text
+    '--strict-mcp-config', // no MCP servers
+    '--setting-sources', '', // no user/project settings, hooks or plugins
+    '--disable-slash-commands',
+    '--no-session-persistence',
+  ];
+
+  return new Promise((resolve, reject) => {
+    const p = spawn(cfg.claudeBin, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
+    let out = '';
+    let err = '';
+    const timer = setTimeout(() => {
+      p.kill();
+      reject(new Error(`claude CLI timed out after ${cfg.claudeTimeoutSec}s`));
+    }, cfg.claudeTimeoutSec * 1000);
+
+    p.stdout.on('data', (d) => (out += d));
+    p.stderr.on('data', (d) => (err += d));
+    p.on('error', (e) => {
+      clearTimeout(timer);
+      reject(
+        new Error(
+          `Could not start "${cfg.claudeBin}": ${e.message}. Install Claude Code and log in by running "claude" once, ` +
+            'or set CLAUDE_BIN in .env to the full path of claude.exe.'
+        )
+      );
+    });
+    p.on('close', (code) => {
+      clearTimeout(timer);
+      let res;
+      try {
+        res = JSON.parse(out);
+      } catch {
+        return reject(new Error(`claude CLI exited with ${code}: ${(err || out).slice(-800)}`));
+      }
+      if (res.is_error || res.subtype !== 'success') {
+        const why = res.result || res.subtype || err.slice(-400);
+        return reject(
+          new Error(`claude CLI error: ${why}. If it says you are not logged in, run "claude" once and log in.`)
+        );
+      }
+      try {
+        resolve(res.structured_output || parseJson(res.result || ''));
+      } catch (e) {
+        reject(new Error(`claude CLI returned no usable JSON: ${e.message}`));
+      }
+    });
+
+    p.stdin.end(prompt, 'utf8');
+  });
+}
+
+/* ---------- Anthropic API ---------- */
+
+async function viaApi({ prompt, schema, name, description, maxTokens }) {
+  if (!cfg.anthropicKey) throw new Error('LLM_PROVIDER=api but ANTHROPIC_API_KEY is not set');
+  const Anthropic = require('@anthropic-ai/sdk');
+  const client = new Anthropic({ apiKey: cfg.anthropicKey });
+
+  // A tool call returns already-parsed JSON matching the schema. This model rejects forced
+  // tool_choice, so we ask for the call in the prompt and fall back to parsing text.
+  const msg = await client.messages.create({
+    model: cfg.model,
+    max_tokens: maxTokens,
+    system: SYSTEM,
+    tools: [{ name, description, input_schema: schema }],
+    messages: [
+      { role: 'user', content: `${prompt}\n\nDeliver the result by calling the ${name} tool. Do not reply with plain text.` },
+    ],
+  });
+  if (msg.stop_reason === 'max_tokens') throw new Error(`${name}: reply was cut off (max_tokens)`);
+  const block = msg.content.find((b) => b.type === 'tool_use');
+  return block ? block.input : parseJson(msg.content.map((b) => b.text || '').join(''));
+}
+
+module.exports = { askJson };
