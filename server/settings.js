@@ -48,7 +48,7 @@ const SETTINGS_SCHEMA = [
   { key: 'TIKTOK_ACCESS_TOKEN', group: 'tiktok', type: 'string', secret: true, default: '', label: 'TikTok access token' },
   { key: 'TIKTOK_REFRESH_TOKEN', group: 'tiktok', type: 'string', secret: true, default: '', label: 'TikTok refresh token' },
   { key: 'TIKTOK_PRIVACY', group: 'tiktok', type: 'enum', options: ['SELF_ONLY', 'MUTUAL_FOLLOW_FRIENDS', 'FOLLOWER_OF_CREATOR', 'PUBLIC_TO_EVERYONE'], default: 'SELF_ONLY', label: 'TikTok privacy' },
-  { key: 'META_GRAPH_VERSION', group: 'meta', type: 'string', default: 'v24.0', label: 'Meta Graph API version' },
+  { key: 'META_GRAPH_VERSION', group: 'meta', type: 'string', default: 'v27.0', label: 'Meta Graph API version' },
   { key: 'FACEBOOK_PAGE_ID', group: 'meta', type: 'string', default: '', label: 'Facebook Page ID' },
   { key: 'FACEBOOK_PAGE_TOKEN', group: 'meta', type: 'string', secret: true, default: '', label: 'Facebook Page access token' },
   { key: 'INSTAGRAM_USER_ID', group: 'meta', type: 'string', default: '', label: 'Instagram user ID' },
