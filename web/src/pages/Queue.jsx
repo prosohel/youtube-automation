@@ -68,9 +68,9 @@ function AddVideo({ categories, onAdded, setToast }) {
 }
 
 function Detail({ id, onChanged, setToast }) {
-  const { data: v, reload } = usePoll(id ? `/api/videos/${id}` : null, 3000);
+  const { data: v, error, reload } = usePoll(id ? `/api/videos/${id}` : null, 3000);
   if (!id) return <section className="card grow-1"><p className="empty">Select a video to see its script, log and file.</p></section>;
-  if (!v) return <section className="card grow-1"><p className="muted">Loading…</p></section>;
+  if (!v) return <section className="card grow-1"><p className="muted">{error ? `Could not load this video: ${error}` : 'Loading…'}</p></section>;
   const act = async (method, path, body, msg) => {
     try {
       await api.send(method, path, body);
@@ -163,8 +163,9 @@ export default function Queue() {
   const groups = useMemo(() => Object.fromEntries(TABS.map(([id, , fn]) => [id, (videos || []).filter(fn)])), [videos]);
   const list = groups[tab] || [];
   useEffect(() => {
-    if (list.length && !list.some((v) => v.id === selected)) setSelected(list[0].id);
-  }, [tab, list, selected]);
+    // The selected video left this tab (deleted, or moved on): show the first one, or nothing when the tab is empty.
+    if (videos && !list.some((v) => v.id === selected)) setSelected(list.length ? list[0].id : null);
+  }, [tab, list, selected, videos]);
 
   return (
     <div className="container">

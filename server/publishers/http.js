@@ -10,9 +10,16 @@ function redact(text, secrets = []) {
 }
 
 /**
+ * An error for a platform that is not set up. `config` tells the publish flow that this is not the video's
+ * fault, so it does not use up one of the video's publish attempts.
+ */
+const notConnected = (message) => Object.assign(new Error(message), { config: true });
+
+/**
  * fetch + JSON parse + uniform errors: "<Platform>: <API message> (HTTP n)".
  * TikTok reports errors as { error: { code != 'ok', message } }, Meta as { error: { message } }
- * or { debug_info: { message } } on its upload host.
+ * or { debug_info: { message } } on its upload host, OAuth endpoints as { error: 'code', error_description }.
+ * A rejected sign-in (HTTP 401, TikTok access_token_invalid, Meta code 190) sets `auth` on the error.
  */
 async function request(ctx, platform, url, opts = {}, secrets = []) {
   const res = await (ctx.fetch || globalThis.fetch)(url, opts);
@@ -23,16 +30,20 @@ async function request(ctx, platform, url, opts = {}, secrets = []) {
   } catch {
     body = null;
   }
+  const err = body && body.error;
   const apiError =
-    (body && body.error && body.error.code !== 'ok' && (body.error.message || body.error.code)) ||
+    (typeof err === 'string' && (body.error_description || err)) ||
+    (err && err.code !== 'ok' && (err.message || err.code)) ||
     (body && body.debug_info && body.debug_info.message);
   if (!res.ok || apiError) {
     const why = apiError || text.slice(0, 300) || 'no details';
-    throw new Error(redact(`${NAMES[platform]}: ${why} (HTTP ${res.status})`, secrets));
+    const e = new Error(redact(`${NAMES[platform]}: ${why} (HTTP ${res.status})`, secrets));
+    if (res.status === 401 || (err && (err.code === 190 || err.code === 'access_token_invalid'))) e.auth = true;
+    throw e;
   }
   return { status: res.status, body: body || {} };
 }
 
 const wait = (ctx, ms) => (ctx.sleep || sleep)(ms);
 
-module.exports = { request, redact, wait, NAMES };
+module.exports = { request, redact, wait, notConnected, NAMES };

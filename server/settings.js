@@ -182,6 +182,22 @@ function maskSettings(settings) {
   return out;
 }
 
+/** True when the settings hold what is needed to post to this platform. */
+function connected(s, platform) {
+  switch (platform) {
+    case 'youtube':
+      return Boolean(s.YOUTUBE_TOKEN && s.YOUTUBE_CLIENT_SECRET);
+    case 'tiktok': // an access token, or everything needed to get one
+      return Boolean(s.TIKTOK_ACCESS_TOKEN || (s.TIKTOK_REFRESH_TOKEN && s.TIKTOK_CLIENT_KEY && s.TIKTOK_CLIENT_SECRET));
+    case 'instagram':
+      return Boolean(s.INSTAGRAM_USER_ID && (s.INSTAGRAM_ACCESS_TOKEN || s.FACEBOOK_PAGE_TOKEN));
+    case 'facebook':
+      return Boolean(s.FACEBOOK_PAGE_ID && s.FACEBOOK_PAGE_TOKEN);
+    default:
+      return false;
+  }
+}
+
 /** Settings as src/config.js fields, ready for cfg.applySettings(). */
 function toConfig(settings, platform = process.platform) {
   const out = {};
@@ -202,5 +218,6 @@ module.exports = {
   loadSettings,
   saveSettings,
   maskSettings,
+  connected,
   toConfig,
 };

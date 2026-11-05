@@ -29,13 +29,7 @@ const slim = (v) => ({
   hasThumb: Boolean(v.files && v.files.thumb),
 });
 
-const connected = (s, p) =>
-  ({
-    youtube: Boolean(s.YOUTUBE_TOKEN && s.YOUTUBE_CLIENT_SECRET),
-    tiktok: Boolean(s.TIKTOK_ACCESS_TOKEN),
-    instagram: Boolean(s.INSTAGRAM_USER_ID && (s.INSTAGRAM_ACCESS_TOKEN || s.FACEBOOK_PAGE_TOKEN)),
-    facebook: Boolean(s.FACEBOOK_PAGE_ID && s.FACEBOOK_PAGE_TOKEN),
-  })[p];
+const { connected } = settings;
 
 async function computeOverview(redis, queues) {
   const [videos, rules, s, worker, paused] = await Promise.all([

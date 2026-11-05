@@ -1,7 +1,8 @@
 /**
  * Every publisher: publish(ctx) -> { remoteId, url, privacy, state: 'published'|'processing' },
- * findExisting(ctx) -> { remoteId, url } | null, test(ctx) -> { ok, detail }.
- * ctx = { video, settings, record, caption, privacy?, onRemoteId(id), log(line), fetch?, sleep?, youtube? }
+ * findExisting(ctx) -> { remoteId, url, state? } | null, test(ctx) -> { ok, detail }.
+ * ctx = { video, settings, record, caption, privacy?, onRemoteId(id), saveSettings?(patch), log(line), fetch?, sleep?, youtube? }
+ * saveSettings stores a renewed token (TikTok). Errors with `config` or `auth` set are setup problems, not the video's.
  */
 const PUBLISHERS = {
   youtube: require('./youtube'),

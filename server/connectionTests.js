@@ -48,7 +48,7 @@ async function testService(service, redis, { fetch = globalThis.fetch } = {}) {
       const cfg = require('../src/config');
       cfg.applySettings(settings.toConfig(s));
       const { getPublisher } = require('./publishers');
-      return getPublisher(service).test({ settings: s, fetch, log: () => {} });
+      return getPublisher(service).test({ settings: s, fetch, saveSettings: (patch) => settings.saveSettings(redis, patch), log: () => {} });
     }
     default:
       throw new Error(`Unknown service: ${service}`);

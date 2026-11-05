@@ -6,6 +6,23 @@ const MAX_PUBLISH_ATTEMPTS = 3;
 const DEFAULT_CAPTION = '{title}\n\n{hashtags}';
 
 /**
+ * True when an earlier run may already have reached the platform, so the platform is asked before any new
+ * upload. `check` carries this across re-queueing, which sets the status back to 'pending'.
+ */
+const mayBePosted = (rec) =>
+  Boolean(rec) && (Boolean(rec.check) || ['uploading', 'interrupted'].includes(rec.status) || (rec.status === 'failed' && Boolean(rec.remoteId)));
+
+/** The record of a video that is being queued for a platform (by a tick or by "Publish now"). */
+const pendingRecord = (rec, extra = {}) => ({ ...(rec || {}), ...extra, status: 'pending', error: null, check: mayBePosted(rec) });
+
+/**
+ * A missing or rejected sign-in is a setup problem, not the video's fault: it must not use up the video's
+ * publish attempts. Publishers mark these errors (config/auth); Google reports 401 or invalid_grant.
+ */
+const isConfigError = (e) =>
+  Boolean(e) && (Boolean(e.config || e.auth) || Number(e.status) === 401 || Number(e.code) === 401 || /invalid_grant/i.test(String(e.message || '')));
+
+/**
  * The video a publish tick should post: ready, meant for this platform, not posted there yet
  * (failed ones are tried again until MAX_PUBLISH_ATTEMPTS). pick: 'oldest' | 'newest'.
  */
@@ -14,7 +31,10 @@ function pickVideo(videos, platform, pick = 'oldest') {
     if (v.status !== 'ready') return false;
     if (v.targets && !v.targets.includes(platform)) return false;
     const rec = v.platforms && v.platforms[platform];
-    if (!rec || rec.status === 'interrupted') return true; // interrupted: checked with the platform before any upload
+    if (!rec) return true;
+    // interrupted: checked with the platform before any upload. A check that keeps failing stops being picked,
+    // so one stuck video cannot block the platform forever ("Publish now" still re-checks it).
+    if (rec.status === 'interrupted') return (rec.checks || 0) < MAX_PUBLISH_ATTEMPTS;
     return rec.status === 'failed' && (rec.attempts || 0) < MAX_PUBLISH_ATTEMPTS;
   });
   ok.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
@@ -50,6 +70,11 @@ async function processTick(job, { redis, queues, log = () => {} }) {
   }
 
   const p = rule.platform;
+  // Not connected: skip the slot. Queueing would only fail and use up the attempts of every ready video.
+  if (!settings.connected(await settings.loadSettings(redis), p)) {
+    log(`Rule ${rule.id}: ${p} is not connected, slot skipped`);
+    return 'not connected';
+  }
   const video = pickVideo(await store.listVideos(redis, { limit: 1000 }), p, rule.pick);
   if (!video) {
     log(`Nothing ready for ${p}`);
@@ -57,7 +82,7 @@ async function processTick(job, { redis, queues, log = () => {} }) {
   }
   await store.updateVideo(redis, video.id, (o) => ({
     ...o,
-    platforms: { ...o.platforms, [p]: { ...(o.platforms[p] || {}), status: 'pending', ruleId: rule.id, error: null } },
+    platforms: { ...o.platforms, [p]: pendingRecord(o.platforms[p], { ruleId: rule.id }) },
   }));
   await addUnique(queues.publish, 'publish', { videoId: video.id, platform: p, ruleId: rule.id }, `pub:${video.id}:${p}`, {
     attempts: 1, // retries happen on later ticks (pickVideo), never blindly inside one job
@@ -88,6 +113,13 @@ async function runPublish({ redis, videoId, platform, rule, getPublisher = requi
     return store.appendLog(redis, videoId, line);
   };
 
+  // The result is already saved: this is a job BullMQ runs again because the worker died before the job was
+  // marked done. Uploading now would post the video a second time.
+  if (['published', 'processing'].includes(rec.status)) {
+    await say(`${platform}: already ${rec.status}, not posting again`);
+    return rec;
+  }
+
   const pub = getPublisher(platform);
   const ctx = {
     video,
@@ -96,18 +128,19 @@ async function runPublish({ redis, videoId, platform, rule, getPublisher = requi
     caption: renderCaption(rule && rule.caption, video),
     privacy: rule && rule.privacy,
     onRemoteId: (id) => setRec({ remoteId: id }),
+    saveSettings: (patch) => settings.saveSettings(redis, patch),
     log: (l) => say(l),
   };
 
   // A run that may already have reached the platform: ask it first. Only a clear "not there" allows a new upload;
   // if the check itself fails (network, expired token, missing scope) nothing is uploaded.
-  if (['uploading', 'interrupted'].includes(rec.status) || (rec.status === 'failed' && rec.remoteId)) {
+  if (mayBePosted(rec)) {
     let found;
     try {
       found = await pub.findExisting(ctx);
     } catch (e) {
       const msg = `Could not check ${platform} before uploading again: ${String(e.message || e).slice(0, 400)}`;
-      await setRec({ status: 'interrupted', error: msg });
+      await setRec({ status: 'interrupted', check: true, checks: (rec.checks || 0) + 1, error: msg });
       await say(msg);
       throw e;
     }
@@ -119,11 +152,13 @@ async function runPublish({ redis, videoId, platform, rule, getPublisher = requi
         url: found.url || rec.url || null,
         publishedAt: new Date().toISOString(),
         error: null,
+        check: false,
+        checks: 0,
       });
     }
   }
 
-  await setRec({ status: 'uploading', error: null, startedAt: new Date().toISOString() });
+  await setRec({ status: 'uploading', check: false, checks: 0, error: null, startedAt: new Date().toISOString() });
   await say(`${platform}: uploading...`);
   try {
     const res = await pub.publish(ctx);
@@ -131,10 +166,55 @@ async function runPublish({ redis, videoId, platform, rule, getPublisher = requi
     return setRec({ status: res.state, remoteId: res.remoteId, url: res.url, privacy: res.privacy, publishedAt: new Date().toISOString(), error: null });
   } catch (e) {
     const msg = String(e.message || e).slice(0, 500);
-    await setRec({ status: 'failed', error: msg, attempts: (rec.attempts || 0) + 1 });
+    await setRec({ status: 'failed', error: msg, attempts: (rec.attempts || 0) + (isConfigError(e) ? 0 : 1) });
     await say(`${platform}: failed: ${msg}`);
     throw e;
   }
+}
+
+/**
+ * Posts a platform was still processing when their upload job ended (TikTok, Facebook): ask again.
+ * Posted -> 'published'. No longer there (rejected, failed) -> 'failed', so a later tick or "Publish now" can
+ * post it again. A check that itself fails (network, sign-in) leaves the record for the next round.
+ * Returns the number of records settled.
+ */
+async function recheckProcessing({ redis, getPublisher = require('./publishers').getPublisher, log = () => {} }) {
+  const s = await settings.loadSettings(redis);
+  let settled = 0;
+  for (const video of await store.listVideos(redis, { limit: 5000 })) {
+    for (const [platform, rec] of Object.entries(video.platforms || {})) {
+      if (rec.status !== 'processing') continue;
+      let found;
+      try {
+        found = await getPublisher(platform).findExisting({
+          video,
+          settings: s,
+          record: rec,
+          onRemoteId: async () => {},
+          saveSettings: (patch) => settings.saveSettings(redis, patch),
+          log,
+        });
+      } catch (e) {
+        log(`${video.id}: could not check ${platform} processing: ${String(e.message || e).slice(0, 200)}`);
+        continue;
+      }
+      if (found && found.state === 'processing') continue;
+      const patch = found
+        ? { status: 'published', remoteId: found.remoteId, url: found.url || rec.url || null, publishedAt: new Date().toISOString(), error: null }
+        : { status: 'failed', attempts: (rec.attempts || 0) + 1, error: `${platform}: the post did not finish processing (rejected or failed on the platform)` };
+      let changed = false;
+      await store.updateVideo(redis, video.id, (o) => {
+        const cur = o.platforms[platform];
+        if (!cur || cur.status !== 'processing' || cur.remoteId !== rec.remoteId) return o; // changed meanwhile
+        changed = true;
+        return { ...o, platforms: { ...o.platforms, [platform]: { ...cur, ...patch } } };
+      });
+      if (!changed) continue;
+      await store.appendLog(redis, video.id, found ? `${platform}: published${patch.url ? ` ${patch.url}` : ''}` : patch.error);
+      settled++;
+    }
+  }
+  return settled;
 }
 
 /**
@@ -175,4 +255,14 @@ async function recoverPublishRecords(redis, queues) {
   }
 }
 
-module.exports = { pickVideo, renderCaption, processTick, runPublish, markPublishJobFailed, recoverPublishRecords, MAX_PUBLISH_ATTEMPTS };
+module.exports = {
+  pickVideo,
+  pendingRecord,
+  renderCaption,
+  processTick,
+  runPublish,
+  recheckProcessing,
+  markPublishJobFailed,
+  recoverPublishRecords,
+  MAX_PUBLISH_ATTEMPTS,
+};

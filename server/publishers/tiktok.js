@@ -1,8 +1,9 @@
 const fs = require('fs');
-const { request, wait } = require('./http');
+const { request, wait, notConnected } = require('./http');
 
 // TikTok Content Posting API, Direct Post with FILE_UPLOAD (docs read 2026-11-05).
 const API = 'https://open.tiktokapis.com/v2/post/publish';
+const OAUTH = 'https://open.tiktokapis.com/v2/oauth/token/';
 const SINGLE_MAX = 60000000; // one PUT up to 60 MB (chunks may be 5-64 MB)
 const CHUNK = 10000000;
 const POLLS = 20;
@@ -10,10 +11,60 @@ const POLL_MS = 15000;
 
 const jsonHeaders = (token) => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json; charset=UTF-8' });
 
-function token(ctx) {
-  const t = ctx.settings.TIKTOK_ACCESS_TOKEN;
-  if (!t) throw new Error('TikTok: not connected (no access token in Integrations)');
-  return t;
+const canRenew = (s) => Boolean(s.TIKTOK_REFRESH_TOKEN && s.TIKTOK_CLIENT_KEY && s.TIKTOK_CLIENT_SECRET);
+
+/**
+ * A new access token from the refresh token (access tokens last 24 hours, refresh tokens a year).
+ * Saved through ctx.saveSettings, so the next job starts with it. TikTok may also hand out a new refresh token.
+ */
+async function renewToken(ctx) {
+  const s = ctx.settings;
+  let body;
+  try {
+    ({ body } = await request(
+      ctx,
+      'tiktok',
+      OAUTH,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Cache-Control': 'no-cache' },
+        body: new URLSearchParams({
+          client_key: s.TIKTOK_CLIENT_KEY,
+          client_secret: s.TIKTOK_CLIENT_SECRET,
+          grant_type: 'refresh_token',
+          refresh_token: s.TIKTOK_REFRESH_TOKEN,
+        }).toString(),
+      },
+      [s.TIKTOK_CLIENT_SECRET, s.TIKTOK_REFRESH_TOKEN]
+    ));
+  } catch (e) {
+    throw notConnected(`TikTok: could not renew the access token (${String(e.message || e).replace(/^TikTok: /, '')}). Connect TikTok again in Integrations.`);
+  }
+  if (!body.access_token) throw notConnected('TikTok: could not renew the access token (none returned). Connect TikTok again in Integrations.');
+  const patch = { TIKTOK_ACCESS_TOKEN: body.access_token };
+  if (body.refresh_token) patch.TIKTOK_REFRESH_TOKEN = body.refresh_token;
+  Object.assign(s, patch); // later calls with these settings use the new token
+  if (ctx.saveSettings) await ctx.saveSettings(patch);
+  ctx.log('TikTok: access token renewed');
+  return body.access_token;
+}
+
+/**
+ * Run fn(token) with the saved access token; if TikTok rejects it (expired), renew it and run fn once more.
+ * Only the first, read-only call of an operation goes through here, so no upload step is ever repeated.
+ */
+async function withToken(ctx, fn) {
+  const s = ctx.settings;
+  if (s.TIKTOK_ACCESS_TOKEN) {
+    try {
+      return await fn(s.TIKTOK_ACCESS_TOKEN);
+    } catch (e) {
+      if (!e.auth || !canRenew(s)) throw e;
+    }
+  } else if (!canRenew(s)) {
+    throw notConnected('TikTok: not connected (no access token in Integrations)');
+  }
+  return fn(await renewToken(ctx));
 }
 
 /** Chunk plan from the media transfer guide: the last chunk absorbs the remainder. */
@@ -39,9 +90,8 @@ async function postStatus(ctx, t, publishId) {
 }
 
 async function publish(ctx) {
-  const t = token(ctx);
+  const { t, info } = await withToken(ctx, async (tok) => ({ t: tok, info: await creatorInfo(ctx, tok) }));
   const privacy = ctx.settings.TIKTOK_PRIVACY;
-  const info = await creatorInfo(ctx, t);
   const allowed = info.privacy_level_options || [];
   if (!allowed.includes(privacy)) {
     throw new Error(`TikTok: privacy ${privacy} is not allowed for this account (allowed: ${allowed.join(', ') || 'none'})`);
@@ -107,7 +157,7 @@ async function publish(ctx) {
 async function findExisting(ctx) {
   const id = ctx.record && ctx.record.remoteId;
   if (!id) return null;
-  const d = await postStatus(ctx, token(ctx), id);
+  const d = await withToken(ctx, (t) => postStatus(ctx, t, id));
   if (d.status === 'PUBLISH_COMPLETE') return { remoteId: id, url: ctx.record.url || null, state: 'published' };
   if (d.status === 'PROCESSING_UPLOAD') {
     const size = fs.statSync(ctx.video.files.video).size;
@@ -117,7 +167,7 @@ async function findExisting(ctx) {
 }
 
 async function test(ctx) {
-  const info = await creatorInfo(ctx, token(ctx));
+  const info = await withToken(ctx, (t) => creatorInfo(ctx, t));
   return { ok: true, detail: `@${info.creator_username || '?'} can post as: ${(info.privacy_level_options || []).join(', ')}` };
 }
 

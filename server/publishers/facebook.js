@@ -1,5 +1,5 @@
 const fs = require('fs');
-const { request, wait } = require('./http');
+const { request, wait, notConnected } = require('./http');
 
 // Facebook Page Reels publishing (docs read 2026-11-05).
 const POLLS = 20;
@@ -7,7 +7,7 @@ const POLL_MS = 15000;
 
 function creds(ctx) {
   const s = ctx.settings;
-  if (!s.FACEBOOK_PAGE_ID || !s.FACEBOOK_PAGE_TOKEN) throw new Error('Facebook: not connected (needs Page ID and Page token in Integrations)');
+  if (!s.FACEBOOK_PAGE_ID || !s.FACEBOOK_PAGE_TOKEN) throw notConnected('Facebook: not connected (needs Page ID and Page token in Integrations)');
   return { page: s.FACEBOOK_PAGE_ID, token: s.FACEBOOK_PAGE_TOKEN, graph: `https://graph.facebook.com/${s.META_GRAPH_VERSION}` };
 }
 
@@ -74,6 +74,7 @@ async function findExisting(ctx) {
   if (['error', 'expired', 'upload_failed'].includes(st.video_status)) return null;
   const ph = st.publishing_phase || {};
   if (['published', 'scheduled'].includes(ph.publish_status)) return { remoteId: id, url: reelUrl(id), state: 'published' };
+  if (ph.status === 'error') return null; // publishing failed: the reel will never appear
   if (ph.status && ph.status !== 'not_started') return { remoteId: id, url: reelUrl(id), state: 'processing' };
   return null;
 }

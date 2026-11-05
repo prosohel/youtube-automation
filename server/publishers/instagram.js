@@ -1,5 +1,5 @@
 const fs = require('fs');
-const { request, wait } = require('./http');
+const { request, wait, notConnected } = require('./http');
 
 // Instagram API with Facebook Login: Reels with resumable upload (docs read 2026-11-05).
 const POLLS = 15;
@@ -8,7 +8,7 @@ const POLL_MS = 20000;
 function creds(ctx) {
   const s = ctx.settings;
   const token = s.INSTAGRAM_ACCESS_TOKEN || s.FACEBOOK_PAGE_TOKEN;
-  if (!s.INSTAGRAM_USER_ID || !token) throw new Error('Instagram: not connected (needs Instagram user ID and a token in Integrations)');
+  if (!s.INSTAGRAM_USER_ID || !token) throw notConnected('Instagram: not connected (needs Instagram user ID and a token in Integrations)');
   return { user: s.INSTAGRAM_USER_ID, token, graph: `https://graph.facebook.com/${s.META_GRAPH_VERSION}` };
 }
 

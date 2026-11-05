@@ -6,7 +6,7 @@ const store = require('./store');
 const settings = require('./settings');
 const { runVideoJob } = require('./pipeline');
 const { QUEUE, createQueues, enqueueVideo } = require('./queues');
-const { processTick, runPublish, markPublishJobFailed, recoverPublishRecords } = require('./publishFlow');
+const { processTick, runPublish, recheckProcessing, markPublishJobFailed, recoverPublishRecords } = require('./publishFlow');
 const { syncSchedulers } = require('./scheduler');
 const { syncYoutube } = require('./youtubeSync');
 
@@ -57,6 +57,10 @@ const defaultProcessors = () => ({
     return rec.status;
   },
   [QUEUE.maintenance]: async (job, ctx) => {
+    if (job.name === 'publish-recheck') {
+      await loadConfig(ctx.redis);
+      return `settled ${await recheckProcessing({ redis: ctx.redis, log: ctx.log })}`;
+    }
     if (job.name !== 'youtube-sync') return 'unknown';
     const s = await loadConfig(ctx.redis);
     if (!s.YOUTUBE_TOKEN || !s.YOUTUBE_CLIENT_SECRET) return 'youtube not connected';
@@ -66,6 +70,7 @@ const defaultProcessors = () => ({
 });
 
 const YOUTUBE_SYNC_EVERY_MS = 3 * 60 * 60 * 1000;
+const PUBLISH_RECHECK_EVERY_MS = 10 * 60 * 1000; // posts a platform was still processing when the upload job ended
 
 /**
  * Start the background worker.
@@ -127,6 +132,7 @@ function startWorker({ redis, deps, outDir, workerOpts = {}, processors = {}, on
     await syncSchedulers(queues, await store.listRules(redis));
     await recoverPublishRecords(redis, queues);
     await queues.maintenance.upsertJobScheduler('youtube-sync', { every: YOUTUBE_SYNC_EVERY_MS }, { name: 'youtube-sync' });
+    await queues.maintenance.upsertJobScheduler('publish-recheck', { every: PUBLISH_RECHECK_EVERY_MS }, { name: 'publish-recheck' });
     for (const v of await store.listVideos(redis, { limit: 1000 })) {
       if ((v.status === 'queued' || v.status === 'working') && !(await queues.videos.getJob(v.id))) {
         log(`Re-queueing ${v.id} (no job found)`);

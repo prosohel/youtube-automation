@@ -167,4 +167,71 @@ test('F4: facebook treats a reel whose finish was sent as existing', async () =>
   assert.equal((await find({ video_status: 'ready', publishing_phase: { status: 'complete', publish_status: 'published' } })).state, 'published');
   assert.equal(await find({ video_status: 'upload_complete', publishing_phase: { status: 'not_started' } }), null);
   assert.equal(await find({ video_status: 'error', publishing_phase: { status: 'in_progress' } }), null);
+  assert.equal(await find({ video_status: 'ready', publishing_phase: { status: 'error' } }), null, 'publishing failed: it will never appear');
+});
+
+/* ---------- code review fixes ---------- */
+
+test('R2: tiktok renews an expired access token with the refresh token, saves it and carries on', async () => {
+  const fetch = fakeFetch([
+    ['creator_info/query', 401, { error: { code: 'access_token_invalid', message: 'The access token is invalid or not found in the request.' } }],
+    ['oauth/token', 200, { access_token: 'tok_NEW', refresh_token: 'ref_NEW', expires_in: 86400, token_type: 'Bearer' }],
+    ['creator_info/query', 200, { data: { privacy_level_options: ['SELF_ONLY'], creator_username: 'banglatech' }, error: { code: 'ok' } }],
+  ]);
+  const saved = [];
+  const c = ctx(
+    { TIKTOK_ACCESS_TOKEN: TOKEN, TIKTOK_REFRESH_TOKEN: 'ref_OLD', TIKTOK_CLIENT_KEY: 'key_1', TIKTOK_CLIENT_SECRET: 'sec_1' },
+    fetch,
+    { saveSettings: async (patch) => saved.push(patch) }
+  );
+  const res = await getPublisher('tiktok').test(c);
+  assert.equal(res.ok, true);
+  const [first, renew, second] = fetch.calls;
+  assert.equal(first.headers.Authorization, `Bearer ${TOKEN}`);
+  assert.match(renew.url, /^https:\/\/open\.tiktokapis\.com\/v2\/oauth\/token\/$/);
+  assert.equal(renew.headers['Content-Type'], 'application/x-www-form-urlencoded');
+  assert.deepEqual(Object.fromEntries(new URLSearchParams(renew.body)), {
+    client_key: 'key_1',
+    client_secret: 'sec_1',
+    grant_type: 'refresh_token',
+    refresh_token: 'ref_OLD',
+  });
+  assert.equal(second.headers.Authorization, 'Bearer tok_NEW');
+  assert.deepEqual(saved, [{ TIKTOK_ACCESS_TOKEN: 'tok_NEW', TIKTOK_REFRESH_TOKEN: 'ref_NEW' }]);
+  assert.equal(c.settings.TIKTOK_ACCESS_TOKEN, 'tok_NEW');
+});
+
+test('R2: tiktok with only a refresh token gets an access token first; a failed renewal is a setup error', async () => {
+  const creds = { TIKTOK_REFRESH_TOKEN: 'ref_OLD', TIKTOK_CLIENT_KEY: 'key_1', TIKTOK_CLIENT_SECRET: 'sec_SECRET' };
+  const ok = fakeFetch([
+    ['oauth/token', 200, { access_token: 'tok_NEW' }],
+    ['status/fetch', 200, { data: { status: 'PUBLISH_COMPLETE' }, error: { code: 'ok' } }],
+  ]);
+  const found = await getPublisher('tiktok').findExisting(ctx(creds, ok, { record: { remoteId: 'pub_9' } }));
+  assert.equal(found.state, 'published');
+  assert.equal(ok.calls[1].headers.Authorization, 'Bearer tok_NEW');
+
+  const bad = fakeFetch([['oauth/token', 400, { error: 'invalid_grant', error_description: 'Refresh token sec_SECRET is expired.' }]]);
+  const err = await getPublisher('tiktok')
+    .test(ctx(creds, bad))
+    .catch((e) => e);
+  assert.match(err.message, /could not renew the access token/);
+  assert.match(err.message, /expired/);
+  assert.equal(err.config, true, 'does not count as a publish attempt');
+  assert.ok(!err.message.includes('sec_SECRET'));
+
+  const none = await getPublisher('tiktok')
+    .test(ctx({}, fakeFetch([])))
+    .catch((e) => e);
+  assert.match(none.message, /not connected/);
+  assert.equal(none.config, true);
+});
+
+test('R2: without refresh details a rejected tiktok token is reported as a sign-in error, not retried', async () => {
+  const fetch = fakeFetch([['creator_info/query', 401, { error: { code: 'access_token_invalid', message: 'The access token is invalid.' } }]]);
+  const err = await getPublisher('tiktok')
+    .test(ctx({ TIKTOK_ACCESS_TOKEN: TOKEN }, fetch))
+    .catch((e) => e);
+  assert.equal(err.auth, true);
+  assert.equal(fetch.calls.length, 1);
 });

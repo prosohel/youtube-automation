@@ -69,14 +69,19 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
       const scenes = v.script.scenes;
       for (let i = 0; i < scenes.length; i++) {
         const file = sceneFile(workDir, i);
-        let duration = fs.existsSync(file) ? await deps.audioDuration(file) : 0;
-        if (duration > 0) {
+        // A scene is finished only when its record was saved, which happens after the whole file was written
+        // and measured. A file without that record is a leftover from an interrupted run: it can be cut off
+        // or unreadable, so it is deleted and made again.
+        const saved = (v.scenes || [])[i];
+        if (saved && saved.audioFile === file && saved.duration > 0 && fs.existsSync(file)) {
           await say(`Voice ${i + 1}/${scenes.length}: already done`);
-        } else {
-          await deps.synthScene(provider, scenes[i].narration, file, workDir, i);
-          duration = await deps.audioDuration(file);
-          await say(`Voice ${i + 1}/${scenes.length}: ${duration.toFixed(1)}s (${provider.name})`);
+          continue;
         }
+        fs.rmSync(file, { force: true });
+        await deps.synthScene(provider, scenes[i].narration, file, workDir, i);
+        const duration = await deps.audioDuration(file);
+        if (!(duration > 0)) throw new Error(`Voice ${i + 1}/${scenes.length}: the audio file is empty or unreadable`);
+        await say(`Voice ${i + 1}/${scenes.length}: ${duration.toFixed(1)}s (${provider.name})`);
         v = await save((o) => {
           const list = [...(o.scenes || [])];
           list[i] = { ...scenes[i], audioFile: file, duration };

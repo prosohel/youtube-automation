@@ -25,6 +25,7 @@ services:
     environment:
       <<: *env
       PORT: 7000
+      HOST: 0.0.0.0 # inside the container only; the port mapping above keeps the dashboard on this PC
       IMPORT_DIR: /app/import
     volumes:
       - ./output:/app/output

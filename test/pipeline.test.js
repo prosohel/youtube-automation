@@ -54,14 +54,70 @@ test('resuming voices only the missing scenes', async () => {
     title: script.title,
     theme: { id: 'neon', seed: 7 },
     slug: `2026-11-05-${v.id}`,
+    voiceProvider: 'eleven',
   });
   const work = path.join(outDir, 'work', v.id);
   fs.mkdirSync(work, { recursive: true });
-  for (const n of ['00', '01', '02']) fs.writeFileSync(path.join(work, `scene-${n}.mp3`), 'old audio');
+  const files = ['00', '01', '02'].map((n) => path.join(work, `scene-${n}.mp3`));
+  for (const f of files) fs.writeFileSync(f, 'old audio');
+  // Finished scenes have a saved record (written after the file was complete), not just a file.
+  await store.updateVideo(r, v.id, { scenes: files.map((f, i) => ({ ...script.scenes[i], audioFile: f, duration: 2.5 })) });
   const done = await runVideoJob(v.id, { redis: r, deps, outDir });
   assert.deepEqual(calls.filter((c) => c.startsWith('voice:')), ['voice:eleven:scene-03.mp3', 'voice:eleven:scene-04.mp3']);
   assert.equal(done.scenes.length, 5);
   assert.equal(done.status, 'ready');
+  for (const f of files) assert.equal(fs.readFileSync(f, 'utf8'), 'old audio');
+});
+
+test('R4: a voice file left half-written by an interrupted run is made again, not reused', async () => {
+  const r = await freshRedis();
+  const outDir = tmpOut();
+  const calls = [];
+  const deps = fakeDeps(calls, { outDir });
+  // The real ffprobe throws on an empty file; a leftover must be deleted without ever being measured.
+  const measure = deps.audioDuration;
+  deps.audioDuration = async (file) => {
+    if (fs.readFileSync(file, 'utf8') !== 'audio by eleven') throw new Error('ffprobe: invalid data');
+    return measure(file);
+  };
+  const v = await store.createVideo(r, {});
+  const script = await deps.writeScript();
+  calls.length = 0;
+  const work = path.join(outDir, 'work', v.id);
+  fs.mkdirSync(work, { recursive: true });
+  const first = path.join(work, 'scene-00.mp3');
+  fs.writeFileSync(first, 'audio by eleven');
+  fs.writeFileSync(path.join(work, 'scene-01.mp3'), 'cut off'); // the PC shut down while this one was being written
+  fs.writeFileSync(path.join(work, 'scene-02.mp3'), ''); // 0 bytes
+  await store.updateVideo(r, v.id, {
+    done: { topic: true, script: true },
+    topicInfo: { topic: 't' },
+    script,
+    title: script.title,
+    theme: { id: 'neon', seed: 7 },
+    slug: `x-${v.id}`,
+    voiceProvider: 'eleven',
+    scenes: [{ ...script.scenes[0], audioFile: first, duration: 2.5 }],
+  });
+  const done = await runVideoJob(v.id, { redis: r, deps, outDir });
+  assert.deepEqual(
+    calls.filter((c) => c.startsWith('voice:')),
+    ['01', '02', '03', '04'].map((n) => `voice:eleven:scene-${n}.mp3`)
+  );
+  assert.equal(done.voiceProvider, 'eleven', 'no fallback to the free voice');
+  for (let i = 0; i < 5; i++) assert.equal(fs.readFileSync(path.join(work, `scene-0${i}.mp3`), 'utf8'), 'audio by eleven');
+  assert.equal(done.status, 'ready');
+});
+
+test('R4: a voice file that cannot be measured fails the scene instead of shipping silence', async () => {
+  const r = await freshRedis();
+  const outDir = tmpOut();
+  const deps = fakeDeps([], { outDir });
+  deps.pickProvider = () => deps.edgeProvider();
+  deps.audioDuration = async () => NaN;
+  const v = await store.createVideo(r, {});
+  await assert.rejects(runVideoJob(v.id, { redis: r, deps, outDir }), /empty or unreadable/);
+  assert.ok(!(await store.getVideo(r, v.id)).done.voice);
 });
 
 test('a failed render is rerun from scratch after its partial file is deleted', async () => {

@@ -102,6 +102,19 @@ test('videos: create queues a job; retry and delete work', async (t) => {
   assert.equal(await queues.videos.getJob(id), undefined);
 });
 
+test('R1: "Publish now" on an interrupted post queues it with the ask-the-platform-first mark', async (t) => {
+  const { call, queues, redis } = await boot(t);
+  const v = await store.createVideo(redis, {});
+  await store.updateVideo(redis, v.id, { status: 'ready', platforms: { tiktok: { status: 'interrupted', remoteId: 'p1' }, facebook: { status: 'processing' } } });
+  const res = await call('POST', `/api/videos/${v.id}/publish`, { platform: 'tiktok' });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.platforms.tiktok.status, 'pending');
+  assert.equal(res.json.platforms.tiktok.check, true);
+  assert.equal(res.json.platforms.tiktok.remoteId, 'p1');
+  assert.ok(await queues.publish.getJob(`pub:${v.id}:tiktok`));
+  assert.equal((await call('POST', `/api/videos/${v.id}/publish`, { platform: 'facebook' })).status, 409);
+});
+
 test('health reports the worker alive only while its heartbeat is fresh', async (t) => {
   const { call, redis } = await boot(t);
   let h = await call('GET', '/api/health');

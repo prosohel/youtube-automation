@@ -7,6 +7,7 @@ const settings = require('./settings');
 const { enqueueVideo, addUnique } = require('./queues');
 const { validateRule, nextRuns, syncSchedulers } = require('./scheduler');
 const { computeOverview, workerState, slim } = require('./overview');
+const { pendingRecord } = require('./publishFlow');
 const youtubeAuth = require('./youtubeAuth');
 
 const WEB_DIST = path.join(cfg.ROOT, 'web', 'dist');
@@ -102,7 +103,7 @@ function createApp({ redis, queues }) {
     if (v.status !== 'ready') throw new HttpError(409, 'The video is not ready yet');
     const rec = v.platforms[platform];
     if (rec && ['pending', 'uploading', 'published', 'processing'].includes(rec.status)) throw new HttpError(409, `Already ${rec.status} on ${platform}`);
-    await store.updateVideo(redis, v.id, (o) => ({ ...o, platforms: { ...o.platforms, [platform]: { ...(o.platforms[platform] || {}), status: 'pending', error: null } } }));
+    await store.updateVideo(redis, v.id, (o) => ({ ...o, platforms: { ...o.platforms, [platform]: pendingRecord(o.platforms[platform]) } }));
     await addUnique(queues.publish, 'publish', { videoId: v.id, platform }, `pub:${v.id}:${platform}`, { attempts: 1 });
     res.json(await store.getVideo(redis, v.id));
   });
@@ -259,7 +260,10 @@ if (require.main === module) {
     .then((first) => {
       if (first) console.log('Imported settings from .env');
       const port = Number(process.env.PORT || 7000);
-      createApp({ redis, queues }).listen(port, '0.0.0.0', () => console.log(`Dashboard on ${PUBLIC_URL} (port ${port})`));
+      // The API has no login, so by default only this PC can reach it. In Docker the container must listen on
+      // every interface (HOST=0.0.0.0 in docker-compose.yml); the port mapping there keeps it on 127.0.0.1.
+      const host = process.env.HOST || '127.0.0.1';
+      createApp({ redis, queues }).listen(port, host, () => console.log(`Dashboard on ${PUBLIC_URL} (${host}:${port})`));
     })
     .catch((e) => {
       console.error('Could not start:', e.message);

@@ -69,7 +69,8 @@ function Field({ spec, value, draft, setDraft }) {
     return (
       <label className="field" style={{ gridColumn: '1 / -1' }}>
         {spec.label}
-        <textarea lang="bn" value={text} onChange={(e) => set(e.target.value.split('\n').map((x) => x.trim()).filter(Boolean))} />
+        {/* The draft keeps the text exactly as typed (new lines, spaces); it becomes a list only on Save. */}
+        <textarea lang="bn" value={text} onChange={(e) => set(e.target.value)} />
         <span className="hint">One per line.</span>
       </label>
     );
@@ -93,7 +94,8 @@ function GroupCard({ group, schema, values, onSaved, setToast }) {
     for (const [k, val] of Object.entries(draft)) {
       const spec = specs.find((s) => s.key === k);
       if (isSecret(spec) && val === '') continue; // blank secret = unchanged
-      patch[k] = val;
+      const isList = spec.type === 'json' && !isSecret(spec) && typeof val === 'string'; // typed one per line
+      patch[k] = isList ? val.split('\n').map((x) => x.trim()).filter(Boolean) : val;
     }
     try {
       await api.send('PUT', '/api/settings', patch);

@@ -1,4 +1,4 @@
-/** JSON calls to the Express API. Non-2xx responses throw Error(body.error). */
+/** JSON calls to the Express API. Non-2xx responses throw Error(body.error) with the HTTP code in `status`. */
 async function request(method, path, body) {
   const res = await fetch(path, {
     method,
@@ -7,7 +7,7 @@ async function request(method, path, body) {
   });
   if (res.status === 204) return null;
   const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error((data && data.error) || `Request failed (${res.status})`);
+  if (!res.ok) throw Object.assign(new Error((data && data.error) || `Request failed (${res.status})`), { status: res.status });
   return data;
 }
 
