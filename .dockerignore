@@ -1,0 +1,17 @@
+.git
+.superpowers
+node_modules
+web/node_modules
+web/dist
+output
+footage
+music
+assets
+docs
+test
+.env
+.env.*
+token.json
+client_secret.json
+history.json
+*.log

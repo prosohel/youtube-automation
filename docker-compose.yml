@@ -1,0 +1,54 @@
+# docker compose up -d --build     -> dashboard on http://localhost:3000 (this PC only)
+# Every service restarts by itself, so everything comes back when Docker Desktop starts with Windows.
+name: automation-studio
+
+x-env: &env
+  REDIS_URL: redis://redis:6379
+  PUBLIC_URL: http://localhost:3000
+  TZ: Asia/Dhaka
+
+services:
+  redis:
+    image: redis:7-alpine
+    # Append-only file: the queue, settings and history survive shutdowns.
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  web:
+    build: .
+    image: automation-studio:latest
+    command: ["node", "server/api.js"]
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment: *env
+    volumes:
+      - ./output:/app/output
+      - ./footage:/app/footage
+      # Read once on first start to fill the dashboard's settings.
+      - ./.env:/app/.env:ro
+      - ./client_secret.json:/app/client_secret.json:ro
+      - ./token.json:/app/token.json:ro
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  worker:
+    image: automation-studio:latest
+    command: ["node", "server/worker.js"]
+    environment: *env
+    volumes:
+      - ./output:/app/output
+      - ./footage:/app/footage
+      - ./music:/app/music
+      - ./assets:/app/assets
+    shm_size: "1gb" # headless Chrome (Remotion) needs more than Docker's 64 MB default
+    init: true # reaps Chrome/ffmpeg child processes
+    depends_on:
+      - redis
+      - web
+    restart: unless-stopped
+
+volumes:
+  redis-data:
