@@ -47,15 +47,16 @@ async function fetchTrendHints() {
 
 /**
  * Ask Claude for fresh video topics in the niche, avoiding anything already made.
+ * category (optional): keeps every candidate inside one of the channel's topic categories.
  * Returns the single best topic: { topic, angle, hook, searchQuery, whyItWorks }
  */
-async function findTopic() {
+async function findTopic(category) {
   const done = loadHistory().map((h) => h.topic);
   const trends = await fetchTrendHints();
 
   const prompt = `You are a YouTube strategist for a channel in this niche: "${cfg.niche}".
 Audience language: ${cfg.language}. Format: ${cfg.format === 'shorts' ? 'YouTube Shorts (under 60s)' : `~${cfg.targetMinutes} minute video`}.
-
+${category ? `Every topic must belong to this category: "${category}".\n` : ''}
 Propose 8 distinct video topics that people are likely searching for right now.
 Prefer evergreen search demand with a fresh angle over pure news chasing.
 ${trends.length ? `Today's broad trending searches (use only if relevant to the niche): ${trends.join('; ')}` : ''}

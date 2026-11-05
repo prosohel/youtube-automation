@@ -5,7 +5,7 @@ const { ensureDir, slugify, log } = require('./util');
 const { findTopic, saveHistory } = require('./topics');
 const { writeScript } = require('./script');
 const { makeVoice } = require('./voice');
-const { makeVideo } = require('./video');
+const { renderAny } = require('./renderAny');
 const { resolveStyle } = require('./style');
 
 const args = Object.fromEntries(
@@ -50,17 +50,7 @@ async function main() {
 
   // 4. Video
   log('Rendering video...');
-  let rendered = null;
-  if (cfg.useRemotion) {
-    try {
-      const { renderWithRemotion } = require('./render');
-      rendered = await renderWithRemotion({ scenes, workDir, slug, title: script.title, theme });
-    } catch (e) {
-      log(`Remotion render failed: ${e.message}`);
-      log('Falling back to the plain ffmpeg renderer...');
-    }
-  }
-  const { videoFile, thumbFile, credits = [] } = rendered || (await makeVideo(scenes, workDir, slug));
+  const { videoFile, thumbFile, credits = [] } = await renderAny({ scenes, workDir, slug, title: script.title, theme });
   // Licence attributions (e.g. CC BY emoji) go at the end of the YouTube description.
   if (credits.length) script.description = `${script.description}\n\n${credits.join('\n')}`;
   log(`Video ready: ${videoFile}`);

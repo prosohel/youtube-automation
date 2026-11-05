@@ -76,8 +76,14 @@ function pickProvider() {
     if (!cfg.elevenKey || !cfg.elevenVoiceId) throw new Error('TTS_PROVIDER=elevenlabs needs ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID');
     return { name: `ElevenLabs ${cfg.elevenModel}`, fn: elevenTts };
   }
-  return { name: `Edge ${cfg.voice}`, fn: edgeTts };
+  return edgeProvider();
 }
+
+/** The free fallback voice. `edge: true` lets callers tell it apart (never mix two voices in one video). */
+const edgeProvider = () => ({ name: `Edge ${cfg.voice}`, fn: edgeTts, edge: true });
+
+/** One scene's narration to one MP3 with the given provider. */
+const synthScene = (provider, text, file, workDir, i) => provider.fn(text, file, workDir, i);
 
 async function synthAll(provider, scenes, workDir) {
   const out = [];
@@ -103,11 +109,11 @@ async function makeVoice(scenes, workDir) {
   try {
     return await synthAll(provider, scenes, workDir);
   } catch (e) {
-    if (provider.fn === edgeTts) throw e;
+    if (provider.edge) throw e;
     log(`${provider.name} failed: ${e.message}`);
     log('Falling back to the free Edge voice for the whole video...');
-    return synthAll({ name: 'Edge', fn: edgeTts }, scenes, workDir);
+    return synthAll(edgeProvider(), scenes, workDir);
   }
 }
 
-module.exports = { makeVoice };
+module.exports = { makeVoice, pickProvider, edgeProvider, synthScene, audioDuration };
