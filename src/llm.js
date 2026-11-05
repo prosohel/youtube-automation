@@ -22,15 +22,24 @@ async function askJson({ prompt, schema, name, description, maxTokens = 8000 }) 
 
 /* ---------- Claude Code headless (your Claude plan, no API key) ---------- */
 
+/**
+ * Environment for the CLI. Drops API credentials so it uses your Claude plan instead of silently
+ * billing the API key that dotenv loaded from .env. Inside Docker there is no interactive login,
+ * so the long-lived token from `claude setup-token` is passed in.
+ */
+function claudeEnv(base = process.env) {
+  const env = { ...base };
+  for (const k of ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT']) delete env[k];
+  if (cfg.claudeOauthToken) env.CLAUDE_CODE_OAUTH_TOKEN = cfg.claudeOauthToken;
+  return env;
+}
+
 function viaClaudeCode({ prompt, schema }) {
   // Run in an empty folder so it never reads this project's files or a CLAUDE.md.
   const cwd = path.join(os.tmpdir(), 'yt-automation-claude');
   fs.mkdirSync(cwd, { recursive: true });
 
-  // IMPORTANT: drop API credentials so the CLI uses your logged-in Claude plan instead of
-  // silently billing the API key that dotenv loaded from .env.
-  const env = { ...process.env };
-  for (const k of ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT']) delete env[k];
+  const env = claudeEnv();
 
   const args = [
     '-p',
@@ -113,4 +122,4 @@ async function viaApi({ prompt, schema, name, description, maxTokens }) {
   return block ? block.input : parseJson(msg.content.map((b) => b.text || '').join(''));
 }
 
-module.exports = { askJson };
+module.exports = { askJson, claudeEnv };

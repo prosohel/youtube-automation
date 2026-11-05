@@ -11,18 +11,32 @@ const cfg = require('./config');
 const SCOPES = ['https://www.googleapis.com/auth/youtube.upload'];
 const PORT = 3000;
 
-function loadClient() {
-  if (!fs.existsSync(cfg.CREDS_FILE)) {
-    throw new Error(`Missing ${cfg.CREDS_FILE}. Download it from Google Cloud Console > Credentials (Desktop app).`);
+function loadClient(redirectUri = `http://localhost:${PORT}/oauth2callback`) {
+  let raw = cfg.youtubeClientSecret;
+  if (!raw) {
+    if (!fs.existsSync(cfg.CREDS_FILE)) {
+      throw new Error(`Missing ${cfg.CREDS_FILE}. Download it from Google Cloud Console > Credentials (Desktop app).`);
+    }
+    raw = JSON.parse(fs.readFileSync(cfg.CREDS_FILE, 'utf8'));
   }
-  const raw = JSON.parse(fs.readFileSync(cfg.CREDS_FILE, 'utf8'));
   const c = raw.installed || raw.web;
-  return new google.auth.OAuth2(c.client_id, c.client_secret, `http://localhost:${PORT}/oauth2callback`);
+  return new google.auth.OAuth2(c.client_id, c.client_secret, redirectUri);
 }
 
-/** Returns an authorized OAuth2 client using the saved token (auto-refreshes and re-saves). */
+/**
+ * Returns an authorized OAuth2 client using the saved token (auto-refreshes and re-saves).
+ * The worker passes the token through cfg (from Redis); the CLI uses token.json.
+ */
 function getAuthorizedClient() {
   const client = loadClient();
+  if (cfg.youtubeToken) {
+    client.setCredentials(cfg.youtubeToken);
+    client.on('tokens', (t) => {
+      cfg.youtubeToken = { ...cfg.youtubeToken, ...t };
+      if (cfg.onYoutubeTokens) cfg.onYoutubeTokens(cfg.youtubeToken);
+    });
+    return client;
+  }
   if (!fs.existsSync(cfg.TOKEN_FILE)) throw new Error('No token.json yet - run: npm run auth');
   client.setCredentials(JSON.parse(fs.readFileSync(cfg.TOKEN_FILE, 'utf8')));
   client.on('tokens', (t) => {
@@ -56,4 +70,4 @@ async function authorize() {
 
 if (require.main === module) authorize().catch((e) => { console.error(e.message); process.exit(1); });
 
-module.exports = { getAuthorizedClient };
+module.exports = { getAuthorizedClient, loadClient };

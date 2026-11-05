@@ -1,4 +1,4 @@
-const fs = require('fs');
+const { loadHistory } = require('./history');
 const cfg = require('./config');
 const THEMES = require('./remotion/themes.json');
 
@@ -49,12 +49,7 @@ const shuffle = (arr, rand) => {
 /* ---------- history ---------- */
 
 function recentThemes(n = RECENT) {
-  try {
-    const h = JSON.parse(fs.readFileSync(cfg.HISTORY_FILE, 'utf8'));
-    return h.map((e) => e.theme).filter(Boolean).slice(-n);
-  } catch {
-    return [];
-  }
+  return loadHistory().map((e) => e.theme).filter(Boolean).slice(-n);
 }
 
 /** Text block for the script prompt: every theme with its mood, plus the ones to avoid. */

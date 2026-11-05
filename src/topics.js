@@ -1,7 +1,7 @@
-const fs = require('fs');
 const cfg = require('./config');
 const { log } = require('./util');
 const { askJson } = require('./llm');
+const { loadHistory, saveHistory } = require('./history');
 
 const TOPIC_SCHEMA = {
   type: 'object',
@@ -28,20 +28,6 @@ const TOPIC_SCHEMA = {
   },
   required: ['candidates', 'best'],
 };
-
-function loadHistory() {
-  try {
-    return JSON.parse(fs.readFileSync(cfg.HISTORY_FILE, 'utf8'));
-  } catch {
-    return [];
-  }
-}
-
-function saveHistory(entry) {
-  const h = loadHistory();
-  h.push({ ...entry, at: new Date().toISOString() });
-  fs.writeFileSync(cfg.HISTORY_FILE, JSON.stringify(h, null, 2));
-}
 
 /** Best-effort: pull today's Google Trends headlines as extra context. Never fatal. */
 async function fetchTrendHints() {

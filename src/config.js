@@ -5,7 +5,7 @@ const ROOT = path.resolve(__dirname, '..');
 
 const format = (process.env.VIDEO_FORMAT || 'landscape').toLowerCase();
 
-module.exports = {
+const cfg = (module.exports = {
   ROOT,
   OUT_DIR: path.join(ROOT, 'output'),
   CREDS_FILE: path.join(ROOT, 'client_secret.json'),
@@ -57,4 +57,24 @@ module.exports = {
   // Tick YouTube's "altered or synthetic content" box (realistic AI clips in ./footage)
   syntheticMedia: (process.env.SYNTHETIC_MEDIA || 'true').toLowerCase() !== 'false',
   categoryId: process.env.YT_CATEGORY_ID || '28',
+
+  // Set by the dashboard/worker (server/settings.js); the CLI leaves them empty and uses files/.env.
+  claudeOauthToken: process.env.CLAUDE_CODE_OAUTH_TOKEN || '',
+  youtubeClientSecret: null, // parsed client_secret.json
+  youtubeToken: null, // parsed token.json
+  onYoutubeTokens: null, // called with the merged token when Google refreshes it
+});
+
+// Paths and the frame rate are fixed by the install, never by settings.
+const FIXED = new Set(['ROOT', 'OUT_DIR', 'CREDS_FILE', 'TOKEN_FILE', 'HISTORY_FILE', 'width', 'height', 'fps']);
+
+/** Overwrite known fields (unknown keys are ignored) and recompute the ones derived from them. */
+cfg.applySettings = function applySettings(values = {}) {
+  for (const [k, v] of Object.entries(values)) {
+    if (Object.prototype.hasOwnProperty.call(cfg, k) && !FIXED.has(k) && typeof cfg[k] !== 'function') cfg[k] = v;
+  }
+  cfg.format = String(cfg.format || 'landscape').toLowerCase();
+  cfg.width = cfg.format === 'shorts' ? 1080 : 1920;
+  cfg.height = cfg.format === 'shorts' ? 1920 : 1080;
+  return cfg;
 };
