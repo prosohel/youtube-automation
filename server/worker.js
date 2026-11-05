@@ -8,6 +8,7 @@ const { runVideoJob } = require('./pipeline');
 const { QUEUE, createQueues, enqueueVideo } = require('./queues');
 const { processTick, runPublish } = require('./publishFlow');
 const { syncSchedulers } = require('./scheduler');
+const { syncYoutube } = require('./youtubeSync');
 
 const HEARTBEAT_KEY = 'worker:heartbeat';
 const log = (...a) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...a);
@@ -38,7 +39,16 @@ const defaultProcessors = () => ({
     const rec = await runPublish({ redis: ctx.redis, videoId: job.data.videoId, platform: job.data.platform, rule, log: ctx.log });
     return rec.status;
   },
+  [QUEUE.maintenance]: async (job, ctx) => {
+    if (job.name !== 'youtube-sync') return 'unknown';
+    const s = await loadConfig(ctx.redis);
+    if (!s.YOUTUBE_TOKEN || !s.YOUTUBE_CLIENT_SECRET) return 'youtube not connected';
+    const youtube = require('./publishers/youtube').client({});
+    return `updated ${await syncYoutube({ redis: ctx.redis, youtube })}`;
+  },
 });
+
+const YOUTUBE_SYNC_EVERY_MS = 3 * 60 * 60 * 1000;
 
 /**
  * Start the background worker.
@@ -94,6 +104,7 @@ function startWorker({ redis, deps, outDir, workerOpts = {}, processors = {}, on
   // Schedules follow the saved rules; a video record that lost its BullMQ job is queued again.
   const recover = (async () => {
     await syncSchedulers(queues, await store.listRules(redis));
+    await queues.maintenance.upsertJobScheduler('youtube-sync', { every: YOUTUBE_SYNC_EVERY_MS }, { name: 'youtube-sync' });
     for (const v of await store.listVideos(redis, { limit: 1000 })) {
       if ((v.status === 'queued' || v.status === 'working') && !(await queues.videos.getJob(v.id))) {
         log(`Re-queueing ${v.id} (no job found)`);
