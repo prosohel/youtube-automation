@@ -13,7 +13,9 @@ for (const [label, repeat] of [['cron pattern', { pattern: '* * * * * *' }]]) {
   test(`missed ticks fire once after downtime (${label})`, { timeout: 20000 }, async (t) => {
     const r = await freshRedis();
     const queues = createQueues(r);
+    let w;
     t.after(async () => {
+      if (w) await w.close(); // worker first, or its last tick hits a closed connection
       await Promise.all(Object.values(queues).map((q) => q.close()));
       await closeAll();
     });
@@ -23,8 +25,7 @@ for (const [label, repeat] of [['cron pattern', { pattern: '* * * * * *' }]]) {
     const back = Date.now();
     const missed = [];
     const onTime = [];
-    const w = new Worker('ticks', async (job) => (job.opts.prevMillis < back ? missed : onTime).push(job.opts.prevMillis), { connection: r });
-    t.after(() => w.close());
+    w = new Worker('ticks', async (job) => (job.opts.prevMillis < back ? missed : onTime).push(job.opts.prevMillis), { connection: r });
     await sleep(2500);
     assert.equal(missed.length, 1, `ticks for the downtime: ${missed.length}`);
     assert.ok(onTime.length >= 1, 'normal ticks continue afterwards');
