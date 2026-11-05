@@ -41,3 +41,21 @@ test('recent videos\' picks come from Redis, so Claude avoids repeating them', a
     require('../src/history').setHistoryBackend(null);
   }
 });
+
+test('recent videos\' graphics come from Redis, so Claude avoids repeating them', async () => {
+  const { loadHistory } = require('../server/worker');
+  const { recentGraphics } = require('../src/graphics');
+  const r = await freshRedis();
+  const v = await store.createVideo(r, {});
+  await store.updateVideo(r, v.id, {
+    done: { topic: true, script: true },
+    theme: { id: 'neon' },
+    script: { scenes: [{ visual: { type: 'bars' } }, { visual: { type: 'donut' } }, { visual: { type: 'icon', icon: 'Bell' } }] },
+  });
+  await loadHistory(r);
+  try {
+    assert.deepEqual(recentGraphics(), ['bars', 'donut']);
+  } finally {
+    require('../src/history').setHistoryBackend(null);
+  }
+});

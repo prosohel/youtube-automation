@@ -8,6 +8,7 @@ const { makeVoice } = require('./voice');
 const { renderAny } = require('./renderAny');
 const { resolveStyle } = require('./style');
 const { resolveDirection, summarizeDirection } = require('./direction');
+const { validateVisuals, summarizeGraphics } = require('./graphics');
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {
@@ -36,7 +37,7 @@ async function main() {
 
   // 2. Script
   log('Writing script...');
-  const script = await writeScript(topic);
+  const script = validateVisuals(await writeScript(topic), cfg);
   const slug = `${new Date().toISOString().slice(0, 10)}-${slugify(script.title)}`;
   const workDir = path.join(cfg.OUT_DIR, 'work', slug);
   ensureDir(workDir);
@@ -69,10 +70,10 @@ async function main() {
       description: script.description,
       tags: script.tags,
     });
-    saveHistory({ topic: topic.topic, title: script.title, url, theme: theme.id, direction: summarizeDirection(direction) });
+    saveHistory({ topic: topic.topic, title: script.title, url, theme: theme.id, direction: summarizeDirection(direction), graphics: summarizeGraphics(script.scenes) });
     return;
   }
-  saveHistory({ topic: topic.topic, title: script.title, url: null, theme: theme.id, direction: summarizeDirection(direction) });
+  saveHistory({ topic: topic.topic, title: script.title, url: null, theme: theme.id, direction: summarizeDirection(direction), graphics: summarizeGraphics(script.scenes) });
 }
 
 main().catch((e) => {

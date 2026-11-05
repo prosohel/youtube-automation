@@ -35,6 +35,7 @@ const cfg = (module.exports = {
   directTransitions: (process.env.DIRECT_TRANSITIONS || 'true').toLowerCase() !== 'false',
   directSfx: (process.env.DIRECT_SFX || 'true').toLowerCase() !== 'false',
   directCamera: (process.env.DIRECT_CAMERA || 'true').toLowerCase() !== 'false',
+  directGraphics: (process.env.DIRECT_GRAPHICS || 'true').toLowerCase() !== 'false',
   // 'mixed' = animated graphics + stock footage as B-roll on some scenes (default)
   // 'motion' = animated graphics only, 'footage' = stock/local clips on every scene
   visuals: (process.env.VISUALS || 'mixed').toLowerCase(),

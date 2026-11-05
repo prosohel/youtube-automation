@@ -3,6 +3,8 @@
 // script and the composition only ever see clean data. A graphic that fails
 // a check becomes a plain icon, the way an invalid visual falls back today.
 
+const { loadHistory } = require('./history');
+
 const BASIC_TYPES = ['icon', 'stat', 'list', 'compare'];
 const LIBRARY_TYPES = ['bigNumber', 'bars', 'line', 'donut', 'timeline'];
 
@@ -113,4 +115,62 @@ function validateVisuals(script, opts) {
   return { ...script, scenes: script.scenes.map((s) => ({ ...s, visual: validateVisual(s && s.visual, opts) })) };
 }
 
-module.exports = { BASIC_TYPES, LIBRARY_TYPES, isBangla, parseNumber, formatNumber, clip, validateVisual, validateVisuals };
+/* ---------- memory: lean away from the graphics the last videos used most ---------- */
+
+const RECENT = 3;
+
+/** How often one video used each graphic type (icons not counted); stored in its history entry. */
+function summarizeGraphics(scenes) {
+  if (!Array.isArray(scenes)) return null;
+  const counts = {};
+  for (const s of scenes) {
+    const type = s && s.visual && s.visual.type;
+    if (type && type !== 'icon') counts[type] = (counts[type] || 0) + 1;
+  }
+  return counts;
+}
+
+/** The two most-used graphic types of the last few videos that recorded them. */
+function recentGraphics(n = RECENT) {
+  const sum = {};
+  for (const g of loadHistory().map((e) => e.graphics).filter(Boolean).slice(-n)) {
+    for (const [type, c] of Object.entries(g)) sum[type] = (sum[type] || 0) + c;
+  }
+  return Object.entries(sum)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 2)
+    .map(([type]) => type);
+}
+
+/* ---------- prompt ---------- */
+
+const REAL = 'Use it only when the narration itself states these numbers; never invent figures.';
+
+/** Script-prompt lines describing the library graphics; '' when the switch is off. */
+function graphicsPrompt(opts, recent = []) {
+  if (!opts || !opts.directGraphics) return '';
+  const lines = [
+    `  - {"type":"bigNumber","value":"১৬ জন","label":"প্রতি মিনিটে প্রতারিত","pre":"এখন:"}: one huge figure (value max 10 characters, label max 40, pre optional, max 24). ${REAL}`,
+    `  - {"type":"bars","bars":[{"label":"ঢাকা","value":70},{"label":"চট্টগ্রাম","value":30}],"unit":"%","highlight":0}: 2-6 bars comparing amounts (labels max 18 characters, values 0 or more, highlight = index of the bar to stress, omit for none). ${REAL}`,
+    `  - {"type":"line","points":[{"label":"২০২২","value":10},{"label":"২০২৪","value":25},{"label":"২০২৬","value":60}],"unit":"লাখ"}: 3-8 points of a change over time (labels max 10 characters). ${REAL}`,
+    `  - {"type":"donut","slices":[{"label":"হ্যাঁ","share":60},{"label":"না","share":40}]}: 2-5 shares of a whole, adding up to 100 (labels max 18 characters). ${REAL}`,
+    '  - {"type":"timeline","events":[{"when":"২০১৯","text":"প্রথম সংস্করণ"},{"when":"২০২১","text":"বড় আপডেট"},{"when":"২০২৪","text":"সবার জন্য খোলা"}]}: 3-5 dated events (when max 12 characters, text max 32). Only dates the narration itself gives.',
+    '  Never use the same graphic type on two scenes in a row (icon is exempt; a B-roll scene in between is fine).' +
+      (recent.length ? ` The last videos relied most on ${recent.join(', ')}: use them less this time.` : ''),
+  ];
+  return lines.join('\n');
+}
+
+module.exports = {
+  BASIC_TYPES,
+  LIBRARY_TYPES,
+  isBangla,
+  parseNumber,
+  formatNumber,
+  clip,
+  validateVisual,
+  validateVisuals,
+  summarizeGraphics,
+  recentGraphics,
+  graphicsPrompt,
+};

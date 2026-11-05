@@ -3,6 +3,7 @@ const path = require('path');
 const cfg = require('../src/config');
 const store = require('./store');
 const { resolveDirection } = require('../src/direction');
+const { validateVisuals } = require('../src/graphics');
 
 /** The real stage functions. Tests pass their own. Required lazily: Remotion etc. load only when used. */
 function realDeps() {
@@ -49,7 +50,8 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
 
   if (!v.done.script) {
     await startStage('script', 'Writing script...');
-    const script = await deps.writeScript(v.topicInfo);
+    // Graphics are checked once here, so the stored script (and any resumed render) holds clean data.
+    const script = validateVisuals(await deps.writeScript(v.topicInfo), cfg);
     const { theme } = deps.resolveStyle(script.style || {});
     v = await markDone('script', {
       script,

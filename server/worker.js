@@ -2,6 +2,7 @@ const { Worker } = require('bullmq');
 const cfg = require('../src/config');
 const { setHistoryBackend } = require('../src/history');
 const { summarizeDirection } = require('../src/direction');
+const { summarizeGraphics } = require('../src/graphics');
 const { createRedis } = require('./redis');
 const store = require('./store');
 const settings = require('./settings');
@@ -49,6 +50,7 @@ async function loadHistory(redis, exceptId) {
       title: v.title,
       theme: v.theme && v.theme.id,
       direction: summarizeDirection(v.direction),
+      graphics: summarizeGraphics(v.script && v.script.scenes),
       url: v.platforms?.youtube?.url || null,
     }));
   setHistoryBackend({ load: () => list, save: () => {} });

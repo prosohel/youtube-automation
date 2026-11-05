@@ -20,7 +20,7 @@ const topic = { topic: 'শেয়ার ট্রেডিং অ্যাপ
 test.beforeEach(() => {
   asked.length = 0;
   history.setHistoryBackend({ load: () => [], save: () => {} });
-  cfg.applySettings({ visuals: 'motion', sfx: true, directTransitions: true, directSfx: true, directCamera: true });
+  cfg.applySettings({ visuals: 'motion', sfx: true, directTransitions: true, directSfx: true, directCamera: true, directGraphics: true });
 });
 test.after(() => history.setHistoryBackend(null));
 
@@ -48,4 +48,18 @@ test('switched-off picks are not asked for', async () => {
   cfg.applySettings({ directTransitions: false, directSfx: false, directCamera: false });
   await writeScript(topic);
   assert.doesNotMatch(asked[0].prompt, /"transition"|"camera"|"sfx"/);
+});
+
+test('scene visuals can be any library graphic when the switch is on', async () => {
+  await writeScript(topic);
+  const visual = asked[0].schema.properties.scenes.items.properties.visual.properties;
+  for (const t of ['bigNumber', 'bars', 'line', 'donut', 'timeline']) assert.ok(visual.type.enum.includes(t), t);
+  for (const k of ['bars', 'points', 'slices', 'events']) assert.equal(visual[k].type, 'array', k);
+  assert.match(asked[0].prompt, /"type":"bars"/);
+});
+
+test('with the graphics switch off, library graphics are not described', async () => {
+  cfg.applySettings({ directGraphics: false });
+  await writeScript(topic);
+  assert.doesNotMatch(asked[0].prompt, /"type":"bars"/);
 });

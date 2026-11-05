@@ -87,7 +87,7 @@ test('F7: readEnvFile parses a .env in the import folder, or gives {} when there
 
 test('the "Claude picks" switches are in the Visuals card, on by default, and reach the config', () => {
   const cfg = require('../src/config');
-  for (const [key, field] of [['DIRECT_TRANSITIONS', 'directTransitions'], ['DIRECT_SFX', 'directSfx'], ['DIRECT_CAMERA', 'directCamera']]) {
+  for (const [key, field] of [['DIRECT_TRANSITIONS', 'directTransitions'], ['DIRECT_SFX', 'directSfx'], ['DIRECT_CAMERA', 'directCamera'], ['DIRECT_GRAPHICS', 'directGraphics']]) {
     const spec = S.SETTINGS_SCHEMA.find((s) => s.key === key);
     assert.ok(spec, key);
     assert.equal(spec.group, 'visuals', key);

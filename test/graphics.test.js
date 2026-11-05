@@ -95,3 +95,39 @@ test('validateVisuals returns a cleaned copy and leaves the script alone', () =>
   });
   assert.equal(script.scenes[0].visual, raw);
 });
+
+/* ---------- memory and prompt ---------- */
+
+test('summarizeGraphics counts graphic types except icons', () => {
+  const scenes = [{ visual: { type: 'bars' } }, { visual: { type: 'icon', icon: 'Bell' } }, { visual: { type: 'bars' } }, { visual: { type: 'stat' } }, {}];
+  assert.deepEqual(G.summarizeGraphics(scenes), { bars: 2, stat: 1 });
+  assert.equal(G.summarizeGraphics(undefined), null);
+});
+
+test('recentGraphics returns the two most-used graphics of the last 3 videos', () => {
+  const history = require('../src/history');
+  history.setHistoryBackend({
+    load: () => [
+      { topic: 't', graphics: { timeline: 9 } }, // 4th from the end: too old to count
+      { topic: 't', graphics: { bars: 2, donut: 1 } },
+      { topic: 'made before graphics existed' },
+      { topic: 't', graphics: { donut: 1, line: 1 } },
+      { topic: 't', graphics: { stat: 2 } },
+    ],
+  });
+  try {
+    assert.deepEqual(G.recentGraphics(), ['bars', 'donut']);
+  } finally {
+    history.setHistoryBackend(null);
+  }
+});
+
+test('graphicsPrompt describes every library type with the real-numbers and no-repeat rules', () => {
+  const p = G.graphicsPrompt(ON, []);
+  for (const t of G.LIBRARY_TYPES) assert.match(p, new RegExp(`"type":"${t}"`), t);
+  assert.match(p, /only when the narration/);
+  assert.match(p, /two scenes in a row/);
+  assert.doesNotMatch(p, /use them less/);
+  assert.match(G.graphicsPrompt(ON, ['bars']), /relied most on bars/);
+  assert.equal(G.graphicsPrompt({ ...ON, directGraphics: false }, ['bars']), '');
+});

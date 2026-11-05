@@ -38,6 +38,7 @@ const SETTINGS_SCHEMA = [
   { key: 'DIRECT_TRANSITIONS', cfg: 'directTransitions', group: 'visuals', type: 'boolean', default: true, label: 'Claude picks transitions (off = theme default)' },
   { key: 'DIRECT_SFX', cfg: 'directSfx', group: 'visuals', type: 'boolean', default: true, label: 'Claude picks sound effects (off = fixed sounds)' },
   { key: 'DIRECT_CAMERA', cfg: 'directCamera', group: 'visuals', type: 'boolean', default: true, label: 'Claude picks camera moves (off = theme default)' },
+  { key: 'DIRECT_GRAPHICS', cfg: 'directGraphics', group: 'visuals', type: 'boolean', default: true, label: 'Claude picks graphics (off = icon/stat/list/compare only)' },
   { key: 'VISUALS', cfg: 'visuals', group: 'visuals', type: 'enum', options: ['mixed', 'motion', 'footage'], default: 'mixed', label: 'Visuals' },
   { key: 'CAPTION_FONT', cfg: 'captionFont', group: 'visuals', type: 'string', default: 'DejaVu Sans', label: 'Caption font (ffmpeg fallback)' },
   // Channel

@@ -8,13 +8,14 @@ const { makeVoice } = require('./voice');
 const { renderWithRemotion } = require('./render');
 const { resolveStyle } = require('./style');
 const { resolveDirection } = require('./direction');
+const { validateVisuals } = require('./graphics');
 
 (async () => {
   const file = process.argv.slice(2).find((a) => !a.startsWith('--'));
   if (!file) throw new Error('Pass a saved script, e.g. output/2026-11-04-xyz.script.json');
   const limit = Number((process.argv.find((a) => a.startsWith('--scenes=')) || '').split('=')[1]) || Infinity;
 
-  const script = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const script = validateVisuals(JSON.parse(fs.readFileSync(file, 'utf8')), cfg);
   script.scenes = script.scenes.slice(0, limit);
   const arg = (k) => (process.argv.find((a) => a.startsWith(`--${k}=`)) || '').split('=')[1];
   const { theme } = resolveStyle(script.style || {}, { forceTheme: arg('theme'), seed: arg('seed') ? Number(arg('seed')) : undefined });
