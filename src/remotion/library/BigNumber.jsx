@@ -1,20 +1,11 @@
 import React from 'react';
 import { interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
-import { bodyFont, fitSize, headFont, isVox, parseStat, pop, theme, twos } from '../shared';
+import { bodyFont, fitSize, headFont, isVox, pop, theme, twos } from '../shared';
+import { countUp } from './format';
 import { Panel } from './Panel';
 import { COUNT_FRAMES } from './timing';
 
 const clamp = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' };
-
-/** An ASCII number counts up from 0 (t = 0..1); a Bangla-digit value shows as written. */
-const countUp = (value, t) => {
-  const stat = parseStat(value);
-  if (!stat) return value;
-  const eased = 1 - Math.pow(1 - t, 3);
-  let txt = (stat.num * eased).toFixed(stat.decimals);
-  if (stat.useComma) txt = Number(txt).toLocaleString('en-US', { minimumFractionDigits: stat.decimals });
-  return `${stat.prefix}${txt}${stat.suffix}`;
-};
 
 /** One huge figure: optional small line above, the number, a label below. */
 export const BigNumber = ({ visual, accent, isShort, start }) => {
@@ -39,7 +30,7 @@ export const BigNumber = ({ visual, accent, isShort, start }) => {
       <div
         style={{
           fontFamily: headFont(),
-          fontSize: fitSize(visual.value, isShort ? 220 : 180, 6),
+          fontSize: fitSize(visual.value, isShort ? 220 : 180, 6, 0.5),
           lineHeight: 1.15,
           whiteSpace: 'nowrap',
           color: T.dark ? accent : T.text,

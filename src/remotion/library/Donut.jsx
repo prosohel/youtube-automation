@@ -2,11 +2,9 @@ import React from 'react';
 import { Easing, interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
 import { bodyFont, fitSize, headFont, isVox, pop, theme, twos } from '../shared';
 import { Panel } from './Panel';
+import { chartColors } from './colors';
 
 const SWEEP = 40; // frames for all slices to sweep in, one after another
-
-/** Distinct slice colours: the theme's accents without repeats, then two neutral tones. */
-const palette = (T) => [...new Set(T.accents), ...(T.dark ? ['rgba(255,255,255,0.85)', 'rgba(255,255,255,0.4)'] : ['rgba(0,0,0,0.72)', 'rgba(0,0,0,0.32)'])];
 
 /** 2-5 shares of a whole as a donut; the largest share sits in the middle, a legend names each slice. */
 export const Donut = ({ visual, accent, isShort, start }) => {
@@ -19,8 +17,8 @@ export const Donut = ({ visual, accent, isShort, start }) => {
   const P = interpolate(f, [start, start + SWEEP], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.inOut(Easing.cubic) });
 
   const { slices } = visual;
-  const colors = palette(T);
-  const color = (i) => colors[i % colors.length];
+  const colors = chartColors(T, slices.length);
+  const color = (i) => colors[i];
   const total = slices.reduce((sum, x) => sum + x.share, 0);
   let acc = 0;
   const arcs = slices.map((x) => {
@@ -30,7 +28,7 @@ export const Donut = ({ visual, accent, isShort, start }) => {
   });
   const big = slices.reduce((best, x, i) => (x.share > slices[best].share ? i : best), 0);
 
-  const D = isShort ? 420 : 400;
+  const D = isShort ? 360 : 400; // Shorts: the whole panel stays under ~800px so a two-line headline never covers it
   const stroke = D * 0.17;
   const r = (D - stroke) / 2 - 4;
   const circ = 2 * Math.PI * r;
@@ -75,12 +73,12 @@ export const Donut = ({ visual, accent, isShort, start }) => {
   );
 
   const legend = (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: isShort ? 16 : 18, ...(isShort ? { marginTop: 36, width: '100%' } : { marginLeft: 64, flex: 1 }) }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: isShort ? 12 : 18, ...(isShort ? { marginTop: 28, width: '100%' } : { marginLeft: 64, flex: 1 }) }}>
       {slices.map((x, i) => (
         <div key={i} style={{ display: 'flex', alignItems: 'center', opacity: shown(arcs[i]) > 0 ? 1 : 0 }}>
           <div style={{ width: 30, height: 30, borderRadius: vox ? 4 : 15, background: color(i), flexShrink: 0 }} />
-          <div style={{ marginLeft: 18, flex: 1, fontFamily: bodyFont(), fontSize: fitSize(x.label, isShort ? 42 : 38, 18), color: T.text, whiteSpace: 'nowrap' }}>{x.label}</div>
-          <div style={{ marginLeft: 16, fontFamily: headFont(), fontSize: isShort ? 42 : 38, color: T.text, whiteSpace: 'nowrap' }}>{x.shown}</div>
+          <div style={{ marginLeft: 18, flex: 1, fontFamily: bodyFont(), fontSize: fitSize(x.label, isShort ? 40 : 38, 18), color: T.text, lineHeight: 1.3, whiteSpace: 'nowrap' }}>{x.label}</div>
+          <div style={{ marginLeft: 16, fontFamily: headFont(), fontSize: isShort ? 40 : 38, color: T.text, lineHeight: 1.3, whiteSpace: 'nowrap' }}>{x.shown}</div>
         </div>
       ))}
     </div>
@@ -91,7 +89,7 @@ export const Donut = ({ visual, accent, isShort, start }) => {
       accent={accent}
       style={{
         width: isShort ? 920 : 1300,
-        padding: isShort ? '44px 56px 48px' : '40px 64px',
+        padding: isShort ? '40px 56px 44px' : '40px 64px',
         display: 'flex',
         flexDirection: isShort ? 'column' : 'row',
         alignItems: 'center',

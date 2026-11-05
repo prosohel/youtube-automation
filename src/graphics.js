@@ -28,17 +28,33 @@ function parseNumber(v) {
 }
 
 function formatNumber(n, bangla) {
-  const s = n.toLocaleString('en-US', { maximumFractionDigits: 1 });
+  const s = n.toLocaleString('en-US', { maximumFractionDigits: 2 });
   return bangla ? toBangla(s) : s;
 }
 
-// Trimmed text no longer than `max`, cut at a word when the word boundary
-// is past half way, with an ellipsis. Non-strings give ''.
+const LETTERS = new Intl.Segmenter('bn', { granularity: 'grapheme' });
+
+// The longest run of whole letter clusters within `max` code units, never ending on a hasanta (্) or a
+// joiner, which would leave a broken half-letter on screen.
+function headOf(text, max) {
+  const parts = [];
+  let len = 0;
+  for (const { segment } of LETTERS.segment(text)) {
+    if (len + segment.length > max) break;
+    parts.push(segment);
+    len += segment.length;
+  }
+  while (parts.length && /[্‌‍]$/.test(parts[parts.length - 1])) parts.pop();
+  return parts.join('');
+}
+
+// Trimmed text no longer than `max`, cut at a word when the word boundary is past half way, else at a
+// letter cluster, with an ellipsis. Non-strings give ''.
 function clip(text, max) {
   if (typeof text !== 'string') return '';
   const t = text.replace(/\s+/g, ' ').trim();
   if (t.length <= max) return t;
-  const head = t.slice(0, max - 1);
+  const head = headOf(t, max - 1);
   const space = head.lastIndexOf(' ');
   return `${(space > max / 2 ? head.slice(0, space) : head).trim()}…`;
 }
@@ -50,7 +66,7 @@ const CHECK = {
   bigNumber(v) {
     const value = typeof v.value === 'number' && Number.isFinite(v.value) ? String(v.value) : typeof v.value === 'string' ? v.value.trim() : '';
     const label = clip(v.label, 40);
-    if (!value || value.length > 10 || !DIGIT.test(value) || !label) return null;
+    if (!value || value.length > 12 || !DIGIT.test(value) || !label) return null;
     return { type: 'bigNumber', value, label, pre: clip(v.pre, 24) || null };
   },
 
@@ -63,18 +79,18 @@ const CHECK = {
     });
     if (bars.includes(null) || bars.every((b) => b.value === 0)) return null;
     const highlight = Number.isInteger(v.highlight) && v.highlight >= 0 && v.highlight < bars.length ? v.highlight : null;
-    return { type: 'bars', bars, unit: clip(v.unit, 8), highlight };
+    return { type: 'bars', bars, unit: clip(v.unit, 14), highlight };
   },
 
   line(v, bangla) {
     if (!inRange(v.points, 3, 8)) return null;
     const points = v.points.map((p) => {
       const value = parseNumber(p && p.value);
-      const label = clip(p && p.label, 10);
+      const label = clip(p && p.label, 16);
       return value === null || !label ? null : { label, value, shown: formatNumber(value, bangla) };
     });
     if (points.includes(null)) return null;
-    return { type: 'line', points, unit: clip(v.unit, 8) };
+    return { type: 'line', points, unit: clip(v.unit, 14) };
   },
 
   donut(v, bangla) {
@@ -82,7 +98,7 @@ const CHECK = {
     const slices = v.slices.map((s) => {
       const share = parseNumber(s && s.share);
       const label = clip(s && s.label, 18);
-      return share === null || share <= 0 || !label ? null : { label, share, shown: `${formatNumber(Math.round(share), bangla)}%` };
+      return share === null || share <= 0 || !label ? null : { label, share, shown: `${formatNumber(share, bangla)}%` };
     });
     if (slices.includes(null)) return null;
     const total = slices.reduce((sum, s) => sum + s.share, 0);
@@ -150,11 +166,11 @@ const REAL = 'Use it only when the narration itself states these numbers; never 
 function graphicsPrompt(opts, recent = []) {
   if (!opts || !opts.directGraphics) return '';
   const lines = [
-    `  - {"type":"bigNumber","value":"১৬ জন","label":"প্রতি মিনিটে প্রতারিত","pre":"এখন:"}: one huge figure (value max 10 characters, label max 40, pre optional, max 24). ${REAL}`,
-    `  - {"type":"bars","bars":[{"label":"ঢাকা","value":70},{"label":"চট্টগ্রাম","value":30}],"unit":"%","highlight":0}: 2-6 bars comparing amounts (labels max 18 characters, values 0 or more, highlight = index of the bar to stress, omit for none). ${REAL}`,
-    `  - {"type":"line","points":[{"label":"২০২২","value":10},{"label":"২০২৪","value":25},{"label":"২০২৬","value":60}],"unit":"লাখ"}: 3-8 points of a change over time (labels max 10 characters). ${REAL}`,
-    `  - {"type":"donut","slices":[{"label":"হ্যাঁ","share":60},{"label":"না","share":40}]}: 2-5 shares of a whole, adding up to 100 (labels max 18 characters). ${REAL}`,
-    '  - {"type":"timeline","events":[{"when":"২০১৯","text":"প্রথম সংস্করণ"},{"when":"২০২১","text":"বড় আপডেট"},{"when":"২০২৪","text":"সবার জন্য খোলা"}]}: 3-5 dated events (when max 12 characters, text max 32). Only dates the narration itself gives.',
+    `  - {"type":"bigNumber","value":"১৬ জন","label":"প্রতি মিনিটে প্রতারিত","pre":"এখন:"}: one huge figure. value: the number with at most a one-word unit (max 12 characters); label: a short phrase (max 40); pre: optional, 1-3 words (max 24). ${REAL}`,
+    `  - {"type":"bars","bars":[{"label":"ঢাকা","value":70},{"label":"চট্টগ্রাম","value":30}],"unit":"%","highlight":0}: 2-6 bars comparing amounts. labels: 1-3 short words (max 18 characters); values 0 or more; unit: 1-2 short words such as %, লাখ, কোটি টাকা (max 14); highlight = index of the bar to stress, omit for none. ${REAL}`,
+    `  - {"type":"line","points":[{"label":"২০২২","value":10},{"label":"২০২৪","value":25},{"label":"২০২৬","value":60}],"unit":"লাখ"}: 3-8 points of a change over time. labels: a year or a short month and year (max 16 characters); unit: 1-2 short words (max 14). ${REAL}`,
+    `  - {"type":"donut","slices":[{"label":"হ্যাঁ","share":60},{"label":"না","share":40}]}: 2-5 shares of a whole, adding up to 100. labels: 1-3 short words (max 18 characters). ${REAL}`,
+    '  - {"type":"timeline","events":[{"when":"২০১৯","text":"প্রথম সংস্করণ"},{"when":"২০২১","text":"বড় আপডেট"},{"when":"২০২৪","text":"সবার জন্য খোলা"}]}: 3-5 dated events. when: a year or a short date (max 12 characters); text: a short phrase of up to 6 words (max 32). Only dates the narration itself gives.',
     '  Never use the same graphic type on two scenes in a row (icon is exempt; a B-roll scene in between is fine).' +
       (recent.length ? ` The last videos relied most on ${recent.join(', ')}: use them less this time.` : ''),
   ];

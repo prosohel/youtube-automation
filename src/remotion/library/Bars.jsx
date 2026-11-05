@@ -3,6 +3,7 @@ import { Easing, interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
 import { bodyFont, fitSize, headFont, isVox, pop, theme, twos } from '../shared';
 import { Panel } from './Panel';
 import { ITEM_STAGGER } from './timing';
+import { withUnit } from './format';
 
 const GROW = 18; // frames one bar takes to grow
 const grow = (f, at) => interpolate(f, [at, at + GROW], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.out(Easing.cubic) });
@@ -33,13 +34,13 @@ export const Bars = ({ visual, accent, isShort, start }) => {
       <Panel accent={accent} style={{ ...panel, width: 920, padding: '40px 44px 44px' }}>
         {bars.map((b, i) => {
           const g = grow(f, start + i * ITEM_STAGGER);
-          const value = `${b.shown} ${unit}`.trim();
+          const value = withUnit(b.shown, unit);
           return (
-            <div key={i} style={{ marginTop: i ? 22 : 0 }}>
+            <div key={i} style={{ marginTop: i ? 16 : 0 }}>
               <div style={{ fontFamily: bodyFont(), fontSize: fitSize(b.label, 42, 18), color: T.text, lineHeight: 1.3, whiteSpace: 'nowrap' }}>{b.label}</div>
               <div style={{ display: 'flex', alignItems: 'center', height: 46, marginTop: 6 }}>
                 <div style={{ width: size(b, track * g), height: 40, ...fill(i) }} />
-                <div style={{ marginLeft: 16, opacity: g, fontFamily: headFont(), fontSize: fitSize(value, 40, 12, 0.7), color: i === hi ? (T.dark ? accent : T.text) : T.text, whiteSpace: 'nowrap' }}>
+                <div style={{ marginLeft: 16, opacity: g, fontFamily: headFont(), fontSize: fitSize(value, 40, 12, 0.6), color: i === hi ? (T.dark ? accent : T.text) : T.text, whiteSpace: 'nowrap' }}>
                   {value}
                 </div>
               </div>

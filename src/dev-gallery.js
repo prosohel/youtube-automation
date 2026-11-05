@@ -62,7 +62,8 @@ const STILL_FRAME = Math.round(INTRO_SECONDS * FPS) + OVERLAP + 2 + 60; // the g
           music: null,
           theme,
           scenes: [
-            { frames: 150, narration: 'গ্রাফিকটি ঠিকমতো দেখা যাচ্ছে কিনা মিলিয়ে দেখুন।', headline: name, visual, emoji: null, bg: null, audio: null },
+            // A realistic 4-word headline (wraps to two lines in some themes); the caption names the sample.
+            { frames: 150, narration: name, headline: 'অনলাইন প্রতারণার নতুন কৌশল', visual, emoji: null, bg: null, audio: null },
           ],
         };
         const output = path.join(outDir, `${format}-${themeId}-${name}.jpg`);

@@ -2,6 +2,7 @@ import React from 'react';
 import { Easing, interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
 import { bodyFont, estWidth, fitSize, headFont, isVox, pop, theme, twos } from '../shared';
 import { Panel } from './Panel';
+import { withUnit } from './format';
 
 const DRAW = 30; // frames for the line to draw itself
 const M = 22; // inner margin of the plot, so edge dots are never cut off
@@ -44,7 +45,7 @@ export const LineChart = ({ visual, accent, isShort, start }) => {
   const path = points.map((q, i) => `${i ? 'L' : 'M'} ${x(i).toFixed(1)} ${y(q.value).toFixed(1)}`).join(' ');
 
   const last = points[n - 1];
-  const lastText = `${last.shown} ${unit}`.trim();
+  const lastText = withUnit(last.shown, unit);
   const lastPop = Math.min(1, pop(f0, fps, start + DRAW, 12));
   const stroke = T.dark ? accent : T.text;
 

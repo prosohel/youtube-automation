@@ -64,14 +64,7 @@ export const pop = (frame, fps, delay = 0, damping = 13) => {
 };
 
 /** "70%" -> { prefix, num, decimals, suffix, useComma }; null when the value has no number. */
-export const parseStat = (value) => {
-  const m = String(value).match(/^(\D*)([\d.,]+)(.*)$/);
-  if (!m) return null;
-  const num = parseFloat(m[2].replace(/,/g, ''));
-  if (Number.isNaN(num)) return null;
-  const decimals = (m[2].split('.')[1] || '').length;
-  return { prefix: m[1], num, decimals, suffix: m[3], useComma: m[2].includes(',') };
-};
+export { parseStat } from './library/format';
 
 /** Hand-made jitter that changes every 6th frame, so still paper "boils" slightly like stop-motion. */
 export const boil = (key, frame, amp = 2) => (random(`${key}-${Math.floor(frame / 6)}`) - 0.5) * 2 * amp;

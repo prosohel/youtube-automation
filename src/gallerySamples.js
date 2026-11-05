@@ -3,7 +3,7 @@
 module.exports = [
   {
     name: 'bigNumber',
-    visual: { type: 'bigNumber', value: '১,২০০ কোটি', label: 'প্রতিদিন অনলাইন প্রতারণার শিকার হন মানুষ', pre: 'গত বছরের তুলনায় এখন মোট' },
+    visual: { type: 'bigNumber', value: '৳১২,৫০০ কোটি', label: 'প্রতিদিন অনলাইন প্রতারণার শিকার হন মানুষ', pre: 'গত বছরের তুলনায় এখন মোট' },
   },
   { name: 'bigNumber-ascii', visual: { type: 'bigNumber', value: '1,200', label: 'জন প্রতি মিনিটে প্রতারিত' } },
   {
@@ -18,7 +18,7 @@ module.exports = [
         { label: 'সিলেট', value: 2 },
         { label: 'বরিশাল বিভাগ', value: 1500 },
       ],
-      unit: 'লাখ টাকা',
+      unit: 'লক্ষ কোটি টাকা',
       highlight: 1,
     },
   },
@@ -27,16 +27,16 @@ module.exports = [
     visual: {
       type: 'line',
       points: [
-        { label: 'মার্চ মাসে', value: 12 },
-        { label: 'এপ্রিল মাস', value: 18 },
-        { label: 'জুলাই মাসে', value: 15 },
-        { label: 'আগস্ট মাসে', value: 27 },
-        { label: 'সেপ্টেম্বর', value: 33 },
-        { label: 'অক্টোবরে', value: 30 },
-        { label: 'নভেম্বরে', value: 48 },
-        { label: 'ডিসেম্বরে', value: 61 },
+        { label: 'জানুয়ারি ২০২৪', value: 12 },
+        { label: 'ফেব্রুয়ারি ২০২৪', value: 18 },
+        { label: 'মার্চ ২০২৪', value: 15 },
+        { label: 'এপ্রিল ২০২৪', value: 27 },
+        { label: 'মে ২০২৪', value: 33 },
+        { label: 'জুন ২০২৪', value: 30 },
+        { label: 'জুলাই ২০২৪', value: 48.5 },
+        { label: 'সেপ্টেম্বর ২০২৪', value: 61.25 },
       ],
-      unit: 'লাখ জন',
+      unit: 'লক্ষ কোটি টাকা',
     },
   },
   {

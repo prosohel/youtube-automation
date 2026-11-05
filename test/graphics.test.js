@@ -18,7 +18,7 @@ test('parseNumber reads ASCII and Bangla digits, separators and percent', () => 
 
 test('formatNumber groups and uses Bangla digits for Bangla videos', () => {
   assert.equal(G.formatNumber(1200, true), '১,২০০');
-  assert.equal(G.formatNumber(4.25, false), '4.3');
+  assert.equal(G.formatNumber(4.25, false), '4.25');
   assert.equal(G.formatNumber(70, false), '70');
 });
 
@@ -157,4 +157,41 @@ test('sound cues on bars and timeline events follow the library timing', () => {
   assert.match(main, /from '\.\/library\/timing'/);
   assert.match(main, /COUNT_FRAMES/);
   assert.match(main, /ITEM_STAGGER/);
+});
+
+/* ---------- final review fixes ---------- */
+
+test('common Bangla units, month-and-year labels and money values fit their limits', () => {
+  const bars = G.validateVisual({ type: 'bars', bars: [{ label: 'a', value: 1 }, { label: 'b', value: 2 }], unit: 'লাখ কোটি টাকা' }, ON);
+  assert.equal(bars.unit, 'লাখ কোটি টাকা');
+  const line = G.validateVisual({ type: 'line', points: [{ label: 'জানুয়ারি ২০২৪', value: 1 }, { label: 'মে ২০২৪', value: 2 }, { label: 'সেপ্টেম্বর ২০২৪', value: 3 }] }, ON);
+  assert.deepEqual(line.points.map((p) => p.label), ['জানুয়ারি ২০২৪', 'মে ২০২৪', 'সেপ্টেম্বর ২০২৪']);
+  assert.equal(G.validateVisual({ type: 'bigNumber', value: '৳১২,৫০০ কোটি', label: 'ক্ষতি' }, ON).value, '৳১২,৫০০ কোটি');
+});
+
+test('clip never cuts inside a Bangla letter cluster or leaves a dangling hasanta', () => {
+  const seg = new Intl.Segmenter('bn', { granularity: 'grapheme' });
+  for (const text of ['ক্ষক্ষক্ষক্ষ', 'প্রতিদ্বন্দ্বিতামূলক', 'স্বাস্থ্যসেবাক্ষেত্রে']) {
+    for (let max = 3; max < text.length; max++) {
+      const out = G.clip(text, max);
+      const head = out.replace(/…$/, '');
+      assert.ok(out.length <= max, `${text} @${max}: ${out}`);
+      assert.ok(!head.endsWith('্'), `${text} @${max}: ends with hasanta`);
+      const graphemes = [...seg.segment(text)].map((s) => s.segment);
+      assert.ok(graphemes.some((_, k) => graphemes.slice(0, k + 1).join('') === head) || head === '', `${text} @${max}: ${head} splits a cluster`);
+    }
+  }
+});
+
+test('the prompt describes limits in words Claude can follow', () => {
+  const p = G.graphicsPrompt(ON, []);
+  assert.match(p, /unit: 1-2 short words/);
+  assert.match(p, /a year or a short month and year/);
+});
+
+test('numbers keep up to two decimals, so the chart says what the narration says', () => {
+  assert.equal(G.formatNumber(9.92, false), '9.92');
+  assert.equal(G.formatNumber(0.04, true), '০.০৪');
+  const d = G.validateVisual({ type: 'donut', slices: [{ label: 'হ্যাঁ', share: 99.6 }, { label: 'না', share: 0.4 }] }, ON);
+  assert.deepEqual(d.slices.map((x) => x.shown), ['৯৯.৬%', '০.৪%']);
 });
