@@ -14,7 +14,8 @@ function pickVideo(videos, platform, pick = 'oldest') {
     if (v.status !== 'ready') return false;
     if (v.targets && !v.targets.includes(platform)) return false;
     const rec = v.platforms && v.platforms[platform];
-    return !rec || (rec.status === 'failed' && (rec.attempts || 0) < MAX_PUBLISH_ATTEMPTS);
+    if (!rec || rec.status === 'interrupted') return true; // interrupted: checked with the platform before any upload
+    return rec.status === 'failed' && (rec.attempts || 0) < MAX_PUBLISH_ATTEMPTS;
   });
   ok.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
   return (pick === 'newest' ? ok[ok.length - 1] : ok[0]) || null;
@@ -98,11 +99,27 @@ async function runPublish({ redis, videoId, platform, rule, getPublisher = requi
     log: (l) => say(l),
   };
 
-  if (rec.status === 'uploading' || (rec.status === 'failed' && rec.remoteId)) {
-    const found = await pub.findExisting(ctx).catch(() => null);
+  // A run that may already have reached the platform: ask it first. Only a clear "not there" allows a new upload;
+  // if the check itself fails (network, expired token, missing scope) nothing is uploaded.
+  if (['uploading', 'interrupted'].includes(rec.status) || (rec.status === 'failed' && rec.remoteId)) {
+    let found;
+    try {
+      found = await pub.findExisting(ctx);
+    } catch (e) {
+      const msg = `Could not check ${platform} before uploading again: ${String(e.message || e).slice(0, 400)}`;
+      await setRec({ status: 'interrupted', error: msg });
+      await say(msg);
+      throw e;
+    }
     if (found) {
       await say(`${platform}: already posted before the interruption (${found.url || found.remoteId})`);
-      return setRec({ status: 'published', remoteId: found.remoteId, url: found.url || rec.url || null, publishedAt: new Date().toISOString(), error: null });
+      return setRec({
+        status: found.state || 'published',
+        remoteId: found.remoteId,
+        url: found.url || rec.url || null,
+        publishedAt: new Date().toISOString(),
+        error: null,
+      });
     }
   }
 
@@ -120,4 +137,42 @@ async function runPublish({ redis, videoId, platform, rule, getPublisher = requi
   }
 }
 
-module.exports = { pickVideo, renderCaption, processTick, runPublish, MAX_PUBLISH_ATTEMPTS };
+/**
+ * A publish record left 'pending' or 'uploading' by a job that died (stalled out, crashed before
+ * runPublish ran) would never be picked again. 'pending' never started an upload -> failed (retried by a
+ * later tick); 'uploading' may have reached the platform -> interrupted (checked before any new upload).
+ */
+async function settleRecord(redis, videoId, platform, error) {
+  await store.updateVideo(redis, videoId, (o) => {
+    const rec = o.platforms[platform];
+    if (!rec || !['pending', 'uploading'].includes(rec.status)) return o;
+    const next =
+      rec.status === 'pending'
+        ? { ...rec, status: 'failed', attempts: (rec.attempts || 0) + 1, error }
+        : { ...rec, status: 'interrupted', error };
+    return { ...o, platforms: { ...o.platforms, [platform]: next } };
+  });
+}
+
+/** BullMQ gave up on a publish job (e.g. stalled too often) without runPublish recording why. */
+async function markPublishJobFailed(redis, job, err) {
+  const { videoId, platform } = job.data;
+  if (!(await store.getVideo(redis, videoId))) return;
+  await settleRecord(redis, videoId, platform, String((err && err.message) || err).slice(0, 500));
+}
+
+/** At worker start: settle records whose publish job is gone. */
+async function recoverPublishRecords(redis, queues) {
+  for (const v of await store.listVideos(redis, { limit: 5000 })) {
+    for (const [p, rec] of Object.entries(v.platforms || {})) {
+      if (!['pending', 'uploading'].includes(rec.status)) continue;
+      const job = await queues.publish.getJob(`pub:${v.id}:${p}`);
+      const live = job && !['completed', 'failed'].includes(await job.getState());
+      if (!live) {
+        await settleRecord(redis, v.id, p, rec.status === 'pending' ? 'Interrupted before the upload started' : 'Interrupted during upload; will check before uploading again');
+      }
+    }
+  }
+}
+
+module.exports = { pickVideo, renderCaption, processTick, runPublish, markPublishJobFailed, recoverPublishRecords, MAX_PUBLISH_ATTEMPTS };

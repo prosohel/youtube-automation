@@ -104,3 +104,44 @@ test('videos with Bangla-only titles never share files', async () => {
   assert.notEqual(da.files.video, db.files.video);
   assert.notEqual(da.scenes[0].audioFile, db.scenes[0].audioFile);
 });
+
+test('F6: a resumed video whose voice changed is re-voiced completely (never two voices)', async () => {
+  const r = await freshRedis();
+  const outDir = tmpOut();
+  const calls = [];
+  const deps = fakeDeps(calls, { outDir });
+  const v = await store.createVideo(r, {});
+  const script = await deps.writeScript();
+  calls.length = 0;
+  await store.updateVideo(r, v.id, {
+    done: { topic: true, script: true },
+    topicInfo: { topic: 't' },
+    script,
+    title: script.title,
+    theme: { id: 'neon' },
+    slug: `x-${v.id}`,
+    voiceProvider: 'Old voice',
+  });
+  const work = path.join(outDir, 'work', v.id);
+  fs.mkdirSync(work, { recursive: true });
+  for (const n of ['00', '01', '02']) fs.writeFileSync(path.join(work, `scene-${n}.mp3`), 'audio by Old voice');
+  const done = await runVideoJob(v.id, { redis: r, deps, outDir });
+  assert.equal(calls.filter((c) => c.startsWith('voice:eleven:')).length, 5);
+  for (let i = 0; i < 5; i++) assert.equal(fs.readFileSync(path.join(work, `scene-0${i}.mp3`), 'utf8'), 'audio by eleven');
+  assert.equal(done.voiceProvider, 'eleven');
+});
+
+test('F6: the voice in use is recorded before the first scene is made', async () => {
+  const r = await freshRedis();
+  const outDir = tmpOut();
+  const v = await store.createVideo(r, {});
+  let seen;
+  const deps = fakeDeps([], { outDir });
+  const synth = deps.synthScene;
+  deps.synthScene = async (...a) => {
+    seen = seen || (await store.getVideo(r, v.id)).voiceProvider;
+    return synth(...a);
+  };
+  await runVideoJob(v.id, { redis: r, deps, outDir });
+  assert.equal(seen, 'eleven');
+});

@@ -77,3 +77,10 @@ test('toConfig ignores a Windows Claude CLI path on Linux', () => {
   assert.equal(S.toConfig({ ...S.defaults(), CLAUDE_BIN: '/usr/local/bin/claude' }, 'linux').claudeBin, '/usr/local/bin/claude');
   assert.equal(S.toConfig({ ...S.defaults(), CLAUDE_BIN: win }, 'win32').claudeBin, win);
 });
+
+test('F7: readEnvFile parses a .env in the import folder, or gives {} when there is none', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'imp-'));
+  assert.deepEqual(S.readEnvFile(dir), {});
+  fs.writeFileSync(path.join(dir, '.env'), 'NICHE="Bangla tech"\nSFX=false\n');
+  assert.deepEqual(S.readEnvFile(dir), { NICHE: 'Bangla tech', SFX: 'false' });
+});

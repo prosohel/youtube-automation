@@ -148,3 +148,23 @@ test('youtube: findExisting matches the "#Shorts" title in the uploads playlist'
   assert.deepEqual(await getPublisher('youtube').findExisting(c), { remoteId: 'abc123', url: 'https://youtu.be/abc123' });
   assert.equal(await getPublisher('youtube').findExisting({ ...c, video: { ...video, title: 'nope' } }), null);
 });
+
+test('F3: tiktok counts a post as existing only when it completed or all bytes arrived', async () => {
+  const status = (data) => fakeFetch([['status/fetch', 200, { data, error: { code: 'ok' } }]]);
+  const find = (data) =>
+    getPublisher('tiktok').findExisting(ctx({ TIKTOK_ACCESS_TOKEN: TOKEN }, status(data), { record: { remoteId: 'pub_9' } }));
+  assert.equal(await find({ status: 'PROCESSING_UPLOAD', uploaded_bytes: 300 }), null, 'half-uploaded post never finished');
+  assert.deepEqual(await find({ status: 'PROCESSING_UPLOAD', uploaded_bytes: 1000 }), { remoteId: 'pub_9', url: null, state: 'processing' });
+  assert.equal((await find({ status: 'PUBLISH_COMPLETE' })).state, 'published');
+  assert.equal(await find({ status: 'FAILED' }), null);
+});
+
+test('F4: facebook treats a reel whose finish was sent as existing', async () => {
+  const status = (st) => fakeFetch([[/fields=status/, 200, { status: st }]]);
+  const s = { FACEBOOK_PAGE_ID: '55', FACEBOOK_PAGE_TOKEN: TOKEN };
+  const find = (st) => getPublisher('facebook').findExisting(ctx(s, status(st), { record: { remoteId: 'fv_2' } }));
+  assert.equal((await find({ video_status: 'processing', publishing_phase: { status: 'in_progress' } })).state, 'processing');
+  assert.equal((await find({ video_status: 'ready', publishing_phase: { status: 'complete', publish_status: 'published' } })).state, 'published');
+  assert.equal(await find({ video_status: 'upload_complete', publishing_phase: { status: 'not_started' } }), null);
+  assert.equal(await find({ video_status: 'error', publishing_phase: { status: 'in_progress' } }), null);
+});

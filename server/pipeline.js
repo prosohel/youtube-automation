@@ -85,19 +85,31 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
       }
     };
 
+    const voiceId = (p) => (p.edge ? 'edge' : p.name);
+    const clearScenes = async () => {
+      v.script.scenes.forEach((_, i) => fs.rmSync(sceneFile(workDir, i), { force: true }));
+      v = await save({ scenes: [] });
+    };
     let provider = v.voiceProvider === 'edge' ? deps.edgeProvider() : deps.pickProvider();
+    // Resumed with a different voice than the finished scenes (key removed, provider/model changed):
+    // redo them all rather than mix two voices in one video.
+    if (v.voiceProvider && v.voiceProvider !== voiceId(provider)) {
+      await say(`Voice changed (${v.voiceProvider} -> ${voiceId(provider)}): redoing every scene`);
+      await clearScenes();
+    }
+    v = await save({ voiceProvider: voiceId(provider) }); // recorded before the first scene, so a resume knows
     try {
       await voiceAll(provider);
     } catch (e) {
       if (provider.edge) throw e;
       // Never mix two voices in one video: redo every scene with the free voice.
       await say(`${provider.name} failed (${e.message}). Redoing all scenes with the free Edge voice.`);
-      v.script.scenes.forEach((_, i) => fs.rmSync(sceneFile(workDir, i), { force: true }));
-      v = await save({ voiceProvider: 'edge', scenes: [] });
+      await clearScenes();
+      v = await save({ voiceProvider: 'edge' });
       provider = deps.edgeProvider();
       await voiceAll(provider);
     }
-    v = await markDone('voice', { voiceProvider: provider.edge ? 'edge' : provider.name });
+    v = await markDone('voice', { voiceProvider: voiceId(provider) });
   }
 
   if (!v.done.render) {

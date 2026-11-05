@@ -40,8 +40,8 @@ export function Switch({ checked, onChange, label, labelledBy }) {
 /** Status of a video on one platform, as a coloured chip. */
 export function PlatformStatus({ rec, platform }) {
   if (!rec) return <span className="faint">Not posted</span>;
-  const tone = { published: 'ok', processing: 'info', uploading: 'info', pending: 'info', failed: 'danger', removed: 'neutral' }[rec.status] || 'neutral';
-  let label = { published: 'Published', processing: 'Processing', uploading: 'Uploading', pending: 'Waiting', failed: 'Failed', removed: 'Removed' }[rec.status] || rec.status;
+  const tone = { published: 'ok', processing: 'info', uploading: 'info', pending: 'info', interrupted: 'warn', failed: 'danger', removed: 'neutral' }[rec.status] || 'neutral';
+  let label = { published: 'Published', processing: 'Processing', uploading: 'Uploading', pending: 'Waiting', interrupted: 'Will re-check', failed: 'Failed', removed: 'Removed' }[rec.status] || rec.status;
   if (platform === 'youtube' && rec.status === 'published' && rec.privacy) label = rec.privacy[0].toUpperCase() + rec.privacy.slice(1);
   const chip = (
     <Chip tone={tone}>

@@ -22,14 +22,15 @@ services:
     command: ["node", "server/api.js"]
     ports:
       - "127.0.0.1:3000:3000"
-    environment: *env
+    environment:
+      <<: *env
+      IMPORT_DIR: /app/import
     volumes:
       - ./output:/app/output
       - ./footage:/app/footage
-      # Read once on first start to fill the dashboard's settings.
-      - ./.env:/app/.env:ro
-      - ./client_secret.json:/app/client_secret.json:ro
-      - ./token.json:/app/token.json:ro
+      # The project folder, read-only: .env, client_secret.json and token.json are read once on first start
+      # (missing files are simply skipped; single-file mounts would create empty folders on the PC instead).
+      - ./:/app/import:ro
     depends_on:
       - redis
     restart: unless-stopped

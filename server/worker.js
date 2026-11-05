@@ -6,19 +6,36 @@ const store = require('./store');
 const settings = require('./settings');
 const { runVideoJob } = require('./pipeline');
 const { QUEUE, createQueues, enqueueVideo } = require('./queues');
-const { processTick, runPublish } = require('./publishFlow');
+const { processTick, runPublish, markPublishJobFailed, recoverPublishRecords } = require('./publishFlow');
 const { syncSchedulers } = require('./scheduler');
 const { syncYoutube } = require('./youtubeSync');
 
 const HEARTBEAT_KEY = 'worker:heartbeat';
 const log = (...a) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...a);
 
+// While a video is being made, a publish/sync job that reloads settings must not change that video
+// halfway (format, voice, theme...): only the platform fields below are refreshed meanwhile.
+let activeVideoJobs = 0;
+const PLATFORM_CFG = ['youtubeClientSecret', 'youtubeToken', 'categoryId', 'syntheticMedia', 'privacy'];
+
 /** Settings from Redis into src/config.js, so every stage sees what the dashboard saved. */
 async function loadConfig(redis) {
   const s = await settings.loadSettings(redis);
-  cfg.applySettings(settings.toConfig(s));
+  const all = settings.toConfig(s);
+  cfg.applySettings(activeVideoJobs > 0 ? Object.fromEntries(PLATFORM_CFG.map((k) => [k, all[k]])) : all);
   cfg.onYoutubeTokens = (t) => settings.saveSettings(redis, { YOUTUBE_TOKEN: t }).catch(() => {});
   return s;
+}
+
+/** Load the full settings once, then keep them fixed for the whole video job. */
+async function runWithVideoConfig(redis, fn) {
+  await loadConfig(redis);
+  activeVideoJobs++;
+  try {
+    return await fn();
+  } finally {
+    activeVideoJobs--;
+  }
 }
 
 /** History (topics/themes of earlier videos) comes from Redis instead of history.json. */
@@ -66,11 +83,12 @@ function startWorker({ redis, deps, outDir, workerOpts = {}, processors = {}, on
     async (job) => {
       const { videoId } = job.data;
       if (!(await store.getVideo(redis, videoId))) return 'deleted';
-      await loadConfig(redis);
-      await loadHistory(redis, videoId);
-      log(`Video ${videoId}: attempt ${job.attemptsMade + 1}`);
-      await runVideoJob(videoId, { redis, deps, outDir, log: (l) => log(`${videoId}: ${l}`) });
-      return 'ready';
+      return runWithVideoConfig(redis, async () => {
+        await loadHistory(redis, videoId);
+        log(`Video ${videoId}: attempt ${job.attemptsMade + 1}`);
+        await runVideoJob(videoId, { redis, deps, outDir, log: (l) => log(`${videoId}: ${l}`) });
+        return 'ready';
+      });
     },
     {
       connection: redis,
@@ -94,7 +112,10 @@ function startWorker({ redis, deps, outDir, workerOpts = {}, processors = {}, on
   workers.push(videoWorker);
 
   for (const [name, fn] of Object.entries({ ...defaultProcessors(), ...processors })) {
-    workers.push(new Worker(name, (job) => fn(job, ctx), { connection: redis, concurrency: 1, ...workerOpts }));
+    const w = new Worker(name, (job) => fn(job, ctx), { connection: redis, concurrency: 1, maxStalledCount: 1000, ...workerOpts });
+    // A publish job BullMQ gave up on must not leave its record 'pending'/'uploading' forever.
+    if (name === QUEUE.publish) w.on('failed', (job, err) => job && markPublishJobFailed(redis, job, err).catch(() => {}));
+    workers.push(w);
   }
 
   const beat = () => redis.set(HEARTBEAT_KEY, new Date().toISOString(), 'EX', 30).catch(() => {});
@@ -104,6 +125,7 @@ function startWorker({ redis, deps, outDir, workerOpts = {}, processors = {}, on
   // Schedules follow the saved rules; a video record that lost its BullMQ job is queued again.
   const recover = (async () => {
     await syncSchedulers(queues, await store.listRules(redis));
+    await recoverPublishRecords(redis, queues);
     await queues.maintenance.upsertJobScheduler('youtube-sync', { every: YOUTUBE_SYNC_EVERY_MS }, { name: 'youtube-sync' });
     for (const v of await store.listVideos(redis, { limit: 1000 })) {
       if ((v.status === 'queued' || v.status === 'working') && !(await queues.videos.getJob(v.id))) {
@@ -136,4 +158,4 @@ if (require.main === module) {
   process.on('SIGINT', stop);
 }
 
-module.exports = { startWorker, loadConfig, HEARTBEAT_KEY };
+module.exports = { startWorker, loadConfig, runWithVideoConfig, HEARTBEAT_KEY };

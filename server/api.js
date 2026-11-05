@@ -251,8 +251,11 @@ if (require.main === module) {
   const { createQueues } = require('./queues');
   const redis = createRedis();
   const queues = createQueues(redis);
+  // Docker: the project folder is mounted read-only at IMPORT_DIR. Locally: this checkout and its .env.
+  const importDir = process.env.IMPORT_DIR || cfg.ROOT;
+  const env = process.env.IMPORT_DIR ? settings.readEnvFile(importDir) : process.env;
   settings
-    .ensureImported(redis, process.env, cfg.ROOT)
+    .ensureImported(redis, env, importDir)
     .then((first) => {
       if (first) console.log('Imported settings from .env');
       const port = Number(process.env.PORT || 3000);

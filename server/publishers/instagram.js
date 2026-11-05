@@ -60,8 +60,8 @@ async function publish(ctx) {
 async function findExisting(ctx) {
   const id = ctx.record && ctx.record.remoteId;
   if (!id) return null;
-  const status = await containerStatus(ctx, creds(ctx), id).catch(() => null);
-  return status === 'PUBLISHED' ? { remoteId: id, url: ctx.record.url || null } : null;
+  const status = await containerStatus(ctx, creds(ctx), id); // errors propagate: no upload without a check
+  return status === 'PUBLISHED' ? { remoteId: id, url: ctx.record.url || null, state: 'published' } : null;
 }
 
 async function test(ctx) {

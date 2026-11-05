@@ -99,12 +99,21 @@ async function publish(ctx) {
   return { remoteId: publishId, url: null, privacy, state: 'processing' };
 }
 
-/** A post whose publish_id was saved before a crash: anything but FAILED means it went through. */
+/**
+ * A post whose publish_id was saved before a crash. Posted = PUBLISH_COMPLETE, or every byte arrived and
+ * TikTok is processing. A half-uploaded post never completes, so it is not "existing" (a new post is no double).
+ * Errors propagate: the caller must not upload when it could not check.
+ */
 async function findExisting(ctx) {
   const id = ctx.record && ctx.record.remoteId;
   if (!id) return null;
-  const d = await postStatus(ctx, token(ctx), id).catch(() => null);
-  return d && d.status && d.status !== 'FAILED' ? { remoteId: id, url: ctx.record.url || null } : null;
+  const d = await postStatus(ctx, token(ctx), id);
+  if (d.status === 'PUBLISH_COMPLETE') return { remoteId: id, url: ctx.record.url || null, state: 'published' };
+  if (d.status === 'PROCESSING_UPLOAD') {
+    const size = fs.statSync(ctx.video.files.video).size;
+    if (Number(d.uploaded_bytes || 0) >= size) return { remoteId: id, url: ctx.record.url || null, state: 'processing' };
+  }
+  return null;
 }
 
 async function test(ctx) {

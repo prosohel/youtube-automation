@@ -113,3 +113,50 @@ test('runPublish records success, and failure with the error and attempt count',
   assert.equal(rec.remoteId, 'remote_1');
   assert.match(rec.error, /spam risk/);
 });
+
+test('F1: if checking the platform fails, nothing is uploaded and the record waits for a re-check', async (t) => {
+  const { r } = await setup(t);
+  const v = await store.createVideo(r, {});
+  await store.updateVideo(r, v.id, { status: 'ready', title: 't', platforms: { youtube: { status: 'uploading' } } });
+  const calls = [];
+  const pub = {
+    findExisting: async () => {
+      calls.push('find');
+      throw new Error('YouTube: insufficient scope (HTTP 403)');
+    },
+    publish: async () => {
+      calls.push('publish');
+    },
+  };
+  await assert.rejects(runPublish({ redis: r, videoId: v.id, platform: 'youtube', getPublisher: () => pub }), /insufficient scope/);
+  assert.deepEqual(calls, ['find']);
+  const rec = (await store.getVideo(r, v.id)).platforms.youtube;
+  assert.equal(rec.status, 'interrupted');
+  assert.match(rec.error, /Could not check youtube/i);
+  assert.equal(pickVideo([await store.getVideo(r, v.id)], 'youtube').id, v.id, 'an interrupted record is picked again later');
+});
+
+test('F2: publish records orphaned by a crash become re-pickable', async (t) => {
+  const { r, queues } = await setup(t);
+  const { recoverPublishRecords, markPublishJobFailed } = require('../server/publishFlow');
+  const a = await store.createVideo(r, {});
+  await store.updateVideo(r, a.id, {
+    status: 'ready',
+    platforms: { youtube: { status: 'pending' }, tiktok: { status: 'uploading', remoteId: 'p1' }, facebook: { status: 'published' } },
+  });
+  const b = await store.createVideo(r, {});
+  await store.updateVideo(r, b.id, { status: 'ready', platforms: { youtube: { status: 'pending' } } });
+  await queues.publish.add('publish', { videoId: b.id, platform: 'youtube' }, { jobId: `pub:${b.id}:youtube` });
+  await recoverPublishRecords(r, queues);
+  const ra = (await store.getVideo(r, a.id)).platforms;
+  assert.equal(ra.youtube.status, 'failed');
+  assert.equal(ra.youtube.attempts, 1);
+  assert.equal(ra.tiktok.status, 'interrupted');
+  assert.equal(ra.facebook.status, 'published');
+  assert.equal((await store.getVideo(r, b.id)).platforms.youtube.status, 'pending', 'a record with a live job is left alone');
+
+  await markPublishJobFailed(r, { data: { videoId: b.id, platform: 'youtube' } }, new Error('job stalled more than allowable limit'));
+  const rb = (await store.getVideo(r, b.id)).platforms.youtube;
+  assert.equal(rb.status, 'failed');
+  assert.match(rb.error, /stalled/);
+});

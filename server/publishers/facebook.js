@@ -63,14 +63,19 @@ async function publish(ctx) {
   return { remoteId: videoId, url: reelUrl(videoId), privacy: 'public', state: 'processing' };
 }
 
-/** A reel saved before a crash that is published or still processing is not posted again. */
+/**
+ * A reel saved before a crash: once "finish" was sent (publishing phase started) it is posted or on its way,
+ * so it is not posted again. Errors propagate: the caller must not upload when it could not check.
+ */
 async function findExisting(ctx) {
   const id = ctx.record && ctx.record.remoteId;
   if (!id) return null;
-  const st = await videoStatus(ctx, creds(ctx), id).catch(() => null);
-  if (!st) return null;
-  const published = st.publishing_phase && ['published', 'scheduled'].includes(st.publishing_phase.publish_status);
-  return published ? { remoteId: id, url: reelUrl(id) } : null;
+  const st = await videoStatus(ctx, creds(ctx), id);
+  if (['error', 'expired', 'upload_failed'].includes(st.video_status)) return null;
+  const ph = st.publishing_phase || {};
+  if (['published', 'scheduled'].includes(ph.publish_status)) return { remoteId: id, url: reelUrl(id), state: 'published' };
+  if (ph.status && ph.status !== 'not_started') return { remoteId: id, url: reelUrl(id), state: 'processing' };
+  return null;
 }
 
 async function test(ctx) {

@@ -100,6 +100,15 @@ function readJsonFile(file) {
   }
 }
 
+/** Key/values of rootDir/.env ({} when there is none). Docker mounts the project read-only for the first import. */
+function readEnvFile(rootDir) {
+  try {
+    return require('dotenv').parse(fs.readFileSync(path.join(rootDir, '.env')));
+  } catch {
+    return {};
+  }
+}
+
 /** Settings found in a .env-style object, plus client_secret.json / token.json from rootDir. Bad values are skipped. */
 function importFromEnv(env, rootDir) {
   const out = {};
@@ -187,6 +196,7 @@ function toConfig(settings, platform = process.platform) {
 module.exports = {
   SETTINGS_SCHEMA,
   defaults,
+  readEnvFile,
   importFromEnv,
   ensureImported,
   loadSettings,
