@@ -15,17 +15,20 @@ function createQueues(connection) {
 }
 
 /**
- * Queue a video job (jobId = videoId, so a video is never queued twice). A finished or failed job
- * with the same id is removed first, which is how "retry" works.
+ * Add a job whose id makes it unique: while one with that id is waiting/running, nothing new is added.
+ * A finished or failed one is removed first (BullMQ would otherwise silently ignore the add).
  */
-async function enqueueVideo(queues, videoId) {
-  const existing = await queues.videos.getJob(videoId);
+async function addUnique(queue, name, data, jobId, opts = {}) {
+  const existing = await queue.getJob(jobId);
   if (existing) {
     const state = await existing.getState();
     if (state !== 'completed' && state !== 'failed') return existing;
     await existing.remove();
   }
-  return queues.videos.add('make', { videoId }, { jobId: videoId, ...VIDEO_JOB_OPTS });
+  return queue.add(name, data, { ...opts, jobId });
 }
 
-module.exports = { QUEUE, VIDEO_JOB_OPTS, createQueues, enqueueVideo };
+/** Queue a video job (jobId = videoId, so a video is never queued twice). Also how "retry" works. */
+const enqueueVideo = (queues, videoId) => addUnique(queues.videos, 'make', { videoId }, videoId, VIDEO_JOB_OPTS);
+
+module.exports = { QUEUE, VIDEO_JOB_OPTS, createQueues, enqueueVideo, addUnique };

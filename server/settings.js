@@ -40,6 +40,7 @@ const SETTINGS_SCHEMA = [
   { key: 'PRIVACY_STATUS', cfg: 'privacy', group: 'channel', type: 'enum', options: ['private', 'unlisted', 'public'], default: 'private', label: 'YouTube privacy' },
   { key: 'YT_CATEGORY_ID', cfg: 'categoryId', group: 'channel', type: 'string', default: '28', label: 'YouTube category ID' },
   { key: 'SYNTHETIC_MEDIA', cfg: 'syntheticMedia', group: 'channel', type: 'boolean', default: true, label: 'Mark as AI-made content' },
+  { key: 'TOPIC_CATEGORIES', group: 'channel', type: 'json', default: ['AI', 'নতুন প্রযুক্তি ও আবিষ্কার', 'চাকরি হারানো', 'Privacy', 'AI বনাম মানুষ', 'Cybersecurity', 'Tech updates'], label: 'Topic categories for auto-picked videos' },
   // Platforms
   { key: 'YOUTUBE_CLIENT_SECRET', cfg: 'youtubeClientSecret', group: 'youtube', type: 'json', secret: true, default: null, label: 'Google OAuth client (client_secret.json)' },
   { key: 'YOUTUBE_TOKEN', cfg: 'youtubeToken', group: 'youtube', type: 'json', secret: true, default: null, label: 'YouTube sign-in' },

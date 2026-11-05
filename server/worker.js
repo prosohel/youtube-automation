@@ -6,6 +6,8 @@ const store = require('./store');
 const settings = require('./settings');
 const { runVideoJob } = require('./pipeline');
 const { QUEUE, createQueues, enqueueVideo } = require('./queues');
+const { processTick, runPublish } = require('./publishFlow');
+const { syncSchedulers } = require('./scheduler');
 
 const HEARTBEAT_KEY = 'worker:heartbeat';
 const log = (...a) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...a);
@@ -26,6 +28,17 @@ async function loadHistory(redis, exceptId) {
     .map((v) => ({ topic: v.topic, title: v.title, theme: v.theme && v.theme.id, url: v.platforms?.youtube?.url || null }));
   setHistoryBackend({ load: () => list, save: () => {} });
 }
+
+/** Cron ticks and publish jobs. */
+const defaultProcessors = () => ({
+  [QUEUE.ticks]: (job, ctx) => processTick(job, ctx),
+  [QUEUE.publish]: async (job, ctx) => {
+    await loadConfig(ctx.redis);
+    const rule = (await store.listRules(ctx.redis)).find((r) => r.id === job.data.ruleId);
+    const rec = await runPublish({ redis: ctx.redis, videoId: job.data.videoId, platform: job.data.platform, rule, log: ctx.log });
+    return rec.status;
+  },
+});
 
 /**
  * Start the background worker.
@@ -70,7 +83,7 @@ function startWorker({ redis, deps, outDir, workerOpts = {}, processors = {}, on
   });
   workers.push(videoWorker);
 
-  for (const [name, fn] of Object.entries(processors)) {
+  for (const [name, fn] of Object.entries({ ...defaultProcessors(), ...processors })) {
     workers.push(new Worker(name, (job) => fn(job, ctx), { connection: redis, concurrency: 1, ...workerOpts }));
   }
 
@@ -78,8 +91,9 @@ function startWorker({ redis, deps, outDir, workerOpts = {}, processors = {}, on
   beat();
   const timer = setInterval(beat, 10000);
 
-  // A video record that lost its BullMQ job (e.g. Redis restored without it) is queued again.
+  // Schedules follow the saved rules; a video record that lost its BullMQ job is queued again.
   const recover = (async () => {
+    await syncSchedulers(queues, await store.listRules(redis));
     for (const v of await store.listVideos(redis, { limit: 1000 })) {
       if ((v.status === 'queued' || v.status === 'working') && !(await queues.videos.getJob(v.id))) {
         log(`Re-queueing ${v.id} (no job found)`);
