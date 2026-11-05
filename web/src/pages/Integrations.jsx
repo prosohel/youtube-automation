@@ -1,0 +1,187 @@
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { api } from '../api.js';
+import { usePoll } from '../usePoll.js';
+import { Chip, PlatformBadge, Switch, useToast } from '../components/ui.jsx';
+
+const GROUPS = [
+  { id: 'ai', title: 'AI models', sub: 'Who finds topics and writes scripts.', tests: [['claude', 'Test Claude']],
+    note: 'Inside Docker, Claude Code has no browser login: run "claude setup-token" in a terminal on this PC and paste the token here. Or switch to the Anthropic API.' },
+  { id: 'voice', title: 'Voice', sub: 'Narration for every scene. If the main voice fails, the whole video is redone with the free Edge voice.', tests: [['elevenlabs', 'Test ElevenLabs']] },
+  { id: 'visuals', title: 'B-roll and visuals', sub: 'Your clips in the footage folder are used first, then stock sites.', tests: [['pixabay', 'Test Pixabay'], ['pexels', 'Test Pexels']] },
+  { id: 'channel', title: 'Channel defaults', sub: 'Used for every new video.', tests: [] },
+  { id: 'youtube', title: 'YouTube', platform: 'youtube', sub: 'Uploads stay private until Google approves your API project (YouTube API audit).', tests: [['youtube', 'Test YouTube']] },
+  { id: 'tiktok', title: 'TikTok', platform: 'tiktok', sub: 'Content Posting API. Until TikTok audits your app, posts can only be private (SELF_ONLY).', tests: [['tiktok', 'Test TikTok']] },
+  { id: 'meta', title: 'Instagram and Facebook', platform: 'instagram', sub: 'Instagram needs a Business or Creator account linked to a Facebook Page. Facebook posts Reels to a Page you manage.', tests: [['instagram', 'Test Instagram'], ['facebook', 'Test Facebook']] },
+];
+
+const isSecret = (spec) => Boolean(spec.secret);
+
+function Field({ spec, value, draft, setDraft }) {
+  const v = draft[spec.key] !== undefined ? draft[spec.key] : value;
+  const set = (x) => setDraft((d) => ({ ...d, [spec.key]: x }));
+  const id = `f-${spec.key}`;
+
+  if (spec.key === 'YOUTUBE_TOKEN') return null; // shown as the Connect button
+  if (spec.type === 'boolean') {
+    return (
+      <div className="between" style={{ minHeight: 44 }}>
+        <span id={id} className="field">{spec.label}</span>
+        <Switch checked={Boolean(v)} onChange={set} labelledBy={id} />
+      </div>
+    );
+  }
+  if (isSecret(spec)) {
+    const saved = value && value.set;
+    const typed = typeof draft[spec.key] === 'string' ? draft[spec.key] : '';
+    const multiline = spec.type === 'json';
+    return (
+      <label className="field" style={multiline ? { gridColumn: '1 / -1' } : undefined}>
+        <span className="between">
+          {spec.label}
+          {draft[spec.key] === null ? <Chip tone="warn">Will be cleared</Chip> : saved ? <Chip tone="ok">Saved</Chip> : <Chip>Not set</Chip>}
+        </span>
+        {multiline ? (
+          <textarea className="mono" value={typed} onChange={(e) => set(e.target.value)} placeholder={saved ? 'Saved. Paste new JSON to replace it.' : 'Paste the whole client_secret.json here'} />
+        ) : (
+          <input type="password" autoComplete="off" value={typed} onChange={(e) => set(e.target.value)} placeholder={saved ? 'Saved. Type to replace.' : 'Not set'} />
+        )}
+        {saved && draft[spec.key] !== null && (
+          <button type="button" className="link-btn" style={{ alignSelf: 'flex-start', fontSize: 13 }} onClick={() => set(null)}>
+            Clear saved value
+          </button>
+        )}
+      </label>
+    );
+  }
+  if (spec.type === 'enum') {
+    return (
+      <label className="field">
+        {spec.label}
+        <select value={v ?? ''} onChange={(e) => set(e.target.value)}>
+          {spec.options.map((o) => <option key={o} value={o}>{o === '' ? 'Claude picks per video' : o}</option>)}
+        </select>
+      </label>
+    );
+  }
+  if (spec.type === 'json') {
+    const text = Array.isArray(v) ? v.join('\n') : typeof v === 'string' ? v : JSON.stringify(v ?? '', null, 2);
+    return (
+      <label className="field" style={{ gridColumn: '1 / -1' }}>
+        {spec.label}
+        <textarea lang="bn" value={text} onChange={(e) => set(e.target.value.split('\n').map((x) => x.trim()).filter(Boolean))} />
+        <span className="hint">One per line.</span>
+      </label>
+    );
+  }
+  return (
+    <label className="field">
+      {spec.label}
+      <input type={spec.type === 'number' ? 'number' : 'text'} value={v ?? ''} onChange={(e) => set(spec.type === 'number' ? e.target.value : e.target.value)} />
+    </label>
+  );
+}
+
+function GroupCard({ group, schema, values, onSaved, setToast }) {
+  const [draft, setDraft] = useState({});
+  const [results, setResults] = useState({});
+  const specs = schema.filter((s) => s.group === group.id);
+  const dirty = Object.keys(draft).length > 0;
+
+  const save = async () => {
+    const patch = {};
+    for (const [k, val] of Object.entries(draft)) {
+      const spec = specs.find((s) => s.key === k);
+      if (isSecret(spec) && val === '') continue; // blank secret = unchanged
+      patch[k] = val;
+    }
+    try {
+      await api.send('PUT', '/api/settings', patch);
+      setDraft({});
+      setToast(`${group.title} saved`);
+      onSaved();
+    } catch (e) {
+      setToast(e.message);
+    }
+  };
+  const runTest = async (service) => {
+    setResults((r) => ({ ...r, [service]: { ok: null, detail: 'Testing…' } }));
+    const res = await api.send('POST', `/api/test/${service}`).catch((e) => ({ ok: false, detail: e.message }));
+    setResults((r) => ({ ...r, [service]: res }));
+  };
+
+  return (
+    <section className="card" aria-labelledby={`g-${group.id}`}>
+      <div className="inline" style={{ alignItems: 'flex-start', flexWrap: 'nowrap' }}>
+        {group.platform && <PlatformBadge id={group.platform} />}
+        <div className="stack" style={{ gap: 2 }}>
+          <h2 id={`g-${group.id}`} style={{ fontSize: 17 }}>{group.title}</h2>
+          <span className="faint">{group.sub}</span>
+        </div>
+      </div>
+      {group.note && <div className="banner tone-info">{group.note}</div>}
+      {group.id === 'youtube' && (
+        <div className="inline">
+          {values.YOUTUBE_TOKEN && values.YOUTUBE_TOKEN.set ? <Chip tone="ok">Signed in</Chip> : <Chip tone="danger">Not signed in</Chip>}
+          <a className="btn" href="/api/youtube/connect">{values.YOUTUBE_TOKEN && values.YOUTUBE_TOKEN.set ? 'Reconnect YouTube' : 'Connect YouTube'}</a>
+          <span className="faint">Reconnect once to allow status sync (read access).</span>
+        </div>
+      )}
+      <div className="fields">
+        {specs.map((s) => (
+          <Field key={s.key} spec={s} value={values[s.key]} draft={draft} setDraft={setDraft} />
+        ))}
+      </div>
+      <div className="between">
+        <div className="stack" style={{ gap: 4 }}>
+          {group.tests.map(([svc]) =>
+            results[svc] ? (
+              <span key={svc} role="status" style={{ fontSize: 13, color: results[svc].ok ? 'var(--ok)' : results[svc].ok === false ? 'var(--danger)' : 'var(--ink-3)' }}>
+                {results[svc].detail}
+              </span>
+            ) : null
+          )}
+        </div>
+        <div className="inline">
+          {group.tests.map(([svc, label]) => (
+            <button key={svc} type="button" className="btn btn-sm" onClick={() => runTest(svc)}>{label}</button>
+          ))}
+          <button type="button" className="btn btn-primary btn-sm" disabled={!dirty} onClick={save}>Save</button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export default function Integrations() {
+  const { data, reload } = usePoll('/api/settings', 120000);
+  const { data: clips } = usePoll('/api/clips', 120000);
+  const [params] = useSearchParams();
+  const [toast, setToast] = useToast();
+  const yt = params.get('youtube');
+  useEffect(() => {
+    if (yt) setToast(yt === 'connected' ? 'YouTube connected' : `YouTube: ${yt}`);
+  }, [yt, setToast]);
+
+  if (!data) return <div className="container"><h1>Integrations</h1><p className="muted">Loading…</p></div>;
+  return (
+    <div className="container">
+      <header className="stack" style={{ gap: 4 }}>
+        <h1>Integrations & settings</h1>
+        <p className="muted" style={{ margin: 0 }}>Keys are saved on this PC only (in Redis, inside Docker) and are never shown again after saving.</p>
+      </header>
+      {GROUPS.map((g) => (
+        <GroupCard key={g.id} group={g} schema={data.schema} values={data.values} onSaved={reload} setToast={setToast} />
+      ))}
+      <section className="card" aria-labelledby="lib-h">
+        <h2 id="lib-h" style={{ fontSize: 17 }}>Saved clip library</h2>
+        <span className="faint">Files in the footage folder. A scene uses a clip when 2 or more words of its file name match the scene keywords.</span>
+        <div className="inline" style={{ gap: 6 }}>
+          {(clips || []).map((c) => <Chip key={c.file}>{c.file.replace(/\.[^.]+$/, '')}</Chip>)}
+          {clips && clips.length === 0 && <span className="faint">No clips yet.</span>}
+        </div>
+      </section>
+      {toast}
+    </div>
+  );
+}

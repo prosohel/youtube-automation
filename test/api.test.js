@@ -141,3 +141,16 @@ test('media of an unknown video is 404 and paths cannot escape the output folder
   assert.equal((await call('GET', `/api/media/${v.id}/video`)).status, 404);
   assert.equal((await call('GET', '/api/media/v_nope/video')).status, 404);
 });
+
+test('schedule week lists every slot of enabled rules for the next 7 days', async (t) => {
+  const { call } = await boot(t);
+  await call('POST', '/api/rules', { kind: 'publish', platform: 'youtube', cron: '0 9,18 * * *', tz: 'Asia/Dhaka', enabled: true });
+  await call('POST', '/api/rules', { kind: 'publish', platform: 'tiktok', cron: '30 19 * * *', tz: 'Asia/Dhaka', enabled: false });
+  const res = await call('GET', '/api/schedule/week');
+  assert.equal(res.status, 200);
+  assert.ok(res.json.length >= 13 && res.json.length <= 14, `got ${res.json.length}`);
+  assert.ok(res.json.every((s) => s.platform === 'youtube' && s.kind === 'publish'));
+  const times = res.json.map((s) => Date.parse(s.at));
+  assert.deepEqual(times, [...times].sort((a, b) => a - b));
+  assert.ok(times[times.length - 1] - Date.now() <= 7 * 24 * 3600 * 1000);
+});

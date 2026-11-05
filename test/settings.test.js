@@ -70,3 +70,10 @@ test('toConfig maps to config field names and swaps the Windows caption font on 
   assert.equal(c.captionFont, 'Noto Sans Bengali');
   assert.equal(S.toConfig({ ...S.defaults(), CAPTION_FONT: 'Nirmala UI' }, 'win32').captionFont, 'Nirmala UI');
 });
+
+test('toConfig ignores a Windows Claude CLI path on Linux', () => {
+  const win = 'C:\Users\me\.local\bin\claude.exe';
+  assert.equal(S.toConfig({ ...S.defaults(), CLAUDE_BIN: win }, 'linux').claudeBin, 'claude');
+  assert.equal(S.toConfig({ ...S.defaults(), CLAUDE_BIN: '/usr/local/bin/claude' }, 'linux').claudeBin, '/usr/local/bin/claude');
+  assert.equal(S.toConfig({ ...S.defaults(), CLAUDE_BIN: win }, 'win32').claudeBin, win);
+});

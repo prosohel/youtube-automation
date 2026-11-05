@@ -142,6 +142,19 @@ function createApp({ redis, queues }) {
 
   app.get('/api/rules', async (req, res) => res.json((await store.listRules(redis)).map(withNext)));
 
+  // Every run of every enabled rule in the next 7 days (the Schedule page's week view).
+  app.get('/api/schedule/week', async (req, res) => {
+    const until = Date.now() + 7 * 24 * 3600 * 1000;
+    const slots = [];
+    for (const r of (await store.listRules(redis)).filter((x) => x.enabled && validateRule(x).ok)) {
+      for (const at of nextRuns(r, 60)) {
+        if (at.getTime() > until) break;
+        slots.push({ at: at.toISOString(), ruleId: r.id, kind: r.kind, platform: r.platform || null, count: r.count || null });
+      }
+    }
+    res.json(slots.sort((a, b) => a.at.localeCompare(b.at)));
+  });
+
   app.get('/api/rules/preview', async (req, res) => {
     const check = validateRule({ kind: 'make', cron: req.query.cron, tz: req.query.tz });
     if (!check.ok) throw bad(check.error);

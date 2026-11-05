@@ -179,6 +179,8 @@ function toConfig(settings, platform = process.platform) {
   for (const spec of SETTINGS_SCHEMA) if (spec.cfg) out[spec.cfg] = settings[spec.key];
   // Nirmala UI ships with Windows only; the Linux image has Noto Sans Bengali instead.
   if (platform === 'linux' && /nirmala/i.test(out.captionFont || '')) out.captionFont = 'Noto Sans Bengali';
+  // A Windows path imported from .env (C:\...\claude.exe) does not exist in the container; use the CLI on PATH.
+  if (platform === 'linux' && /^[a-z]:[\\/]|\.exe$/i.test(out.claudeBin || '')) out.claudeBin = 'claude';
   return out;
 }
 
