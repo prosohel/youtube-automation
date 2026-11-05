@@ -117,6 +117,14 @@ that talks to a plain HTTP API.
 New background styles, transitions or text animations go in the components under
 [src/remotion/](../src/remotion/).
 
+**Vox-style themes.** Themes with `"family": "vox"` (`vox-paper`, `vox-newsprint`, `vox-marker`) change how things
+move, not only how they look: `"motion": "stepped"` cuts every animation "on twos" (stop-motion), the camera is
+locked (no shake, zoom punch or motion blur), footage is shown as a tinted photo print, and the scene visuals are
+redrawn as paper cutouts by [src/remotion/Vox.jsx](../src/remotion/Vox.jsx) (tape, marker circle and underline,
+highlighter). The paper textures (`GRAIN`, `tornClip`, `halftone`) are in [shared.js](../src/remotion/shared.js).
+To add another Vox look, copy one of the three entries and change its colours, fonts, `card`, `headline`, `caption` and
+`bgStyles`. `test/themes.test.js` checks that every name you use exists in the renderer.
+
 ### Add a setting
 
 1. Add one entry to `SETTINGS_SCHEMA` in [server/settings.js](../server/settings.js). `group` decides which

@@ -28,7 +28,12 @@ const SETTINGS_SCHEMA = [
   { key: 'PIXABAY_API_KEY', cfg: 'pixabayKey', group: 'visuals', type: 'string', secret: true, default: '', label: 'Pixabay API key' },
   { key: 'PEXELS_API_KEY', cfg: 'pexelsKey', group: 'visuals', type: 'string', secret: true, default: '', label: 'Pexels API key' },
   { key: 'USE_REMOTION', cfg: 'useRemotion', group: 'visuals', type: 'boolean', default: true, label: 'Animated (Remotion) video' },
-  { key: 'THEME', cfg: 'theme', group: 'visuals', type: 'enum', options: ['', ...Object.keys(THEMES)], default: '', label: 'Design theme (empty = Claude picks)' },
+  {
+    key: 'THEME', cfg: 'theme', group: 'visuals', type: 'enum', options: ['', ...Object.keys(THEMES)], default: '', label: 'Design theme (empty = Claude picks)',
+    // Shown in the dashboard: a readable name per option and what the style suits.
+    optionLabels: Object.fromEntries(Object.entries(THEMES).map(([id, t]) => [id, t.label])),
+    optionHints: Object.fromEntries(Object.entries(THEMES).map(([id, t]) => [id, `Best for: ${t.mood}.`])),
+  },
   { key: 'SFX', cfg: 'sfx', group: 'visuals', type: 'boolean', default: true, label: 'Sound effects' },
   { key: 'VISUALS', cfg: 'visuals', group: 'visuals', type: 'enum', options: ['mixed', 'motion', 'footage'], default: 'mixed', label: 'Visuals' },
   { key: 'CAPTION_FONT', cfg: 'captionFont', group: 'visuals', type: 'string', default: 'DejaVu Sans', label: 'Caption font (ffmpeg fallback)' },

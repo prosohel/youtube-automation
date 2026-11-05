@@ -1,8 +1,9 @@
 import React from 'react';
 import { interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
 import { icons } from 'lucide-react';
-import { accentFor, bodyFont, cardStyle, headFont, pop, theme } from './shared';
+import { accentFor, bodyFont, cardStyle, headFont, isVox, parseStat, pop, theme } from './shared';
 import { OVERLAP } from './timeline';
+import { VoxVisual } from './Vox';
 
 export const VISUAL_START = OVERLAP + 2; // visuals begin as the scene transition finishes
 const START = VISUAL_START;
@@ -80,15 +81,6 @@ const IconVisual = ({ name, accent, isShort }) => {
       </div>
     </Stage>
   );
-};
-
-const parseStat = (value) => {
-  const m = String(value).match(/^(\D*)([\d.,]+)(.*)$/);
-  if (!m) return null;
-  const num = parseFloat(m[2].replace(/,/g, ''));
-  if (Number.isNaN(num)) return null;
-  const decimals = (m[2].split('.')[1] || '').length;
-  return { prefix: m[1], num, decimals, suffix: m[3], useComma: m[2].includes(',') };
 };
 
 const StatVisual = ({ value, label, accent, isShort }) => {
@@ -274,6 +266,13 @@ const CompareVisual = ({ left, right, isShort }) => {
 /** Picks the visual for a scene from the script's `visual` object; always falls back to an icon. */
 export const SceneVisual = ({ visual, accent, isShort }) => {
   const v = visual || {};
+  if (isVox()) {
+    return (
+      <Stage isShort={isShort}>
+        <VoxVisual visual={v} accent={accent} isShort={isShort} start={START} />
+      </Stage>
+    );
+  }
   if (v.type === 'stat' && v.value) return <StatVisual value={v.value} label={v.label} accent={accent} isShort={isShort} />;
   if (v.type === 'list' && v.items && v.items.length >= 2) return <ListVisual items={v.items} isShort={isShort} />;
   if (v.type === 'compare' && v.left && v.right) return <CompareVisual left={v.left} right={v.right} isShort={isShort} />;

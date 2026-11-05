@@ -20,7 +20,8 @@ import { pushCut } from '@remotion/transitions/push-cut';
 import { fade } from '@remotion/transitions/fade';
 import { CameraMotionBlur } from '@remotion/motion-blur';
 import { OVERLAP, buildTimeline } from './timeline';
-import { accentFor, energy, headFont, pop, setTheme, theme } from './shared';
+import { accentFor, cardStyle, energy, headFont, isVox, pop, setTheme, theme } from './shared';
+import { MarkerUnderline, Tape, draw } from './Vox';
 import { SceneVisual, VISUAL_START } from './Visuals';
 import { MotionBg, Overlays, Particles } from './Backgrounds';
 import { Captions, HeadlineCard } from './Text';
@@ -31,7 +32,7 @@ import { EmojiPop, LeakAt, Sfx } from './Effects';
  * are actually flying in or out. The rest of the time the layer renders once (5x cheaper).
  */
 const BlurWhileMoving = ({ moving, children }) =>
-  moving ? (
+  moving && !isVox() ? ( // paper cutouts have no motion blur
     <CameraMotionBlur shutterAngle={200} samples={5}>
       {children}
     </CameraMotionBlur>
@@ -85,7 +86,8 @@ const Scene = ({ scene, index, total, isShort, kicker }) => {
   const pan = interpolate(f, [0, dur], [-1.5 * dir, 1.5 * dir]);
 
   // Zoom punch + a short decaying camera shake as the scene lands (scaled by the video's energy).
-  const e = energy();
+  const vox = isVox();
+  const e = vox ? 0 : energy(); // Vox keeps the camera locked: no shake, no zoom punch
   const punch = Math.min(1, pop(f, fps, OVERLAP, 12));
   const shakeT = f - OVERLAP;
   const shake = shakeT >= 0 && shakeT < 12 ? (1 - shakeT / 12) * 9 * e : 0;
@@ -96,14 +98,24 @@ const Scene = ({ scene, index, total, isShort, kicker }) => {
   return (
     <AbsoluteFill style={{ background: theme().bg[0], overflow: 'hidden' }}>
       <AbsoluteFill style={{ transform: `translate(${sx}px, ${sy}px) scale(${1 + zoom - zoom * punch})` }}>
-        {scene.bg ? (
+        {scene.bg && vox ? (
+          // Footage as an archival print pinned on the paper: desaturated, framed, a little crooked.
+          <>
+            <MotionBg index={index} accent={accent} />
+            <AbsoluteFill style={{ padding: isShort ? '120px 50px 300px' : '70px 110px 190px', transform: `rotate(${index % 2 ? 0.8 : -0.8}deg)` }}>
+              <div style={{ width: '100%', height: '100%', overflow: 'hidden', border: `16px solid ${theme().surface}`, boxShadow: '6px 10px 30px rgba(60,40,10,0.45)', background: '#000' }}>
+                <OffthreadVideo src={staticFile(scene.bg)} muted style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'grayscale(0.8) sepia(0.3) contrast(1.05)' }} />
+              </div>
+            </AbsoluteFill>
+          </>
+        ) : scene.bg ? (
           <AbsoluteFill style={{ transform: `scale(${kb}) translateX(${pan}%)` }}>
             <OffthreadVideo src={staticFile(scene.bg)} muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </AbsoluteFill>
         ) : (
           <MotionBg index={index} accent={accent} />
         )}
-        {scene.bg ? (
+        {scene.bg && !vox ? (
           <AbsoluteFill style={{ background: 'linear-gradient(180deg, rgba(5,8,20,0.55) 0%, rgba(5,8,20,0.12) 38%, rgba(5,8,20,0.7) 100%)' }} />
         ) : null}
         <Particles count={isShort ? 14 : 18} seed={index + 7} />
@@ -157,7 +169,20 @@ const Intro = ({ title, kicker, isShort }) => {
               {kicker}
             </div>
           ) : null}
-          <div style={{ textAlign: 'center', lineHeight: 1.3 }}>
+          <div
+            style={{
+              textAlign: 'center',
+              lineHeight: 1.3,
+              // Vox: the title sits on a taped sheet of paper
+              ...(isVox() ? { ...cardStyle(accentFor(0)), position: 'relative', padding: isShort ? '50px 44px 56px' : '40px 70px 46px', transform: `rotate(${-1.2 + (1 - Math.min(1, kick)) * 4}deg)` } : {}),
+            }}
+          >
+            {isVox() ? (
+              <>
+                <Tape style={{ left: 40, top: -22, transform: 'rotate(-14deg)' }} w={120} />
+                <Tape style={{ right: 40, top: -22, transform: 'rotate(11deg)' }} w={120} />
+              </>
+            ) : null}
             {words.map((w, i) => {
               const s = Math.min(1, pop(f, fps, 6 + i * 3));
               return (
@@ -179,15 +204,21 @@ const Intro = ({ title, kicker, isShort }) => {
               );
             })}
           </div>
-          <div
-            style={{
-              marginTop: 40,
-              height: 10,
-              borderRadius: 5,
-              width: `${Math.min(1, line) * (isShort ? 55 : 30)}%`,
-              background: `linear-gradient(90deg, ${accentFor(0)}, ${accentFor(1)})`,
-            }}
-          />
+          {isVox() ? (
+            <div style={{ marginTop: 34 }}>
+              <MarkerUnderline width={isShort ? 520 : 560} color={accentFor(0)} p={draw(f, 22, 16)} seed={2} stroke={9} />
+            </div>
+          ) : (
+            <div
+              style={{
+                marginTop: 40,
+                height: 10,
+                borderRadius: 5,
+                width: `${Math.min(1, line) * (isShort ? 55 : 30)}%`,
+                background: `linear-gradient(90deg, ${accentFor(0)}, ${accentFor(1)})`,
+              }}
+            />
+          )}
         </AbsoluteFill>
       </BlurWhileMoving>
     </AbsoluteFill>

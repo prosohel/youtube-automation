@@ -15,7 +15,8 @@ topic  ->  script  ->  voice  ->  video  ->  publish
 - **Dashboard and background worker** in Docker: queue, schedules, integrations and status in one place.
 - **Picks up where it stopped.** After a crash or a shutdown, a half-made video continues from its last finished step.
 - **Free to start.** Works with your Claude plan and free Edge voices; paid voices and stock footage are optional.
-- **Eight animated themes** (Remotion), for Shorts (vertical) and long videos (landscape), in any language.
+- **Eleven animated themes** (Remotion), for Shorts (vertical) and long videos (landscape), in any language. Three of them are
+  Vox-style explainer looks (paper collage, newsprint, marker notes). Pick one in the dashboard under *Integrations > Design theme*.
 - **Built to be extended.** A new platform, voice or theme is one small file. See [Contributing](#contributing).
 
 | Stage | Tool |

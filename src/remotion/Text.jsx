@@ -1,8 +1,9 @@
 import React from 'react';
 import { interpolate, random, useCurrentFrame, useVideoConfig } from 'remotion';
-import { bodyFont, cardStyle, headFont, pop, theme } from './shared';
+import { GRAIN, bodyFont, cardStyle, headFont, pop, theme, tornClip } from './shared';
 import { OVERLAP } from './timeline';
 import { VISUAL_START } from './Visuals';
+import { Highlighter, MarkerUnderline, Tape, draw } from './Vox';
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
 
@@ -57,6 +58,34 @@ export const HeadlineCard = ({ text, accent, frames, isShort, kicker, seed = 0 }
         <div style={{ background: '#ffffff', padding: isShort ? '14px 26px' : '10px 22px', clipPath: `inset(0 ${(1 - b) * 100}% 0 0)` }}>
           <div style={{ ...textStyle, color: '#111111' }}>{text}</div>
         </div>
+      </div>
+    );
+  }
+
+  if (style === 'strip') {
+    // Vox paper collage: a torn paper label taped to the page, slides in on twos and lands with a tilt.
+    const s = clamp01(pop(f, fps, VISUAL_START, 12));
+    const tape = clamp01(pop(f, fps, VISUAL_START + 5, 14));
+    return wrap(
+      <div style={{ position: 'relative', display: 'inline-block', transform: `translateX(${(1 - s) * -280}px) rotate(-1.6deg)`, opacity: clamp01(s * 3), filter: 'drop-shadow(4px 7px 6px rgba(60,40,10,0.32))' }}>
+        <div style={{ backgroundColor: T.surface, backgroundImage: GRAIN, borderTop: `10px solid ${accent}`, clipPath: tornClip(`hd-${seed}`, 2.4), padding: isShort ? '24px 40px 26px' : '16px 32px 20px' }}>
+          <div style={textStyle}>{text}</div>
+        </div>
+        <Tape style={{ left: -28, top: -18, transform: 'rotate(-38deg)' }} w={96} scale={tape} />
+        <Tape style={{ right: -28, bottom: -14, transform: 'rotate(-38deg)' }} w={96} scale={tape} />
+      </div>
+    );
+  }
+
+  if (style === 'marker') {
+    // Vox marker notes: the words land, a highlighter sweeps behind them, a marker underline is drawn last.
+    const width = Math.min(isShort ? 760 : 1100, Math.max(220, String(text).length * fontSize * 0.5));
+    return wrap(
+      <div>
+        <div style={textStyle}>
+          <Highlighter p={draw(f, VISUAL_START + 4, 14)}>{wordSpans(3, 30)}</Highlighter>
+        </div>
+        <MarkerUnderline width={width} color={accent} p={draw(f, VISUAL_START + 16, 14)} seed={seed + 1} />
       </div>
     );
   }
@@ -182,6 +211,9 @@ export const Captions = ({ narration, frames, accent, isShort, onFootage = false
     underline: { background: T.dark || onFootage ? T.captionBg : 'transparent', borderRadius: 16, padding: isShort ? '16px 24px' : '10px 18px' },
     outline: { padding: '0 10px' },
     terminal: { background: T.captionBg, borderRadius: 4, border: `2px solid ${accent}`, padding: isShort ? '16px 24px' : '10px 18px' },
+    // Vox: a paper strip with a hard shadow, or ink on a plain paper label with a highlighter on the spoken word.
+    strip: { backgroundColor: T.captionBg, backgroundImage: GRAIN, borderRadius: 2, boxShadow: '4px 6px 0 rgba(60,40,10,0.22)', padding: isShort ? '18px 26px' : '10px 22px' },
+    marker: { background: T.captionBg, borderRadius: 8, padding: isShort ? '16px 24px' : '8px 18px' },
   }[style] || {};
 
   return (
@@ -227,6 +259,13 @@ export const Captions = ({ narration, frames, accent, isShort, onFootage = false
               </span>
             );
           }
+          if (style === 'marker') {
+            return (
+              <span key={gi} style={{ ...base, color: T.captionText, opacity: gi <= active ? 1 : 0.45 }}>
+                <Highlighter p={on ? s : 0}>{w}</Highlighter>
+              </span>
+            );
+          }
           if (style === 'pill') {
             return (
               <span key={gi} style={{ ...base, color: on ? accent : T.captionText, textShadow: on ? `0 0 22px ${accent}` : 'none', transform: `scale(${on ? 1 + 0.12 * s : 1})` }}>
@@ -240,7 +279,7 @@ export const Captions = ({ narration, frames, accent, isShort, onFootage = false
               key={gi}
               style={{
                 ...base,
-                borderRadius: style === 'terminal' ? 2 : 14,
+                borderRadius: style === 'terminal' || style === 'strip' ? 2 : 14,
                 color: on ? T.onAccent : T.captionText,
                 background: on ? accent : 'transparent',
                 boxShadow: on && T.dark ? `0 0 26px ${accent}99` : 'none',
