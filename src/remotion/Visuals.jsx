@@ -4,6 +4,7 @@ import { icons } from 'lucide-react';
 import { accentFor, bodyFont, cardStyle, headFont, isVox, parseStat, pop, theme } from './shared';
 import { OVERLAP } from './timeline';
 import { VoxVisual } from './Vox';
+import { LibraryVisual, LIBRARY_RENDERED } from './library';
 
 export const VISUAL_START = OVERLAP + 2; // visuals begin as the scene transition finishes
 const START = VISUAL_START;
@@ -266,6 +267,14 @@ const CompareVisual = ({ left, right, isShort }) => {
 /** Picks the visual for a scene from the script's `visual` object; always falls back to an icon. */
 export const SceneVisual = ({ visual, accent, isShort }) => {
   const v = visual || {};
+  if (LIBRARY_RENDERED.includes(v.type)) {
+    // Library graphics draw every theme themselves (the Vox look comes from Panel and pop).
+    return (
+      <Stage isShort={isShort}>
+        <LibraryVisual visual={v} accent={accent} isShort={isShort} start={START} />
+      </Stage>
+    );
+  }
   if (isVox()) {
     return (
       <Stage isShort={isShort}>

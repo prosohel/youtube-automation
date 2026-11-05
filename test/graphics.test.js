@@ -131,3 +131,30 @@ test('graphicsPrompt describes every library type with the real-numbers and no-r
   assert.match(G.graphicsPrompt(ON, ['bars']), /relied most on bars/);
   assert.equal(G.graphicsPrompt({ ...ON, directGraphics: false }, ['bars']), '');
 });
+
+/* ---------- composition contract ---------- */
+
+const fs = require('fs');
+const path = require('path');
+const readRemotion = (f) => fs.readFileSync(path.join(__dirname, '..', 'src', 'remotion', f), 'utf8');
+// Library types whose component isn't built yet. Shrinks to [] as the components land.
+const NOT_YET = ['bars', 'line', 'donut', 'timeline'];
+
+test('every library type the validator accepts has a component, and LIBRARY_RENDERED lists exactly those', () => {
+  const src = readRemotion('library/index.jsx');
+  const cases = [...src.matchAll(/case '(\w+)':/g)].map((m) => m[1]).sort();
+  assert.deepEqual(cases, G.LIBRARY_TYPES.filter((t) => !NOT_YET.includes(t)).sort());
+  const rendered = [...src.match(/LIBRARY_RENDERED = \[([^\]]*)\]/)[1].matchAll(/'(\w+)'/g)].map((m) => m[1]).sort();
+  assert.deepEqual(rendered, cases);
+});
+
+test('SceneVisual hands library graphics to LibraryVisual', () => {
+  assert.match(readRemotion('Visuals.jsx'), /import \{[^}]*\bLibraryVisual\b[^}]*\} from '\.\/library'/);
+});
+
+test('sound cues on bars and timeline events follow the library timing', () => {
+  const main = readRemotion('Main.jsx');
+  assert.match(main, /from '\.\/library\/timing'/);
+  assert.match(main, /COUNT_FRAMES/);
+  assert.match(main, /ITEM_STAGGER/);
+});

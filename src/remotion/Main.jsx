@@ -23,6 +23,7 @@ import { OVERLAP, buildTimeline } from './timeline';
 import { accentFor, cardStyle, energy, headFont, isVox, pop, setTheme, theme } from './shared';
 import { MarkerUnderline, Tape, draw } from './Vox';
 import { SceneVisual, VISUAL_START } from './Visuals';
+import { COUNT_FRAMES, ITEM_STAGGER } from './library/timing';
 import { MotionBg, Overlays, Particles } from './Backgrounds';
 import { Captions, HeadlineCard } from './Text';
 import { EmojiPop, LeakAt, Sfx } from './Effects';
@@ -334,12 +335,16 @@ const SFX_VOLUME = { whoosh: 0.35, whip: 0.35, ding: 0.3, 'mouse-click': 0.45, s
 const cueFrames = (scene, start, at) => {
   const v = scene.visual || {};
   const graphic = !scene.bg;
-  const landed = start + VISUAL_START + (v.type === 'stat' ? 38 : 10);
+  const landed = start + VISUAL_START + (v.type === 'stat' || v.type === 'bigNumber' ? COUNT_FRAMES : 10);
+  const each = (list, max) => (list || []).slice(0, max).map((_, i) => start + VISUAL_START + i * ITEM_STAGGER);
   if (at === 'enter') return [start];
   if (at === 'visual') return graphic ? [landed] : [];
   if (at === 'items') {
     if (!graphic) return [];
-    return v.type === 'list' ? (v.items || []).slice(0, 4).map((_, i) => start + VISUAL_START + i * 7) : [landed];
+    if (v.type === 'list') return each(v.items, 4);
+    if (v.type === 'bars') return each(v.bars, 6);
+    if (v.type === 'timeline') return each(v.events, 6);
+    return [landed];
   }
   if (at === 'emoji') return scene.emoji ? [start + VISUAL_START + 10] : [];
   return [];

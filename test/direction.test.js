@@ -156,3 +156,7 @@ test('recentDirection returns the two most-used picks of the last 3 videos', () 
     history.setHistoryBackend(null);
   }
 });
+
+test('the "items" cue is described for bars and timeline events too', () => {
+  assert.match(D.directionPrompt(ON, {}), /"items" \(on each point of a list, each bar or each timeline event\)/);
+});

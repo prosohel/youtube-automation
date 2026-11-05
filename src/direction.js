@@ -114,7 +114,7 @@ function directionPrompt(opts, recent = {}) {
   if (opts.sfx && opts.directSfx) {
     lines.push(
       `- For each scene give "sfx": 0-${MAX_CUES} sound cues like {"sound":"whoosh","at":"enter"}. sound is one of: ${SOUNDS.join(', ')}. ` +
-        'at is "enter" (as the scene arrives), "visual" (when its graphic lands), "items" (on each point of a list graphic) or "emoji" (when its emoji pops; only if the scene has one). ' +
+        'at is "enter" (as the scene arrives), "visual" (when its graphic lands), "items" (on each point of a list, each bar or each timeline event) or "emoji" (when its emoji pops; only if the scene has one). ' +
         'Sound only what deserves attention; [] makes a quiet scene. Do not put the same cue on every scene.' +
         avoid(recent.sounds)
     );

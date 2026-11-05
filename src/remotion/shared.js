@@ -162,3 +162,7 @@ export const cardStyle = (accent, opts = {}) => {
       };
   }
 };
+
+/** Font size that shrinks for text longer than `maxChars`, never below `min` of the base. */
+export const fitSize = (text, base, maxChars, min = 0.6) =>
+  base * Math.min(1, Math.max(min, maxChars / Math.max(1, String(text || '').length)));
