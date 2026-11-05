@@ -63,3 +63,9 @@ test('with the graphics switch off, library graphics are not described', async (
   await writeScript(topic);
   assert.doesNotMatch(asked[0].prompt, /"type":"bars"/);
 });
+
+test('B-roll is kept off scenes that carry a data graphic', async () => {
+  cfg.applySettings({ visuals: 'mixed' });
+  await writeScript(topic);
+  assert.match(asked[0].prompt, /"broll": false for scenes that rely on a stat, list, comparison or data graphic \(bigNumber, bars, line, donut, timeline\)/);
+});
