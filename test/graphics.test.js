@@ -138,7 +138,7 @@ const fs = require('fs');
 const path = require('path');
 const readRemotion = (f) => fs.readFileSync(path.join(__dirname, '..', 'src', 'remotion', f), 'utf8');
 // Library types whose component isn't built yet. Shrinks to [] as the components land.
-const NOT_YET = ['donut', 'timeline'];
+const NOT_YET = [];
 
 test('every library type the validator accepts has a component, and LIBRARY_RENDERED lists exactly those', () => {
   const src = readRemotion('library/index.jsx');
