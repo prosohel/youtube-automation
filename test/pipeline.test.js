@@ -201,3 +201,28 @@ test('F6: the voice in use is recorded before the first scene is made', async ()
   await runVideoJob(v.id, { redis: r, deps, outDir });
   assert.equal(seen, 'eleven');
 });
+
+test('the script stage keeps Claude\'s checked picks and the render receives them', async () => {
+  const cfg = require('../src/config');
+  cfg.applySettings({ directTransitions: true, directSfx: true, directCamera: true, sfx: true });
+  const r = await freshRedis();
+  const outDir = tmpOut();
+  const calls = [];
+  const renders = [];
+  const deps = fakeDeps(calls, { outDir, onRender: (args) => renders.push(args) });
+  const write = deps.writeScript;
+  deps.writeScript = async (t) => {
+    const s = await write(t);
+    s.kicker = 'স্ক্যাম সতর্কতা।';
+    s.scenes[0] = { ...s.scenes[0], transition: 'iris', camera: 'push', sfx: [{ sound: 'ding', at: 'enter' }] };
+    s.scenes[1] = { ...s.scenes[1], transition: 'spiral' };
+    return s;
+  };
+  const v = await store.createVideo(r, {});
+  const done = await runVideoJob(v.id, { redis: r, deps, outDir });
+  assert.equal(done.direction.kicker, 'স্ক্যাম সতর্কতা');
+  assert.deepEqual(done.direction.scenes[0], { transition: 'iris', camera: 'push', sfx: [{ sound: 'ding', at: 'enter' }] });
+  assert.equal(done.direction.scenes[1].transition, null);
+  assert.equal(renders.length, 1);
+  assert.deepEqual(renders[0].direction, done.direction);
+});

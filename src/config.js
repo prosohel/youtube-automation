@@ -31,6 +31,10 @@ const cfg = (module.exports = {
   theme: (process.env.THEME || '').toLowerCase(),
   // Sound effects on transitions/cards (whoosh, click, ding). SFX=false to turn off.
   sfx: (process.env.SFX || 'true').toLowerCase() !== 'false',
+  // Claude picks each scene's transition / sound cues / camera move (false = the theme's fixed behaviour)
+  directTransitions: (process.env.DIRECT_TRANSITIONS || 'true').toLowerCase() !== 'false',
+  directSfx: (process.env.DIRECT_SFX || 'true').toLowerCase() !== 'false',
+  directCamera: (process.env.DIRECT_CAMERA || 'true').toLowerCase() !== 'false',
   // 'mixed' = animated graphics + stock footage as B-roll on some scenes (default)
   // 'motion' = animated graphics only, 'footage' = stock/local clips on every scene
   visuals: (process.env.VISUALS || 'mixed').toLowerCase(),

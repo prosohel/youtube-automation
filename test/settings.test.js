@@ -84,3 +84,19 @@ test('F7: readEnvFile parses a .env in the import folder, or gives {} when there
   fs.writeFileSync(path.join(dir, '.env'), 'NICHE="Bangla tech"\nSFX=false\n');
   assert.deepEqual(S.readEnvFile(dir), { NICHE: 'Bangla tech', SFX: 'false' });
 });
+
+test('the "Claude picks" switches are in the Visuals card, on by default, and reach the config', () => {
+  const cfg = require('../src/config');
+  for (const [key, field] of [['DIRECT_TRANSITIONS', 'directTransitions'], ['DIRECT_SFX', 'directSfx'], ['DIRECT_CAMERA', 'directCamera']]) {
+    const spec = S.SETTINGS_SCHEMA.find((s) => s.key === key);
+    assert.ok(spec, key);
+    assert.equal(spec.group, 'visuals', key);
+    assert.equal(spec.type, 'boolean', key);
+    assert.equal(S.defaults()[key], true, key);
+    assert.equal(S.importFromEnv({ [key]: 'false' }, fs.mkdtempSync(path.join(os.tmpdir(), 'set-')))[key], false, key);
+    assert.equal(S.toConfig({ ...S.defaults(), [key]: false })[field], false, key);
+    cfg.applySettings({ [field]: false });
+    assert.equal(cfg[field], false, `${field} is a config field`);
+    cfg.applySettings({ [field]: true });
+  }
+});

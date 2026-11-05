@@ -85,19 +85,29 @@ const Scene = ({ scene, index, total, isShort, kicker }) => {
   const dir = index % 2 === 0 ? 1 : -1;
   const pan = interpolate(f, [0, dur], [-1.5 * dir, 1.5 * dir]);
 
-  // Zoom punch + a short decaying camera shake as the scene lands (scaled by the video's energy).
+  // Camera: Claude's pick for this scene, or (none picked) a zoom punch + short decaying shake as the
+  // scene lands, scaled by the video's energy. Vox keeps the camera locked whatever was picked.
   const vox = isVox();
-  const e = vox ? 0 : energy(); // Vox keeps the camera locked: no shake, no zoom punch
+  const cam = vox ? null : scene.camera;
+  const e = vox ? 0 : cam === 'punch' ? Math.max(1, energy()) : energy();
   const punch = Math.min(1, pop(f, fps, OVERLAP, 12));
   const shakeT = f - OVERLAP;
   const shake = shakeT >= 0 && shakeT < 12 ? (1 - shakeT / 12) * 9 * e : 0;
   const sx = (random(`sx-${index}-${f}`) - 0.5) * 2 * shake;
   const sy = (random(`sy-${index}-${f}`) - 0.5) * 2 * shake;
   const zoom = 0.07 * e;
+  const camera =
+    cam === 'still'
+      ? 'none'
+      : cam === 'push'
+        ? `scale(${interpolate(f, [0, dur], [1, 1.08])})`
+        : cam === 'pan'
+          ? `scale(1.06) translateX(${interpolate(f, [0, dur], [-1.8 * dir, 1.8 * dir])}%)`
+          : `translate(${sx}px, ${sy}px) scale(${1 + zoom - zoom * punch})`;
 
   return (
     <AbsoluteFill style={{ background: theme().bg[0], overflow: 'hidden' }}>
-      <AbsoluteFill style={{ transform: `translate(${sx}px, ${sy}px) scale(${1 + zoom - zoom * punch})` }}>
+      <AbsoluteFill style={{ transform: camera }}>
         {scene.bg && vox ? (
           // Footage as an archival print pinned on the paper: desaturated, framed, a little crooked.
           <>
@@ -155,7 +165,13 @@ const Intro = ({ title, kicker, isShort }) => {
             <div
               style={{
                 fontFamily: headFont(),
-                fontSize: isShort ? 44 : 34,
+                // A label is at most 28 characters (src/direction.js); longer ones get a smaller size and
+                // can never wrap or spill out of the bubble.
+                fontSize: (isShort ? 44 : 34) * (kicker.length > 16 ? 0.82 : 1),
+                whiteSpace: 'nowrap',
+                maxWidth: '100%',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
                 color: T.onAccent,
                 background: accentFor(0),
                 borderRadius: T.card === 'solid' || T.card === 'terminal' ? 4 : 999,
@@ -312,8 +328,35 @@ const makePresentation = (name, width, height) => {
 
 const timing = linearTiming({ durationInFrames: OVERLAP, easing: Easing.inOut(Easing.cubic) });
 
+const SFX_VOLUME = { whoosh: 0.35, whip: 0.35, ding: 0.3, 'mouse-click': 0.45, switch: 0.4 };
+
+/** Frames at which one of Claude's cues plays. Footage scenes hide the graphic, so its cues are dropped there. */
+const cueFrames = (scene, start, at) => {
+  const v = scene.visual || {};
+  const graphic = !scene.bg;
+  const landed = start + VISUAL_START + (v.type === 'stat' ? 38 : 10);
+  if (at === 'enter') return [start];
+  if (at === 'visual') return graphic ? [landed] : [];
+  if (at === 'items') {
+    if (!graphic) return [];
+    return v.type === 'list' ? (v.items || []).slice(0, 4).map((_, i) => start + VISUAL_START + i * 7) : [landed];
+  }
+  if (at === 'emoji') return scene.emoji ? [start + VISUAL_START + 10] : [];
+  return [];
+};
+
 /** Sound effects timed to the animation (only when the renderer cached the files). */
 const SceneSfx = ({ scene, start, index }) => {
+  if (Array.isArray(scene.sfx)) {
+    // Claude's cues for this scene ([] = a deliberately quiet scene).
+    return (
+      <>
+        {scene.sfx.flatMap((c, n) =>
+          cueFrames(scene, start, c.at).map((at, k) => <Sfx key={`${n}-${k}`} name={c.sound} at={at} volume={SFX_VOLUME[c.sound] ?? 0.35} />)
+        )}
+      </>
+    );
+  }
   const v = scene.visual || {};
   const out = [<Sfx key="w" name={index % 2 ? 'whip' : 'whoosh'} at={start} volume={0.35} />];
   if (!scene.bg && v.type === 'list') {
@@ -340,7 +383,7 @@ export const Main = (props) => {
         </TransitionSeries.Sequence>
         {scenes.map((s, i) => (
           <React.Fragment key={i}>
-            <TransitionSeries.Transition presentation={makePresentation(trans[i % trans.length], width, height)} timing={timing} />
+            <TransitionSeries.Transition presentation={makePresentation(s.transition || trans[i % trans.length], width, height)} timing={timing} />
             <TransitionSeries.Sequence durationInFrames={s.frames + OVERLAP}>
               <Scene scene={s} index={i} total={scenes.length} isShort={isShort} kicker={kicker} />
             </TransitionSeries.Sequence>

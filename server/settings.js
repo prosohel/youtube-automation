@@ -35,6 +35,9 @@ const SETTINGS_SCHEMA = [
     optionHints: Object.fromEntries(Object.entries(THEMES).map(([id, t]) => [id, `Best for: ${t.mood}.`])),
   },
   { key: 'SFX', cfg: 'sfx', group: 'visuals', type: 'boolean', default: true, label: 'Sound effects' },
+  { key: 'DIRECT_TRANSITIONS', cfg: 'directTransitions', group: 'visuals', type: 'boolean', default: true, label: 'Claude picks transitions (off = theme default)' },
+  { key: 'DIRECT_SFX', cfg: 'directSfx', group: 'visuals', type: 'boolean', default: true, label: 'Claude picks sound effects (off = fixed sounds)' },
+  { key: 'DIRECT_CAMERA', cfg: 'directCamera', group: 'visuals', type: 'boolean', default: true, label: 'Claude picks camera moves (off = theme default)' },
   { key: 'VISUALS', cfg: 'visuals', group: 'visuals', type: 'enum', options: ['mixed', 'motion', 'footage'], default: 'mixed', label: 'Visuals' },
   { key: 'CAPTION_FONT', cfg: 'captionFont', group: 'visuals', type: 'string', default: 'DejaVu Sans', label: 'Caption font (ffmpeg fallback)' },
   // Channel

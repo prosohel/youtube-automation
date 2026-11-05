@@ -7,6 +7,7 @@ const { ensureDir, slugify, log } = require('./util');
 const { makeVoice } = require('./voice');
 const { renderWithRemotion } = require('./render');
 const { resolveStyle } = require('./style');
+const { resolveDirection } = require('./direction');
 
 (async () => {
   const file = process.argv.slice(2).find((a) => !a.startsWith('--'));
@@ -23,7 +24,8 @@ const { resolveStyle } = require('./style');
   ensureDir(workDir);
 
   const scenes = await makeVoice(script.scenes, workDir);
-  const { videoFile, thumbFile } = await renderWithRemotion({ scenes, workDir, slug, title: script.title, theme });
+  const direction = resolveDirection(script, cfg);
+  const { videoFile, thumbFile } = await renderWithRemotion({ scenes, workDir, slug, title: script.title, theme, direction });
   log(`Done: ${videoFile}${thumbFile ? `\nThumbnail: ${thumbFile}` : ''}`);
 })().catch((e) => {
   console.error('\nFailed:', e.stack || e.message);

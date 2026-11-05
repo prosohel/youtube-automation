@@ -436,6 +436,7 @@ export const Overlays = ({ kicker, title, isShort }) => {
       )}
       {list.includes('ticker') && (
         <div style={{ position: 'absolute', top: 12, left: 0, right: 0, height: isShort ? 66 : 54, display: 'flex', background: '#ffffff', overflow: 'hidden' }}>
+          {kicker ? (
           <div
             style={{
               background: T.accents[0],
@@ -447,10 +448,12 @@ export const Overlays = ({ kicker, title, isShort }) => {
               display: 'flex',
               alignItems: 'center',
               zIndex: 2,
+              whiteSpace: 'nowrap',
             }}
           >
             {kicker}
           </div>
+          ) : null}
           <div style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
             <div
               style={{

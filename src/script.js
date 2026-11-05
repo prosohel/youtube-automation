@@ -3,6 +3,7 @@ const { log } = require('./util');
 const { askJson } = require('./llm');
 const { themeMenu, recentThemes } = require('./style');
 const { listLocalClips } = require('./footage');
+const { directionPrompt, recentDirection } = require('./direction');
 
 // Icons the animated visuals can draw (lucide-react names; unknown names fall back to Sparkles).
 const ICON_NAMES =
@@ -15,6 +16,7 @@ const SCRIPT_SCHEMA = {
   type: 'object',
   properties: {
     title: { type: 'string' },
+    kicker: { type: 'string' },
     description: { type: 'string' },
     tags: { type: 'array', items: { type: 'string' } },
     style: {
@@ -50,12 +52,19 @@ const SCRIPT_SCHEMA = {
           emoji: { type: 'string' },
           broll: { type: 'boolean' },
           keywords: { type: 'array', items: { type: 'string' } },
+          // Picked only when switched on in the dashboard; checked by src/direction.js.
+          transition: { type: 'string' },
+          camera: { type: 'string' },
+          sfx: {
+            type: 'array',
+            items: { type: 'object', properties: { sound: { type: 'string' }, at: { type: 'string' } }, required: ['sound', 'at'] },
+          },
         },
         required: ['narration', 'headline', 'visual'],
       },
     },
   },
-  required: ['title', 'description', 'tags', 'scenes', 'style'],
+  required: ['title', 'kicker', 'description', 'tags', 'scenes', 'style'],
 };
 
 // Google animated emoji the video can pop in as stickers (names from @remotion/animated-emoji).
@@ -77,6 +86,7 @@ async function writeScript(topic) {
   const sceneCount = isShort ? '6-8' : `${Math.max(8, cfg.targetMinutes * 4)}-${cfg.targetMinutes * 6}`;
 
   const recent = recentThemes();
+  const direction = directionPrompt(cfg, recentDirection());
   // Our own AI clips in ./footage; a scene only gets one if its keywords share 2+ words with the clip name
   const library = cfg.visuals === 'motion' ? [] : listLocalClips();
   const prompt = `Write a YouTube video script.
@@ -107,7 +117,7 @@ ${cfg.visuals === 'mixed' ? `- B-roll: stock video clips are mixed in with the a
 ` : cfg.visuals === 'footage' ? '- For each scene set "broll": true and give 2-3 "keywords": concrete, visual, English stock-footage search terms (e.g. "person typing laptop"). Avoid abstract words.\n' : ''}${library.length ? `- Our own B-roll library (looks better than stock footage, so prefer it whenever it fits). One clip per line:
 ${library.map((c) => `  - ${c}`).join('\n')}
   When a B-roll scene's subject fits one of these clips, make its FIRST keyword 2-4 words copied exactly from that clip's line (e.g. "humanoid robot face"), so that clip is chosen. A scene that fits a library clip may be a B-roll scene even when its subject is abstract (AI, privacy, security, job loss). Use each library clip at most once per video. Scenes that fit none of them still get normal stock-footage keywords.
-` : ''}
+` : ''}${direction ? `${direction}\n` : ''}
 Visual style of this video ("style"):
 - theme: pick the design that best fits this topic's mood. One of:
 ${themeMenu()}
@@ -118,6 +128,7 @@ ${recent.length ? `  Do NOT pick these, they were used in the last videos: ${rec
 
 Metadata rules:
 - title: under 70 characters, includes the search phrase naturally, no clickbait lies.
+- kicker: a 1-3 word tag in ${cfg.language} naming what kind of story this is (e.g. "স্ক্যাম সতর্কতা", "AI খবর", "প্রাইভেসি টিপস"), shown small above the title on the opening card. Not the title, not a sentence, no punctuation.
 - description: 2-3 short paragraphs, then 3 relevant hashtags on the last line.
 - tags: 8-12 tags.`;
 

@@ -1,6 +1,7 @@
 const { Worker } = require('bullmq');
 const cfg = require('../src/config');
 const { setHistoryBackend } = require('../src/history');
+const { summarizeDirection } = require('../src/direction');
 const { createRedis } = require('./redis');
 const store = require('./store');
 const settings = require('./settings');
@@ -43,7 +44,13 @@ async function loadHistory(redis, exceptId) {
   const list = (await store.listVideos(redis, { limit: 500 }))
     .filter((v) => v.id !== exceptId && v.done && v.done.script)
     .reverse() // oldest first, like history.json
-    .map((v) => ({ topic: v.topic, title: v.title, theme: v.theme && v.theme.id, url: v.platforms?.youtube?.url || null }));
+    .map((v) => ({
+      topic: v.topic,
+      title: v.title,
+      theme: v.theme && v.theme.id,
+      direction: summarizeDirection(v.direction),
+      url: v.platforms?.youtube?.url || null,
+    }));
   setHistoryBackend({ load: () => list, save: () => {} });
 }
 
@@ -164,4 +171,4 @@ if (require.main === module) {
   process.on('SIGINT', stop);
 }
 
-module.exports = { startWorker, loadConfig, runWithVideoConfig, HEARTBEAT_KEY };
+module.exports = { startWorker, loadConfig, loadHistory, runWithVideoConfig, HEARTBEAT_KEY };

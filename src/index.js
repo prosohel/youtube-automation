@@ -7,6 +7,7 @@ const { writeScript } = require('./script');
 const { makeVoice } = require('./voice');
 const { renderAny } = require('./renderAny');
 const { resolveStyle } = require('./style');
+const { resolveDirection, summarizeDirection } = require('./direction');
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((a) => {
@@ -43,6 +44,7 @@ async function main() {
 
   const { theme, notes } = resolveStyle(script.style);
   log(`Design: ${theme.label} (${theme.id}), energy ${theme.energy}${script.style?.reason ? ` - ${script.style.reason}` : ''}${notes.length ? ` [${notes.join('; ')}]` : ''}`);
+  const direction = resolveDirection(script, cfg);
 
   // 3. Voice
   log('Generating voice...');
@@ -50,7 +52,7 @@ async function main() {
 
   // 4. Video
   log('Rendering video...');
-  const { videoFile, thumbFile, credits = [] } = await renderAny({ scenes, workDir, slug, title: script.title, theme });
+  const { videoFile, thumbFile, credits = [] } = await renderAny({ scenes, workDir, slug, title: script.title, theme, direction });
   // Licence attributions (e.g. CC BY emoji) go at the end of the YouTube description.
   if (credits.length) script.description = `${script.description}\n\n${credits.join('\n')}`;
   log(`Video ready: ${videoFile}`);
@@ -67,10 +69,10 @@ async function main() {
       description: script.description,
       tags: script.tags,
     });
-    saveHistory({ topic: topic.topic, title: script.title, url, theme: theme.id });
+    saveHistory({ topic: topic.topic, title: script.title, url, theme: theme.id, direction: summarizeDirection(direction) });
     return;
   }
-  saveHistory({ topic: topic.topic, title: script.title, url: null, theme: theme.id });
+  saveHistory({ topic: topic.topic, title: script.title, url: null, theme: theme.id, direction: summarizeDirection(direction) });
 }
 
 main().catch((e) => {
