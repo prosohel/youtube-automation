@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest a new platform, voice, theme or other improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What do you want to do
+      description: The problem or goal, in your own words. "I want to post to LinkedIn too" is enough.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How it could work
+      description: Your idea for the solution, if you have one. Links to the relevant API docs help.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - New publishing platform
+        - New voice provider
+        - New AI model or provider
+        - Themes and animation
+        - Dashboard
+        - Schedules and queue
+        - Setup and docs
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Would you build it
+      options:
+        - label: I would like to open a pull request for this

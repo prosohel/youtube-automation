@@ -2,6 +2,30 @@
   "name": "yt-automation",
   "version": "1.0.0",
   "description": "AI pipeline: topic finding -> script -> voice -> video -> YouTube upload",
+  "license": "MIT",
+  "author": "SH SOHEL",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/prosohel/youtube-automation.git"
+  },
+  "bugs": {
+    "url": "https://github.com/prosohel/youtube-automation/issues"
+  },
+  "homepage": "https://github.com/prosohel/youtube-automation#readme",
+  "keywords": [
+    "youtube",
+    "youtube-automation",
+    "youtube-shorts",
+    "tiktok",
+    "instagram-reels",
+    "ai-video",
+    "video-generation",
+    "remotion",
+    "claude",
+    "text-to-speech",
+    "bullmq",
+    "self-hosted"
+  ],
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
