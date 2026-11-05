@@ -1,10 +1,10 @@
-# docker compose up -d --build     -> dashboard on http://localhost:3000 (this PC only)
+# docker compose up -d --build     -> dashboard on http://localhost:7000 (this PC only)
 # Every service restarts by itself, so everything comes back when Docker Desktop starts with Windows.
 name: automation-studio
 
 x-env: &env
   REDIS_URL: redis://redis:6379
-  PUBLIC_URL: http://localhost:3000
+  PUBLIC_URL: http://localhost:7000
   TZ: Asia/Dhaka
 
 services:
@@ -21,9 +21,10 @@ services:
     image: automation-studio:latest
     command: ["node", "server/api.js"]
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:7000:7000"
     environment:
       <<: *env
+      PORT: 7000
       IMPORT_DIR: /app/import
     volumes:
       - ./output:/app/output

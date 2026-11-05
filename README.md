@@ -9,7 +9,7 @@ docker compose up -d --build      # first time (builds the image, ~5 min)
 docker compose up -d              # later starts
 ```
 
-Open **http://localhost:3000** (reachable from this PC only). Three containers run: `redis` (queue, settings,
+Open **http://localhost:7000** (reachable from this PC only). Three containers run: `redis` (queue, settings,
 history; saved to disk), `web` (dashboard + API) and `worker` (makes and publishes videos). All of them restart by
 themselves, and the worker resumes any half-finished video from its last finished step.
 

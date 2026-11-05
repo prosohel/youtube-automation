@@ -33,5 +33,5 @@ COPY src ./src
 COPY server ./server
 COPY --from=web /web/dist ./web/dist
 
-EXPOSE 3000
+EXPOSE 7000
 CMD ["node", "server/api.js"]

@@ -11,7 +11,7 @@ const youtubeAuth = require('./youtubeAuth');
 
 const WEB_DIST = path.join(cfg.ROOT, 'web', 'dist');
 const FOOTAGE_DIR = path.join(cfg.ROOT, 'footage');
-const PUBLIC_URL = process.env.PUBLIC_URL || 'http://localhost:3000';
+const PUBLIC_URL = process.env.PUBLIC_URL || 'http://localhost:7000';
 
 class HttpError extends Error {
   constructor(status, message) {
@@ -258,7 +258,7 @@ if (require.main === module) {
     .ensureImported(redis, env, importDir)
     .then((first) => {
       if (first) console.log('Imported settings from .env');
-      const port = Number(process.env.PORT || 3000);
+      const port = Number(process.env.PORT || 7000);
       createApp({ redis, queues }).listen(port, '0.0.0.0', () => console.log(`Dashboard on ${PUBLIC_URL} (port ${port})`));
     })
     .catch((e) => {
