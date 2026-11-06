@@ -19,6 +19,7 @@ import { clockWipe } from '@remotion/transitions/clock-wipe';
 import { pushCut } from '@remotion/transitions/push-cut';
 import { fade } from '@remotion/transitions/fade';
 import { CameraMotionBlur } from '@remotion/motion-blur';
+import { Bell } from 'lucide-react';
 import { OVERLAP, buildTimeline } from './timeline';
 import { accentFor, bodyFont, cardStyle, energy, headFont, isVox, pop, setTheme, theme } from './shared';
 import { MarkerUnderline, Tape, draw } from './Vox';
@@ -304,7 +305,10 @@ const Outro = ({ subscribeText, brandLabel, isShort }) => {
               <path d="M8 5v14l11-7z" fill="#fff" />
             </svg>
             <span style={{ fontFamily: headFont(), fontSize: isShort ? 84 : 66, color: '#fff', opacity: Math.min(1, text) }}>{subscribeText}</span>
-            <span style={{ fontSize: isShort ? 80 : 62, display: 'inline-block', transform: `rotate(${wiggle}deg)`, transformOrigin: '50% 0%' }}>🔔</span>
+            {/* An SVG, not the bell emoji: the Docker image has no emoji font and drew an empty box. */}
+            <span style={{ display: 'inline-flex', transform: `rotate(${wiggle}deg)`, transformOrigin: '50% 0%' }}>
+              <Bell size={isShort ? 72 : 56} color="#fff" fill="#fff" strokeWidth={1.6} aria-hidden="true" />
+            </span>
           </div>
         </div>
         {brandLabel ? (
