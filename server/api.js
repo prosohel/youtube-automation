@@ -4,6 +4,7 @@ const express = require('express');
 const cfg = require('../src/config');
 const store = require('./store');
 const settings = require('./settings');
+const brands = require('./brands');
 const { enqueueVideo, addUnique } = require('./queues');
 const { validateRule, nextRuns, syncSchedulers } = require('./scheduler');
 const { computeOverview, workerState, slim } = require('./overview');
@@ -27,7 +28,7 @@ async function asBadRequest(fn) {
   try {
     return await fn();
   } catch (e) {
-    if (/^(Unknown setting|Invalid value)/.test(e.message)) throw bad(e.message);
+    if (/^(Unknown setting|Invalid value|Setting \S+ is shared)/.test(e.message)) throw bad(e.message);
     throw e;
   }
 }
@@ -45,6 +46,15 @@ function createApp({ redis, queues }) {
     return v;
   }
 
+  /** The brand a video or rule is made for: it must be named, exist and not be archived. */
+  async function activeBrandOr4xx(brandId) {
+    if (!brandId) throw bad('brandId is required');
+    const brand = await brands.getBrand(redis, String(brandId));
+    if (!brand) throw bad('Unknown brand');
+    if (brand.archived) throw new HttpError(409, 'Brand is archived');
+    return brand;
+  }
+
   async function resync() {
     await syncSchedulers(queues, await store.listRules(redis));
   }
@@ -56,37 +66,82 @@ function createApp({ redis, queues }) {
     res.json({ ok: true, redis: pong === 'PONG', worker: await workerState(redis) });
   });
 
-  app.get('/api/overview', async (req, res) => res.json(await computeOverview(redis, queues)));
+  app.get('/api/overview', async (req, res) => res.json(await computeOverview(redis, queues, { brandId: req.query.brand || undefined })));
 
   /* ---------- settings ---------- */
 
-  const schemaForUi = () => settings.SETTINGS_SCHEMA.map((s) => ({ ...s, default: s.secret ? null : s.default }));
+  const schemaForUi = (keep) => settings.SETTINGS_SCHEMA.filter((s) => keep(s.key)).map((s) => ({ ...s, default: s.secret ? null : s.default }));
+  const only = (obj, keep) => Object.fromEntries(Object.entries(obj).filter(([k]) => keep(k)));
+  const isShared = (k) => !settings.isBrandKey(k);
 
   // effective: settings this machine swaps for another value (a Windows path inside Docker), so the form can say so.
-  const settingsView = (s) => ({ values: settings.maskSettings(s), schema: schemaForUi(), effective: settings.effectiveValues(s) });
+  const settingsView = (s, keep) => ({
+    values: only(settings.maskSettings(s), keep),
+    schema: schemaForUi(keep),
+    effective: only(settings.effectiveValues(s), keep),
+  });
 
   app.get('/api/settings', async (req, res) => {
-    res.json(settingsView(await settings.loadSettings(redis)));
+    res.json(settingsView(await settings.loadSettings(redis), isShared));
   });
 
   app.put('/api/settings', async (req, res) => {
-    const saved = await asBadRequest(() => settings.saveSettings(redis, req.body || {}));
-    res.json(settingsView(saved));
+    const patch = req.body || {};
+    const own = Object.keys(patch).find(settings.isBrandKey);
+    if (own) throw bad(`Setting ${own} belongs to a brand; change it on the brand page`);
+    const saved = await asBadRequest(() => settings.saveSettings(redis, patch));
+    res.json(settingsView(saved, isShared));
+  });
+
+  /* ---------- brands ---------- */
+
+  const brandPage = async (brand) => ({ brand, ...settingsView(await brands.brandSettings(redis, brand.id), settings.isBrandKey) });
+
+  async function getBrandOr404(id) {
+    const brand = await brands.getBrand(redis, id);
+    if (!brand) throw new HttpError(404, 'Brand not found');
+    return brand;
+  }
+
+  app.get('/api/brands', async (req, res) => res.json(await brands.listBrands(redis, { includeArchived: Boolean(req.query.archived) })));
+
+  app.post('/api/brands', async (req, res) => {
+    const { name, copyFrom } = req.body || {};
+    res.status(201).json(await brands.createBrand(redis, { name, copyFrom }));
+  });
+
+  app.put('/api/brands/:id', async (req, res) => {
+    const { name, active, archived } = req.body || {};
+    res.json(await brands.updateBrand(redis, req.params.id, { name, active, archived }));
+  });
+
+  app.delete('/api/brands/:id', async (req, res) => {
+    await brands.deleteBrand(redis, req.params.id);
+    res.status(204).end();
+  });
+
+  app.get('/api/brands/:id/settings', async (req, res) => res.json(await brandPage(await getBrandOr404(req.params.id))));
+
+  app.put('/api/brands/:id/settings', async (req, res) => {
+    const brand = await getBrandOr404(req.params.id);
+    await asBadRequest(() => brands.saveBrandSettings(redis, brand.id, req.body || {}));
+    res.json(await brandPage(await getBrandOr404(brand.id)));
   });
 
   /* ---------- videos ---------- */
 
   app.get('/api/videos', async (req, res) => {
-    const list = await store.listVideos(redis, { status: req.query.status || undefined, limit: Number(req.query.limit) || 100 });
+    const list = await store.listVideos(redis, { status: req.query.status || undefined, limit: Number(req.query.limit) || 100, brandId: req.query.brand || undefined });
     res.json(list.map(slim));
   });
 
   app.get('/api/videos/:id', async (req, res) => res.json(await getVideoOr404(req.params.id)));
 
   app.post('/api/videos', async (req, res) => {
-    const { topic, category, platforms } = req.body || {};
+    const { brandId, topic, category, platforms } = req.body || {};
     if (platforms !== undefined && !Array.isArray(platforms)) throw bad('platforms must be a list');
-    const v = await store.createVideo(redis, { topic: String(topic || '').trim(), category: String(category || ''), platforms });
+    await activeBrandOr4xx(brandId);
+    const v = await store.createVideo(redis, { brandId, topic: String(topic || '').trim(), category: String(category || ''), platforms });
     await enqueueVideo(queues, v.id);
     res.status(201).json(v);
   });
@@ -104,6 +159,9 @@ function createApp({ redis, queues }) {
     const platform = req.body && req.body.platform;
     if (!store.PLATFORMS.includes(platform)) throw bad('Unknown platform');
     if (v.status !== 'ready') throw new HttpError(409, 'The video is not ready yet');
+    const brand = await brands.getBrand(redis, v.brandId);
+    if (!brand) throw new HttpError(409, 'This video has no brand');
+    if (!brand.active) throw new HttpError(409, `Brand "${brand.name}" is switched off`);
     const rec = v.platforms[platform];
     if (rec && ['pending', 'uploading', 'published', 'processing'].includes(rec.status)) throw new HttpError(409, `Already ${rec.status} on ${platform}`);
     await store.updateVideo(redis, v.id, (o) => ({ ...o, platforms: { ...o.platforms, [platform]: pendingRecord(o.platforms[platform]) } }));
@@ -144,29 +202,32 @@ function createApp({ redis, queues }) {
 
   /* ---------- rules ---------- */
 
-  app.get('/api/rules', async (req, res) => res.json((await store.listRules(redis)).map(withNext)));
+  const rulesOf = async (brandId) => (await store.listRules(redis)).filter((r) => !brandId || r.brandId === brandId);
+
+  app.get('/api/rules', async (req, res) => res.json((await rulesOf(req.query.brand || undefined)).map(withNext)));
 
   // Every run of every enabled rule in the next 7 days (the Schedule page's week view).
   app.get('/api/schedule/week', async (req, res) => {
     const until = Date.now() + 7 * 24 * 3600 * 1000;
     const slots = [];
-    for (const r of (await store.listRules(redis)).filter((x) => x.enabled && validateRule(x).ok)) {
+    for (const r of (await rulesOf(req.query.brand || undefined)).filter((x) => x.enabled && validateRule(x).ok)) {
       for (const at of nextRuns(r, 60)) {
         if (at.getTime() > until) break;
-        slots.push({ at: at.toISOString(), ruleId: r.id, kind: r.kind, platform: r.platform || null, count: r.count || null });
+        slots.push({ at: at.toISOString(), ruleId: r.id, brandId: r.brandId, kind: r.kind, platform: r.platform || null, count: r.count || null });
       }
     }
     res.json(slots.sort((a, b) => a.at.localeCompare(b.at)));
   });
 
   app.get('/api/rules/preview', async (req, res) => {
-    const check = validateRule({ kind: 'make', cron: req.query.cron, tz: req.query.tz });
+    const check = validateRule({ brandId: 'preview', kind: 'make', cron: req.query.cron, tz: req.query.tz }); // a preview belongs to no brand
     if (!check.ok) throw bad(check.error);
     res.json({ ok: true, next: nextRuns({ cron: req.query.cron, tz: req.query.tz }, 3).map((d) => d.toISOString()) });
   });
 
   const cleanRule = (body = {}) => {
     const rule = {
+      brandId: body.brandId,
       kind: body.kind,
       cron: String(body.cron || '').trim(),
       tz: body.tz,
@@ -181,7 +242,9 @@ function createApp({ redis, queues }) {
   };
 
   app.post('/api/rules', async (req, res) => {
-    const saved = await store.saveRule(redis, cleanRule(req.body));
+    const rule = cleanRule(req.body);
+    await activeBrandOr4xx(rule.brandId);
+    const saved = await store.saveRule(redis, rule);
     await resync();
     res.status(201).json(withNext(saved));
   });
@@ -189,7 +252,9 @@ function createApp({ redis, queues }) {
   app.put('/api/rules/:id', async (req, res) => {
     const old = (await store.listRules(redis)).find((r) => r.id === req.params.id);
     if (!old) throw new HttpError(404, 'Rule not found');
-    const saved = await store.saveRule(redis, { ...cleanRule(req.body), id: old.id, createdAt: old.createdAt });
+    const rule = cleanRule(req.body);
+    await activeBrandOr4xx(rule.brandId);
+    const saved = await store.saveRule(redis, { ...rule, id: old.id, createdAt: old.createdAt });
     await resync();
     res.json(withNext(saved));
   });
@@ -260,8 +325,10 @@ if (require.main === module) {
   const env = process.env.IMPORT_DIR ? settings.readEnvFile(importDir) : process.env;
   settings
     .ensureImported(redis, env, importDir)
-    .then((first) => {
+    .then(async (first) => {
       if (first) console.log('Imported settings from .env');
+      const { created } = await brands.ensureBrands(redis); // after the import, so the first brand takes the imported settings
+      if (created) console.log('Created the first brand from the existing setup');
       const port = Number(process.env.PORT || 7000);
       // The API has no login, so by default only this PC can reach it. In Docker the container must listen on
       // every interface (HOST=0.0.0.0 in docker-compose.yml); the port mapping there keeps it on 127.0.0.1.

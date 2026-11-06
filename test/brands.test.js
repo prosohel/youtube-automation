@@ -57,13 +57,15 @@ test('brand settings use the same patch rules as shared ones', async () => {
 
 test('a new brand copies settings but no credentials or account ids', async () => {
   const r = await freshRedis();
-  const a = await seedBrand(r, { name: 'A', settings: { LANGUAGE: 'Bangla', YOUTUBE_TOKEN: { a: 1 }, FACEBOOK_PAGE_ID: '42' } });
+  const a = await seedBrand(r, { name: 'A', settings: { LANGUAGE: 'Bangla', BRAND_HANDLE: '@a', SHOW_BRAND: true, YOUTUBE_TOKEN: { a: 1 }, FACEBOOK_PAGE_ID: '42' } });
   await B.setAccount(r, a.id, 'youtube', { id: 'UC1', name: 'One' });
   const copy = await B.createBrand(r, { name: 'Copy', copyFrom: a.id });
   const s = await B.brandSettings(r, copy.id);
   assert.equal(s.LANGUAGE, 'Bangla');
   assert.equal(s.YOUTUBE_TOKEN, null);
   assert.equal(s.FACEBOOK_PAGE_ID, '');
+  assert.equal(s.BRAND_HANDLE, ''); // the handle is the brand's own identity
+  assert.equal(s.SHOW_BRAND, true);
   assert.deepEqual(copy.accounts, {});
   assert.deepEqual((await B.getBrand(r, copy.id)).accounts, {});
 });

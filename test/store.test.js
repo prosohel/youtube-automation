@@ -52,6 +52,18 @@ test('listVideos is newest first and filters by status', async () => {
   assert.deepEqual((await store.listVideos(r)).map((v) => v.id), [b.id]);
 });
 
+test('createVideo stores brandId and listVideos filters by it', async () => {
+  const r = await freshRedis();
+  const a = await store.createVideo(r, { brandId: 'b_one' });
+  const b = await store.createVideo(r, { brandId: 'b_two' });
+  const none = await store.createVideo(r, {});
+  assert.equal(a.brandId, 'b_one');
+  assert.equal(none.brandId, null);
+  assert.deepEqual((await store.listVideos(r, { brandId: 'b_one' })).map((v) => v.id), [a.id]);
+  assert.deepEqual((await store.listVideos(r, { brandId: 'b_two', status: 'queued' })).map((v) => v.id), [b.id]);
+  assert.equal((await store.listVideos(r)).length, 3);
+});
+
 test('rules can be saved, listed and deleted', async () => {
   const r = await freshRedis();
   const rule = await store.saveRule(r, { kind: 'publish', platform: 'youtube', cron: '0 18 * * *', tz: 'Asia/Dhaka', enabled: true });

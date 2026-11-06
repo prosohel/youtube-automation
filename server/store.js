@@ -32,11 +32,12 @@ async function getVideo(redis, id) {
   return raw ? JSON.parse(raw) : null;
 }
 
-/** input: { topic?, category?, platforms?: string[] } (target platforms; per-platform state lives in `platforms`). */
+/** input: { brandId, topic?, category?, platforms?: string[] } (target platforms; per-platform state lives in `platforms`). */
 async function createVideo(redis, input = {}) {
   const now = new Date().toISOString();
   const video = {
     id: newId('v_'),
+    brandId: input.brandId || null,
     topic: input.topic || '',
     category: input.category || '',
     targets: (input.platforms || PLATFORMS).filter((p) => PLATFORMS.includes(p)),
@@ -70,7 +71,7 @@ async function appendLog(redis, id, line) {
   return updateVideo(redis, id, (v) => ({ ...v, log: [...(v.log || []), `${clock()} ${line}`].slice(-LOG_LINES) }));
 }
 
-async function listVideos(redis, { status, limit = 50 } = {}) {
+async function listVideos(redis, { status, limit = 50, brandId } = {}) {
   const ids = await redis.zrevrange('videos', 0, -1);
   if (!ids.length) return [];
   const raws = await redis.mget(ids.map(vKey));
@@ -78,6 +79,7 @@ async function listVideos(redis, { status, limit = 50 } = {}) {
     .filter(Boolean)
     .map((r) => JSON.parse(r))
     .filter((v) => !status || v.status === status)
+    .filter((v) => !brandId || v.brandId === brandId)
     .slice(0, limit);
 }
 

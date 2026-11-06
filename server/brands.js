@@ -10,8 +10,8 @@ const ACCOUNT_PLATFORMS = ['youtube', 'tiktok', 'facebook', 'instagram'];
 const ACCOUNT_ID_FIELD = { youtube: 'id', facebook: 'id', instagram: 'id', tiktok: 'username' };
 // Settings that hold the id of a Page or user: one brand each, recorded in `accounts`.
 const ACCOUNT_SETTINGS = { FACEBOOK_PAGE_ID: 'facebook', INSTAGRAM_USER_ID: 'instagram' };
-// A copy of a brand starts without any of these (credentials and account ids).
-const NOT_COPIED = (spec) => spec.secret || spec.key in ACCOUNT_SETTINGS;
+// A copy of a brand starts without any of these: credentials, account ids and the handle (a brand's own identity).
+const NOT_COPIED = (spec) => spec.secret || spec.key in ACCOUNT_SETTINGS || spec.key === 'BRAND_HANDLE';
 
 const newId = () => 'b_' + Array.from(crypto.randomBytes(10), (b) => (b % 36).toString(36)).join('');
 const settingsKey = (id) => `brand:${id}:settings`;
@@ -57,7 +57,7 @@ async function storedValues(redis, brandId) {
   return settings.parseHash(await redis.hgetall(settingsKey(brandId)));
 }
 
-/** A new brand. copyFrom: id of a brand whose settings it starts with, minus credentials and account ids. */
+/** A new brand. copyFrom: id of a brand whose settings it starts with, minus credentials, account ids and the handle. */
 async function createBrand(redis, { name, copyFrom } = {}) {
   const clean = cleanName(name);
   const copied = {};
