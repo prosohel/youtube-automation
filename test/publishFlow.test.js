@@ -4,6 +4,8 @@ const { freshRedis, closeAll } = require('./helpers/redis');
 const store = require('../server/store');
 const { createQueues } = require('../server/queues');
 const settings = require('../server/settings');
+const brands = require('../server/brands');
+const { seedBrand } = require('./helpers/brands');
 const { pickVideo, pendingRecord, processTick, runPublish, recheckProcessing, renderCaption } = require('../server/publishFlow');
 
 const connectYoutube = (r) => settings.saveSettings(r, { YOUTUBE_TOKEN: { refresh_token: 'x' }, YOUTUBE_CLIENT_SECRET: { installed: {} } });
@@ -58,7 +60,8 @@ test('two publish ticks never queue the same video twice for a platform', async 
 
 test('a make tick queues new videos in the rule category', async (t) => {
   const { r, queues, ctx } = await setup(t);
-  const rule = await store.saveRule(r, { kind: 'make', cron: '0 2 * * *', tz: 'UTC', count: 2, category: 'Privacy', enabled: true });
+  const brand = await seedBrand(r, { name: 'A' });
+  const rule = await store.saveRule(r, { kind: 'make', brandId: brand.id, cron: '0 2 * * *', tz: 'UTC', count: 2, category: 'Privacy', enabled: true });
   await processTick({ data: { ruleId: rule.id } }, ctx);
   const vids = await store.listVideos(r);
   assert.equal(vids.length, 2);
@@ -68,7 +71,8 @@ test('a make tick queues new videos in the rule category', async (t) => {
 
 test('a disabled or deleted rule does nothing', async (t) => {
   const { r, ctx } = await setup(t);
-  const rule = await store.saveRule(r, { kind: 'make', cron: '0 2 * * *', tz: 'UTC', count: 1, enabled: false });
+  const brand = await seedBrand(r, { name: 'A' });
+  const rule = await store.saveRule(r, { kind: 'make', brandId: brand.id, cron: '0 2 * * *', tz: 'UTC', count: 1, enabled: false });
   assert.equal(await processTick({ data: { ruleId: rule.id } }, ctx), 'skipped');
   assert.equal(await processTick({ data: { ruleId: 'r_gone' } }, ctx), 'skipped');
   assert.equal((await store.listVideos(r)).length, 0);
@@ -308,4 +312,31 @@ test('R5: posts left "processing" are asked about again and settled', async (t) 
   assert.equal(pickVideo([await store.getVideo(r, rejected)], 'tiktok').id, rejected, 'a rejected post can be posted again');
   assert.equal((await rec(waiting)).status, 'processing');
   assert.equal((await rec(offline)).status, 'processing', 'a failed check changes nothing');
+});
+
+test('make ticks create videos for the rule\'s brand from its categories', async (t) => {
+  const { r, queues, ctx } = await setup(t);
+  const a = await seedBrand(r, { name: 'A', settings: { TOPIC_CATEGORIES: ['Alpha'] } });
+  const b = await seedBrand(r, { name: 'B', settings: { TOPIC_CATEGORIES: ['Beta'] } });
+  const rule = await store.saveRule(r, { kind: 'make', brandId: b.id, cron: '0 2 * * *', tz: 'UTC', count: 2, enabled: true });
+  assert.equal(await processTick({ data: { ruleId: rule.id } }, ctx), 'made 2');
+  const vids = await store.listVideos(r);
+  assert.equal(vids.length, 2);
+  assert.ok(vids.every((v) => v.brandId === b.id && v.category === 'Beta'));
+  assert.equal((await store.listVideos(r, { brandId: a.id })).length, 0);
+  assert.equal((await queues.videos.getJobs(['waiting'])).length, 2);
+});
+
+test('a make tick for a switched-off brand makes nothing', async (t) => {
+  const { r, queues, ctx } = await setup(t);
+  const off = await seedBrand(r, { name: 'Off' });
+  const archived = await seedBrand(r, { name: 'Gone' });
+  await brands.updateBrand(r, off.id, { active: false });
+  await brands.updateBrand(r, archived.id, { archived: true });
+  for (const brand of [off, archived]) {
+    const rule = await store.saveRule(r, { kind: 'make', brandId: brand.id, cron: '0 2 * * *', tz: 'UTC', count: 1, enabled: true });
+    assert.equal(await processTick({ data: { ruleId: rule.id } }, ctx), 'brand off');
+  }
+  assert.equal((await store.listVideos(r)).length, 0);
+  assert.equal((await queues.videos.getJobs(['waiting'])).length, 0);
 });

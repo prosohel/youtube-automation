@@ -1,4 +1,4 @@
-const { Worker } = require('bullmq');
+const { Worker, DelayedError } = require('bullmq');
 const cfg = require('../src/config');
 const { setHistoryBackend } = require('../src/history');
 const { summarizeDirection } = require('../src/direction');
@@ -6,6 +6,7 @@ const { summarizeGraphics } = require('../src/graphics');
 const { createRedis } = require('./redis');
 const store = require('./store');
 const settings = require('./settings');
+const brands = require('./brands');
 const { runVideoJob } = require('./pipeline');
 const { QUEUE, createQueues, enqueueVideo } = require('./queues');
 const { processTick, runPublish, recheckProcessing, markPublishJobFailed, recoverPublishRecords } = require('./publishFlow');
@@ -18,20 +19,26 @@ const log = (...a) => console.log(`[${new Date().toISOString().slice(11, 19)}]`,
 // While a video is being made, a publish/sync job that reloads settings must not change that video
 // halfway (format, voice, theme...): only the platform fields below are refreshed meanwhile.
 let activeVideoJobs = 0;
-const PLATFORM_CFG = ['youtubeClientSecret', 'youtubeToken', 'categoryId', 'syntheticMedia', 'privacy'];
+const PLATFORM_CFG = ['youtubeClientSecret'];
+// The settings every brand shares. Brand keys are never applied here: a brand's own values come in with its video.
+const SHARED_CFG = settings.SETTINGS_SCHEMA.filter((spec) => spec.cfg && !settings.isBrandKey(spec.key)).map((spec) => spec.cfg);
+const VIDEO_WAIT_MS = 10 * 60 * 1000; // a switched-off brand's video is looked at again after this
 
-/** Settings from Redis into src/config.js, so every stage sees what the dashboard saved. */
+/** The shared settings from Redis into src/config.js. A brand's settings come in with its video (runWithVideoConfig). */
 async function loadConfig(redis) {
   const s = await settings.loadSettings(redis);
   const all = settings.toConfig(s);
-  cfg.applySettings(activeVideoJobs > 0 ? Object.fromEntries(PLATFORM_CFG.map((k) => [k, all[k]])) : all);
-  cfg.onYoutubeTokens = (t) => settings.saveSettings(redis, { YOUTUBE_TOKEN: t }).catch(() => {});
+  const keys = activeVideoJobs > 0 ? PLATFORM_CFG : SHARED_CFG;
+  cfg.applySettings(Object.fromEntries(keys.map((k) => [k, all[k]])));
   return s;
 }
 
-/** Load the full settings once, then keep them fixed for the whole video job. */
-async function runWithVideoConfig(redis, fn) {
-  await loadConfig(redis);
+/** Load the brand's full settings once, then keep them fixed for the whole video job. Only for making videos. */
+async function runWithVideoConfig(redis, brandId, fn) {
+  const brand = await brands.getBrand(redis, brandId);
+  const own = await brands.brandSettings(redis, brandId); // throws (config) for an unknown brand
+  cfg.applySettings({ ...settings.toConfig(own), brandName: brand.name });
+  cfg.onYoutubeTokens = null; // posting is a separate job; a video job never saves a sign-in
   activeVideoJobs++;
   try {
     return await fn();
@@ -40,9 +47,9 @@ async function runWithVideoConfig(redis, fn) {
   }
 }
 
-/** History (topics/themes of earlier videos) comes from Redis instead of history.json. */
-async function loadHistory(redis, exceptId) {
-  const list = (await store.listVideos(redis, { limit: 500 }))
+/** History (topics/themes of earlier videos) of one brand, from Redis instead of history.json. */
+async function loadHistory(redis, exceptId, brandId) {
+  const list = (await store.listVideos(redis, { limit: 500, brandId }))
     .filter((v) => v.id !== exceptId && v.done && v.done.script)
     .reverse() // oldest first, like history.json
     .map((v) => ({
@@ -60,7 +67,7 @@ async function loadHistory(redis, exceptId) {
 const defaultProcessors = () => ({
   [QUEUE.ticks]: (job, ctx) => processTick(job, ctx),
   [QUEUE.publish]: async (job, ctx) => {
-    await loadConfig(ctx.redis);
+    await loadConfig(ctx.redis); // shared keys only; Task 4 gives each post its brand's sign-in
     const rule = (await store.listRules(ctx.redis)).find((r) => r.id === job.data.ruleId);
     const rec = await runPublish({ redis: ctx.redis, videoId: job.data.videoId, platform: job.data.platform, rule, log: ctx.log });
     return rec.status;
@@ -82,6 +89,35 @@ const YOUTUBE_SYNC_EVERY_MS = 3 * 60 * 60 * 1000;
 const PUBLISH_RECHECK_EVERY_MS = 10 * 60 * 1000; // posts a platform was still processing when the upload job ended
 
 /**
+ * The video job's processor. A video is made with its brand's settings; a switched-off or archived brand's
+ * video waits (moved back to delayed, ten minutes at a time) without using up an attempt.
+ * ready: resolves once the move into brands is done; no video is looked at before that.
+ */
+function createVideoProcessor({ redis, deps, outDir, log: say = log, ready = Promise.resolve() }) {
+  return async (job, token) => {
+    await ready;
+    const { videoId } = job.data;
+    const video = await store.getVideo(redis, videoId);
+    if (!video) return 'deleted';
+    const brand = video.brandId ? await brands.getBrand(redis, video.brandId) : null;
+    if (!brand) throw new Error('This video has no brand');
+    if (!brand.active || brand.archived) {
+      const line = `Waiting: brand "${brand.name}" is switched off`;
+      const last = (video.log || []).at(-1);
+      if (!last || !last.endsWith(line)) await store.appendLog(redis, videoId, line);
+      await job.moveToDelayed(Date.now() + VIDEO_WAIT_MS, token);
+      throw new DelayedError();
+    }
+    return runWithVideoConfig(redis, brand.id, async () => {
+      await loadHistory(redis, videoId, brand.id);
+      say(`Video ${videoId}: attempt ${job.attemptsMade + 1}`);
+      await runVideoJob(videoId, { redis, deps, outDir, log: (l) => say(`${videoId}: ${l}`) });
+      return 'ready';
+    });
+  };
+}
+
+/**
  * Start the background worker.
  * workerOpts: BullMQ overrides (tests shorten lockDuration/stalledInterval).
  * processors: extra { [queueName]: fn(job, ctx) } registered by later features (ticks, publish, maintenance).
@@ -92,18 +128,17 @@ function startWorker({ redis, deps, outDir, workerOpts = {}, processors = {}, on
   const ctx = { redis, queues, log };
   const workers = [];
 
+  // Workers start taking jobs as soon as they exist, and the worker may start before the API: so today's setup
+  // is moved into a brand first, and every processor waits for that (and the shared settings) before it runs.
+  const ready = (async () => {
+    await brands.ensureBrands(redis);
+    await loadConfig(redis);
+  })();
+  ready.catch((e) => log(`Brands could not be set up: ${e.message}`));
+
   const videoWorker = new Worker(
     QUEUE.videos,
-    async (job) => {
-      const { videoId } = job.data;
-      if (!(await store.getVideo(redis, videoId))) return 'deleted';
-      return runWithVideoConfig(redis, async () => {
-        await loadHistory(redis, videoId);
-        log(`Video ${videoId}: attempt ${job.attemptsMade + 1}`);
-        await runVideoJob(videoId, { redis, deps, outDir, log: (l) => log(`${videoId}: ${l}`) });
-        return 'ready';
-      });
-    },
+    createVideoProcessor({ redis, deps, outDir, ready }),
     {
       connection: redis,
       concurrency: 1, // one render at a time
@@ -126,7 +161,7 @@ function startWorker({ redis, deps, outDir, workerOpts = {}, processors = {}, on
   workers.push(videoWorker);
 
   for (const [name, fn] of Object.entries({ ...defaultProcessors(), ...processors })) {
-    const w = new Worker(name, (job) => fn(job, ctx), { connection: redis, concurrency: 1, maxStalledCount: 1000, ...workerOpts });
+    const w = new Worker(name, async (job) => (await ready, fn(job, ctx)), { connection: redis, concurrency: 1, maxStalledCount: 1000, ...workerOpts });
     // A publish job BullMQ gave up on must not leave its record 'pending'/'uploading' forever.
     if (name === QUEUE.publish) w.on('failed', (job, err) => job && markPublishJobFailed(redis, job, err).catch(() => {}));
     workers.push(w);
@@ -138,6 +173,7 @@ function startWorker({ redis, deps, outDir, workerOpts = {}, processors = {}, on
 
   // Schedules follow the saved rules; a video record that lost its BullMQ job is queued again.
   const recover = (async () => {
+    await ready;
     await syncSchedulers(queues, await store.listRules(redis));
     await recoverPublishRecords(redis, queues);
     await queues.maintenance.upsertJobScheduler('youtube-sync', { every: YOUTUBE_SYNC_EVERY_MS }, { name: 'youtube-sync' });
@@ -173,4 +209,4 @@ if (require.main === module) {
   process.on('SIGINT', stop);
 }
 
-module.exports = { startWorker, loadConfig, loadHistory, runWithVideoConfig, HEARTBEAT_KEY };
+module.exports = { startWorker, createVideoProcessor, loadConfig, loadHistory, runWithVideoConfig, HEARTBEAT_KEY };

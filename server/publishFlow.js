@@ -1,5 +1,6 @@
 const store = require('./store');
 const settings = require('./settings');
+const brands = require('./brands');
 const { enqueueVideo, addUnique } = require('./queues');
 
 const MAX_PUBLISH_ATTEMPTS = 3;
@@ -57,12 +58,21 @@ async function processTick(job, { redis, queues, log = () => {} }) {
   if (!rule || !rule.enabled) return 'skipped';
 
   if (rule.kind === 'make') {
-    const s = await settings.loadSettings(redis);
+    const brand = await brands.getBrand(redis, rule.brandId);
+    if (!brand) {
+      log(`Rule ${rule.id}: its brand no longer exists, nothing made`);
+      return 'no brand';
+    }
+    if (!brand.active || brand.archived) {
+      log(`Rule ${rule.id}: brand "${brand.name}" is switched off, nothing made`);
+      return 'brand off';
+    }
+    const s = await brands.brandSettings(redis, brand.id);
     const cats = Array.isArray(s.TOPIC_CATEGORIES) ? s.TOPIC_CATEGORIES : [];
     const n = rule.count || 1;
     for (let i = 0; i < n; i++) {
       const category = rule.category || (cats.length ? cats[Math.floor(Math.random() * cats.length)] : '');
-      const v = await store.createVideo(redis, { category, platforms: rule.platforms });
+      const v = await store.createVideo(redis, { brandId: brand.id, category, platforms: rule.platforms });
       await enqueueVideo(queues, v.id);
     }
     log(`Rule ${rule.id}: queued ${n} new video(s)`);
