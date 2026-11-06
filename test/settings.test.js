@@ -129,3 +129,33 @@ test('the video length setting applies to every video and warns about the 3-minu
   assert.match(spec.hint, /Shorts/);
   assert.match(spec.hint, /3 minutes/);
 });
+
+test('BRAND_KEYS is exactly what each brand keeps for itself', () => {
+  const expected = [
+    // channel
+    'NICHE', 'LANGUAGE', 'VIDEO_FORMAT', 'TARGET_MINUTES', 'TOPIC_CATEGORIES', 'PRIVACY_STATUS', 'YT_CATEGORY_ID', 'SYNTHETIC_MEDIA',
+    // look
+    'THEME', 'VISUALS',
+    // voice
+    'TTS_PROVIDER', 'ELEVENLABS_VOICE_ID', 'ELEVENLABS_STYLE_TAGS', 'VOICE', 'TTS_RATE', 'GOOGLE_TTS_VOICE',
+    // accounts
+    'YOUTUBE_TOKEN', 'TIKTOK_ACCESS_TOKEN', 'TIKTOK_REFRESH_TOKEN', 'TIKTOK_PRIVACY', 'FACEBOOK_PAGE_ID', 'FACEBOOK_PAGE_TOKEN', 'INSTAGRAM_USER_ID', 'INSTAGRAM_ACCESS_TOKEN',
+    // on the video
+    'BRAND_HANDLE', 'SHOW_BRAND',
+  ];
+  assert.deepEqual([...S.BRAND_KEYS].sort(), [...expected].sort());
+  assert.equal(S.isBrandKey('LANGUAGE'), true);
+  assert.equal(S.isBrandKey('ELEVENLABS_API_KEY'), false);
+  assert.equal(S.isBrandKey('YOUTUBE_CLIENT_SECRET'), false);
+});
+
+test('SHOW_BRAND is off by default and feeds cfg.showBrand; BRAND_HANDLE feeds cfg.brandHandle', () => {
+  const show = S.SETTINGS_SCHEMA.find((s) => s.key === 'SHOW_BRAND');
+  assert.equal(show.default, false);
+  assert.equal(show.type, 'boolean');
+  assert.equal(S.defaults().SHOW_BRAND, false);
+  assert.equal(S.toConfig({ ...S.defaults(), BRAND_HANDLE: '@cats', SHOW_BRAND: true }).brandHandle, '@cats');
+  assert.equal(S.toConfig({ ...S.defaults(), SHOW_BRAND: true }).showBrand, true);
+  const cfg = require('../src/config');
+  for (const field of ['brandName', 'brandHandle', 'showBrand']) assert.ok(Object.prototype.hasOwnProperty.call(cfg, field), field);
+});

@@ -63,6 +63,11 @@ const cfg = (module.exports = {
   syntheticMedia: (process.env.SYNTHETIC_MEDIA || 'true').toLowerCase() !== 'false',
   categoryId: process.env.YT_CATEGORY_ID || '28',
 
+  // The brand a dashboard video is made for (server/brands.js); the CLI has none.
+  brandName: '',
+  brandHandle: '',
+  showBrand: false,
+
   // Set by the dashboard/worker (server/settings.js); the CLI leaves them empty and uses files/.env.
   claudeOauthToken: process.env.CLAUDE_CODE_OAUTH_TOKEN || '',
   youtubeClientSecret: null, // parsed client_secret.json
