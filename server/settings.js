@@ -51,7 +51,7 @@ const SETTINGS_SCHEMA = [
   { key: 'PRIVACY_STATUS', scope: 'brand', cfg: 'privacy', group: 'channel', type: 'enum', options: ['private', 'unlisted', 'public'], default: 'private', label: 'YouTube privacy' },
   { key: 'YT_CATEGORY_ID', scope: 'brand', cfg: 'categoryId', group: 'channel', type: 'string', default: '28', label: 'YouTube category ID' },
   { key: 'SYNTHETIC_MEDIA', scope: 'brand', cfg: 'syntheticMedia', group: 'channel', type: 'boolean', default: true, label: 'Mark as AI-made content' },
-  { key: 'BRAND_HANDLE', cfg: 'brandHandle', scope: 'brand', group: 'channel', type: 'string', default: '', label: 'Brand handle (shown on the video)' },
+  { key: 'BRAND_HANDLE', cfg: 'brandHandle', scope: 'brand', requires: 'SHOW_BRAND', group: 'channel', type: 'string', default: '', label: 'Brand handle (shown on the video)' },
   { key: 'SHOW_BRAND', cfg: 'showBrand', scope: 'brand', group: 'channel', type: 'boolean', default: false, label: 'Show brand on video' },
   { key: 'TOPIC_CATEGORIES', scope: 'brand', group: 'channel', type: 'json', default: ['AI', 'নতুন প্রযুক্তি ও আবিষ্কার', 'চাকরি হারানো', 'Privacy', 'AI বনাম মানুষ', 'Cybersecurity', 'Tech updates'], label: 'Topic categories for auto-picked videos' },
   // Platforms

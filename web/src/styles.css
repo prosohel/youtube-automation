@@ -166,3 +166,7 @@ video.preview { width: 100%; max-height: 420px; background: #000; border-radius:
 
 /* ---------- queue: the details panel scrolls on its own and stays in view ---------- */
 .detail-panel { align-self: flex-start; position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
+.brand-card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.brand-name-input { flex: 1 1 220px; min-width: 0; min-height: 44px; padding: 0 12px; border: 1px solid transparent; border-radius: 10px; background: transparent; font-family: var(--display); font-weight: 700; font-size: 18px; color: var(--ink); }
+.brand-name-input:hover, .brand-name-input:focus { border-color: var(--field); background: var(--surface); }
+.field input:disabled, .field select:disabled, .field textarea:disabled { background: var(--surface-2); color: var(--ink-4); cursor: not-allowed; }

@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { usePoll } from './usePoll.js';
 
@@ -20,6 +20,10 @@ const writeStored = (id) => {
   }
 };
 
+const CHANGED = 'brands-changed';
+/** Tell every open picker and list that a brand was added, renamed, switched, archived or deleted. */
+export const notifyBrandsChanged = () => window.dispatchEvent(new Event(CHANGED));
+
 /** "bn" when a brand name is written in Bangla, so it is read with a Bangla voice. */
 export const nameLang = (name) => (/[\u0980-\u09FF]/.test(name || '') ? 'bn' : undefined);
 
@@ -35,7 +39,11 @@ export const withBrand = (path, picked) =>
  */
 export function useBrands() {
   const [params, setParams] = useSearchParams();
-  const { data } = usePoll('/api/brands?archived=1', 60000);
+  const { data, reload } = usePoll('/api/brands?archived=1', 60000);
+  useEffect(() => {
+    window.addEventListener(CHANGED, reload);
+    return () => window.removeEventListener(CHANGED, reload);
+  }, [reload]);
   const all = useMemo(() => data || [], [data]);
   const brands = useMemo(() => all.filter((b) => !b.archived), [all]);
   const wanted = params.get('brand') || readStored() || ALL;
