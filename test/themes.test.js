@@ -69,3 +69,25 @@ test('every theme is selectable in the dashboard with a readable name', () => {
     assert.ok(spec.optionHints[id].includes(t.mood));
   }
 });
+
+test('the intro and outro draw brandLabel only when it is set', () => {
+  const main = read('Main.jsx');
+  const body = (name) => {
+    const start = main.indexOf(`const ${name} = (`);
+    assert.ok(start >= 0, `${name} component`);
+    const next = main.indexOf('\nconst ', start + 1);
+    return main.slice(start, next);
+  };
+  for (const name of ['Intro', 'Outro']) {
+    const src = body(name);
+    const guard = src.search(/\{\s*brandLabel\s*\?/);
+    assert.ok(guard >= 0, `${name} draws brandLabel behind a truthiness guard`);
+    const block = src.slice(guard, src.indexOf('</div>', guard)); // the label's own element (the kicker has its own ellipsis)
+    assert.match(block, /brandLabel\.length > 16/, `${name} shrinks a long label`);
+    assert.match(block, /whiteSpace: 'nowrap'/, `${name} never wraps the label`);
+    assert.match(block, /textOverflow: 'ellipsis'/, `${name} ellipsises a label that still does not fit`);
+    assert.match(block, /T\.muted/, `${name} uses the theme's muted colour`);
+  }
+  assert.match(main, /<Intro [^>]*brandLabel=\{brandLabel\}/, 'Main hands brandLabel to Intro');
+  assert.match(main, /<Outro [^>]*brandLabel=\{brandLabel\}/, 'Main hands brandLabel to Outro');
+});

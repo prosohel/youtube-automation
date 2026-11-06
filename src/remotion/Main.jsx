@@ -20,7 +20,7 @@ import { pushCut } from '@remotion/transitions/push-cut';
 import { fade } from '@remotion/transitions/fade';
 import { CameraMotionBlur } from '@remotion/motion-blur';
 import { OVERLAP, buildTimeline } from './timeline';
-import { accentFor, cardStyle, energy, headFont, isVox, pop, setTheme, theme } from './shared';
+import { accentFor, bodyFont, cardStyle, energy, headFont, isVox, pop, setTheme, theme } from './shared';
 import { MarkerUnderline, Tape, draw } from './Vox';
 import { SceneVisual, VISUAL_START } from './Visuals';
 import { COUNT_FRAMES, ITEM_STAGGER } from './library/timing';
@@ -146,7 +146,7 @@ const Scene = ({ scene, index, total, isShort, kicker }) => {
   );
 };
 
-const Intro = ({ title, kicker, isShort }) => {
+const Intro = ({ title, kicker, brandLabel, isShort }) => {
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
   const T = theme();
@@ -236,15 +236,34 @@ const Intro = ({ title, kicker, isShort }) => {
               }}
             />
           )}
+          {brandLabel ? (
+            <div
+              style={{
+                marginTop: 30,
+                fontFamily: bodyFont(),
+                // A handle or channel name: one quiet line that never wraps or spills past the screen padding.
+                fontSize: (isShort ? 38 : 30) * (brandLabel.length > 16 ? 0.8 : 1),
+                whiteSpace: 'nowrap',
+                maxWidth: '100%',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                color: T.muted,
+                opacity: Math.min(1, line),
+              }}
+            >
+              {brandLabel}
+            </div>
+          ) : null}
         </AbsoluteFill>
       </BlurWhileMoving>
     </AbsoluteFill>
   );
 };
 
-const Outro = ({ subscribeText, isShort }) => {
+const Outro = ({ subscribeText, brandLabel, isShort }) => {
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
+  const T = theme();
   const btn = pop(f, fps, OVERLAP + 2, 10);
   const text = pop(f, fps, OVERLAP + 10);
   const ringP = ((f - OVERLAP) % 40) / 40;
@@ -288,6 +307,23 @@ const Outro = ({ subscribeText, isShort }) => {
             <span style={{ fontSize: isShort ? 80 : 62, display: 'inline-block', transform: `rotate(${wiggle}deg)`, transformOrigin: '50% 0%' }}>🔔</span>
           </div>
         </div>
+        {brandLabel ? (
+          <div
+            style={{
+              marginTop: 36,
+              fontFamily: bodyFont(),
+              fontSize: (isShort ? 44 : 34) * (brandLabel.length > 16 ? 0.8 : 1),
+              whiteSpace: 'nowrap',
+              maxWidth: '88%',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              color: T.muted,
+              opacity: Math.min(1, text),
+            }}
+          >
+            {brandLabel}
+          </div>
+        ) : null}
       </AbsoluteFill>
     </AbsoluteFill>
   );
@@ -374,7 +410,7 @@ const SceneSfx = ({ scene, start, index }) => {
 };
 
 export const Main = (props) => {
-  const { title, kicker, subscribeText, scenes, isShort, sfx, music } = props;
+  const { title, kicker, brandLabel, subscribeText, scenes, isShort, sfx, music } = props;
   setTheme(props.theme);
   const T = theme();
   const { width, height } = useVideoConfig();
@@ -384,7 +420,7 @@ export const Main = (props) => {
     <AbsoluteFill style={{ background: T.bg[0] }}>
       <TransitionSeries>
         <TransitionSeries.Sequence durationInFrames={t.introFrames + OVERLAP}>
-          <Intro title={title} kicker={kicker} isShort={isShort} />
+          <Intro title={title} kicker={kicker} brandLabel={brandLabel} isShort={isShort} />
         </TransitionSeries.Sequence>
         {scenes.map((s, i) => (
           <React.Fragment key={i}>
@@ -396,7 +432,7 @@ export const Main = (props) => {
         ))}
         <TransitionSeries.Transition presentation={makePresentation(trans[scenes.length % trans.length], width, height)} timing={timing} />
         <TransitionSeries.Sequence durationInFrames={t.outroFrames}>
-          <Outro subscribeText={subscribeText} isShort={isShort} />
+          <Outro subscribeText={subscribeText} brandLabel={brandLabel} isShort={isShort} />
         </TransitionSeries.Sequence>
       </TransitionSeries>
 
