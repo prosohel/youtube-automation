@@ -136,7 +136,7 @@ function Editor({ initial, categories, onSaved, onCancel, setToast }) {
           <input className="mono" value={f.cron} onChange={(e) => set('cron', e.target.value)} />
         </label>
       ) : (
-        <label className="field">
+        <label className="field" style={{ maxWidth: 360 }}>
           Times
           <input value={f.times} onChange={(e) => set('times', e.target.value)} placeholder="09:00, 18:00" />
           <span className="hint">24-hour clock, separated by commas.</span>

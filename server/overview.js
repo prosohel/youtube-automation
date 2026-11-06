@@ -41,12 +41,15 @@ async function computeOverview(redis, queues) {
   ]);
 
   const published = (v) => Object.values(v.platforms || {}).some((p) => p.status === 'published');
+  // Posted, but nobody can see it yet: every posted copy is private (YouTube "private", TikTok "SELF_ONLY").
+  const privateOnly = (v) => Object.values(v.platforms || {}).filter((p) => p.status === 'published').every((p) => ['private', 'SELF_ONLY'].includes(p.privacy));
   const counts = {
     queued: videos.filter((v) => v.status === 'queued').length,
     working: videos.filter((v) => v.status === 'working').length,
     ready: videos.filter((v) => v.status === 'ready' && !published(v)).length,
     failed: videos.filter((v) => v.status === 'failed').length,
     published: videos.filter(published).length,
+    privateOnly: videos.filter((v) => published(v) && privateOnly(v)).length,
   };
 
   // Upcoming posts: the first slot per platform shows the video that would go out.

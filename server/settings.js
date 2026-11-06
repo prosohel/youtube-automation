@@ -35,17 +35,18 @@ const SETTINGS_SCHEMA = [
     optionHints: Object.fromEntries(Object.entries(THEMES).map(([id, t]) => [id, `Best for: ${t.mood}.`])),
   },
   { key: 'SFX', cfg: 'sfx', group: 'visuals', type: 'boolean', default: true, label: 'Sound effects' },
-  { key: 'DIRECT_TRANSITIONS', cfg: 'directTransitions', group: 'visuals', type: 'boolean', default: true, label: 'Claude picks transitions (off = theme default)' },
-  { key: 'DIRECT_SFX', cfg: 'directSfx', group: 'visuals', type: 'boolean', default: true, label: 'Claude picks sound effects (off = fixed sounds)' },
-  { key: 'DIRECT_CAMERA', cfg: 'directCamera', group: 'visuals', type: 'boolean', default: true, label: 'Claude picks camera moves (off = theme default)' },
-  { key: 'DIRECT_GRAPHICS', cfg: 'directGraphics', group: 'visuals', type: 'boolean', default: true, label: 'Claude picks graphics (off = icon/stat/list/compare only)' },
+  // What Claude decides per video: shown together in the dashboard ("subgroup"), each with what "off" means.
+  { key: 'DIRECT_TRANSITIONS', cfg: 'directTransitions', group: 'visuals', subgroup: 'claude', type: 'boolean', default: true, label: 'Transitions', hint: "Off: the theme's own transitions." },
+  { key: 'DIRECT_SFX', cfg: 'directSfx', group: 'visuals', subgroup: 'claude', requires: 'SFX', type: 'boolean', default: true, label: 'Sound cues', hint: 'Off: fixed sounds. Needs Sound effects on.' },
+  { key: 'DIRECT_CAMERA', cfg: 'directCamera', group: 'visuals', subgroup: 'claude', type: 'boolean', default: true, label: 'Camera moves', hint: "Off: the theme's own camera." },
+  { key: 'DIRECT_GRAPHICS', cfg: 'directGraphics', group: 'visuals', subgroup: 'claude', type: 'boolean', default: true, label: 'Graphics', hint: 'Off: only icon, stat, list and compare.' },
   { key: 'VISUALS', cfg: 'visuals', group: 'visuals', type: 'enum', options: ['mixed', 'motion', 'footage'], default: 'mixed', label: 'Visuals' },
   { key: 'CAPTION_FONT', cfg: 'captionFont', group: 'visuals', type: 'string', default: 'DejaVu Sans', label: 'Caption font (ffmpeg fallback)' },
   // Channel
-  { key: 'NICHE', cfg: 'niche', group: 'channel', type: 'string', default: 'technology tips', label: 'Channel niche' },
+  { key: 'NICHE', cfg: 'niche', group: 'channel', type: 'string', default: 'technology tips', label: 'Channel niche (used to pick topics)' },
   { key: 'LANGUAGE', cfg: 'language', group: 'channel', type: 'string', default: 'English', label: 'Language' },
   { key: 'VIDEO_FORMAT', cfg: 'format', group: 'channel', type: 'enum', options: ['shorts', 'landscape'], default: 'landscape', label: 'Video format' },
-  { key: 'TARGET_MINUTES', cfg: 'targetMinutes', group: 'channel', type: 'number', default: 3, label: 'Length of long videos (min)' },
+  { key: 'TARGET_MINUTES', cfg: 'targetMinutes', group: 'channel', type: 'number', default: 3, label: 'Video length (min)', hint: 'Every video, Shorts included. YouTube counts vertical videos up to 3 minutes as Shorts.' },
   { key: 'PRIVACY_STATUS', cfg: 'privacy', group: 'channel', type: 'enum', options: ['private', 'unlisted', 'public'], default: 'private', label: 'YouTube privacy' },
   { key: 'YT_CATEGORY_ID', cfg: 'categoryId', group: 'channel', type: 'string', default: '28', label: 'YouTube category ID' },
   { key: 'SYNTHETIC_MEDIA', cfg: 'syntheticMedia', group: 'channel', type: 'boolean', default: true, label: 'Mark as AI-made content' },
@@ -218,8 +219,17 @@ function toConfig(settings, platform = process.platform) {
   return out;
 }
 
+/** Settings that the given platform swaps for another value (e.g. Windows paths in Docker): { KEY: value really used }. */
+function effectiveValues(settings, platform = process.platform) {
+  const used = toConfig(settings, platform);
+  const out = {};
+  for (const spec of SETTINGS_SCHEMA) if (spec.cfg && !spec.secret && used[spec.cfg] !== settings[spec.key]) out[spec.key] = used[spec.cfg];
+  return out;
+}
+
 module.exports = {
   SETTINGS_SCHEMA,
+  effectiveValues,
   defaults,
   readEnvFile,
   importFromEnv,

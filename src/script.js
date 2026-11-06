@@ -84,15 +84,38 @@ const EMOJI_NAMES =
   'bell direct-hit collision electricity globe-showing-asia-australia police-car-light construction skull liar ' +
   'monocle raised-eyebrow flushed smirk wave shushing-face zipper-face';
 
+/* ---------- video length ---------- */
+
+// Spoken words a minute. Bangla was measured on this channel's ElevenLabs videos (~142); kept a little
+// lower so a video lands at, or just under, its target.
+const WPM = { bangla: 140, other: 150 };
+const INTRO_OUTRO_SEC = 4; // 1.8 s intro + 2.2 s outro (src/render.js)
+const SCENE_TAIL_SEC = 0.25; // src/render.js adds this after every scene's voice
+
+const minutesLabel = (m) => `${m} minute${Number(m) === 1 ? '' : 's'}`;
+
+/**
+ * How long a script should be. TARGET_MINUTES sets the length of every video, Shorts included;
+ * the format only sets the pace: Shorts cut to a new scene every ~6-8 s, landscape every ~10-15 s.
+ * Returns { words, scenes: "lo-hi" }.
+ */
+function lengthPlan({ format, targetMinutes, language }) {
+  const seconds = Math.max(15, (Number(targetMinutes) || 3) * 60);
+  const [slow, fast] = format === 'shorts' ? [8, 6] : [15, 10];
+  const lo = Math.max(3, Math.round(seconds / slow));
+  const hi = Math.max(lo + 1, Math.round(seconds / fast));
+  const speak = seconds - INTRO_OUTRO_SEC - SCENE_TAIL_SEC * ((lo + hi) / 2);
+  const wpm = /bangla|bengali|bn\b/i.test(language || '') ? WPM.bangla : WPM.other;
+  return { words: Math.max(30, Math.round((speak / 60) * wpm)), scenes: `${lo}-${hi}` };
+}
+
 /**
  * Write a scene-by-scene script plus YouTube metadata.
  * Returns { title, description, tags[], scenes: [{ narration, headline, visual, broll, keywords[] }] }
  */
 async function writeScript(topic) {
-  const isShort = cfg.format === 'shorts';
   const isBangla = /bangla|bengali|bn\b/i.test(cfg.language);
-  const words = isShort ? 110 : cfg.targetMinutes * 150;
-  const sceneCount = isShort ? '6-8' : `${Math.max(8, cfg.targetMinutes * 4)}-${cfg.targetMinutes * 6}`;
+  const { words, scenes: sceneCount } = lengthPlan(cfg);
 
   const recent = recentThemes();
   const direction = directionPrompt(cfg, recentDirection());
@@ -106,7 +129,7 @@ Angle: ${topic.angle}
 Opening hook: ${topic.hook}
 Primary search phrase: ${topic.searchQuery}
 Language: ${cfg.language}
-Total narration length: about ${words} words (${isShort ? 'under 60 seconds' : `~${cfg.targetMinutes} minutes`} when read aloud).
+Total narration length: about ${words} words (~${minutesLabel(cfg.targetMinutes)} when read aloud).
 
 Rules:
 - Spoken-word style: short sentences, no stage directions, no emojis inside the narration, no markdown, nothing that cannot be read aloud.
@@ -155,4 +178,4 @@ Metadata rules:
   return script;
 }
 
-module.exports = { writeScript };
+module.exports = { writeScript, lengthPlan, minutesLabel };

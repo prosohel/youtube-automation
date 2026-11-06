@@ -21,7 +21,7 @@ export function Chip({ tone = 'neutral', children }) {
   return <span className={`chip tone-${tone}`}>{children}</span>;
 }
 
-export function Switch({ checked, onChange, label, labelledBy }) {
+export function Switch({ checked, onChange, label, labelledBy, describedBy, disabled }) {
   return (
     <button
       type="button"
@@ -30,6 +30,8 @@ export function Switch({ checked, onChange, label, labelledBy }) {
       aria-checked={Boolean(checked)}
       aria-label={labelledBy ? undefined : label}
       aria-labelledby={labelledBy}
+      aria-describedby={describedBy}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
     >
       <span />
@@ -84,6 +86,29 @@ export function StageBar({ video }) {
   );
 }
 
+/** Posted on at least one platform. */
+export const isPublished = (v) => Object.values(v.platforms || {}).some((p) => p.status === 'published');
+/** Posted, but every posted copy is private (YouTube "private", TikTok "SELF_ONLY"), so nobody can see it yet. */
+export const isPrivateOnly = (v) =>
+  isPublished(v) && Object.values(v.platforms || {}).filter((p) => p.status === 'published').every((p) => ['private', 'SELF_ONLY'].includes(p.privacy));
+
+/** One line naming the graphic Claude picked for a scene, e.g. "bars (3)" or "big number ৫ জিবি". */
+export function graphicLabel(visual) {
+  const v = visual || {};
+  const n = (list) => (Array.isArray(list) ? list.length : 0);
+  switch (v.type) {
+    case 'bigNumber': return `big number ${v.value || ''}`.trim();
+    case 'stat': return `stat ${v.value || ''}`.trim();
+    case 'bars': return `bars (${n(v.bars)})`;
+    case 'line': return `line (${n(v.points)} points)`;
+    case 'donut': return `donut (${n(v.slices)})`;
+    case 'timeline': return `timeline (${n(v.events)} events)`;
+    case 'list': return `list (${n(v.items)})`;
+    case 'compare': return 'compare';
+    default: return v.icon ? `icon ${v.icon}` : 'icon';
+  }
+}
+
 export const VIDEO_STATUS = {
   queued: ['neutral', 'Waiting'],
   working: ['info', 'Making'],
@@ -92,9 +117,14 @@ export const VIDEO_STATUS = {
 };
 
 export function VideoStatus({ video }) {
+  // A finished video that went out shows where it stands with viewers, not just "Ready".
+  if (video.status === 'ready' && isPublished(video)) return <Chip tone="ok">{isPrivateOnly(video) ? 'Published · private' : 'Published'}</Chip>;
   const [tone, label] = VIDEO_STATUS[video.status] || ['neutral', video.status];
   return <Chip tone={tone}>{video.status === 'working' ? `${label}: ${video.stage}` : label}</Chip>;
 }
+
+/** "bn" for a Bangla channel, so typed and shown channel text is read with a Bangla voice. */
+export const contentLang = (language) => (/bangla|bengali|\bbn\b/i.test(language || '') ? 'bn' : undefined);
 
 export const fmtTime = (iso) =>
   iso ? new Date(iso).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';

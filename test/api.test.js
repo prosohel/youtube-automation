@@ -167,3 +167,16 @@ test('schedule week lists every slot of enabled rules for the next 7 days', asyn
   assert.deepEqual(times, [...times].sort((a, b) => a - b));
   assert.ok(times[times.length - 1] - Date.now() <= 7 * 24 * 3600 * 1000);
 });
+
+test('overview counts posts that are still private, and settings report the values Docker really uses', async (t) => {
+  const { call, redis } = await boot(t);
+  const a = await store.createVideo(redis, {});
+  await store.updateVideo(redis, a.id, { status: 'ready', title: 'a', platforms: { youtube: { status: 'published', privacy: 'private' } } });
+  const b = await store.createVideo(redis, {});
+  await store.updateVideo(redis, b.id, { status: 'ready', title: 'b', platforms: { youtube: { status: 'published', privacy: 'public' } } });
+  const o = await call('GET', '/api/overview');
+  assert.equal(o.json.counts.published, 2);
+  assert.equal(o.json.counts.privateOnly, 1);
+  const s = await call('GET', '/api/settings');
+  assert.equal(typeof s.json.effective, 'object');
+});

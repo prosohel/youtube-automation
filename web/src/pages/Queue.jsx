@@ -2,9 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { usePoll } from '../usePoll.js';
-import { Chip, fmtTime, Icon, ICONS, PlatformBadge, PlatformStatus, PLATFORMS, StageBar, useToast, VideoStatus } from '../components/ui.jsx';
+import { Chip, contentLang, fmtTime, graphicLabel, Icon, ICONS, isPublished, PlatformBadge, PlatformStatus, PLATFORMS, StageBar, useToast, VideoStatus } from '../components/ui.jsx';
 
-const isPublished = (v) => Object.values(v.platforms || {}).some((p) => p.status === 'published');
 const TABS = [
   ['active', 'In progress', (v) => v.status === 'queued' || v.status === 'working'],
   ['ready', 'Ready', (v) => v.status === 'ready' && !isPublished(v)],
@@ -12,7 +11,7 @@ const TABS = [
   ['failed', 'Failed', (v) => v.status === 'failed' || Object.values(v.platforms || {}).some((p) => p.status === 'failed')],
 ];
 
-function AddVideo({ categories, onAdded, setToast }) {
+function AddVideo({ categories, lang, onAdded, setToast }) {
   const [topic, setTopic] = useState('');
   const [category, setCategory] = useState('');
   const [platforms, setPlatforms] = useState(PLATFORMS.map((p) => p.id));
@@ -35,21 +34,24 @@ function AddVideo({ categories, onAdded, setToast }) {
   return (
     <form className="card" onSubmit={add} aria-labelledby="add-h">
       <h2 id="add-h">Add a video to the queue</h2>
+      {/* Two rows: what to make, then where it goes and the button, so the platform pills never wrap one by one. */}
       <div className="inline" style={{ alignItems: 'flex-end', gap: 14 }}>
         <label className="field" style={{ flex: '3 1 280px' }}>
           Topic
-          <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="Leave empty and AI picks a trending topic" />
+          <input lang={lang} value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="Leave empty and AI picks a trending topic" />
         </label>
-        <label className="field" style={{ flex: '1 1 200px' }}>
+        <label className="field" style={{ flex: '1 1 220px' }}>
           Category
-          <select value={category} onChange={(e) => setCategory(e.target.value)}>
+          <select lang={lang} value={category} onChange={(e) => setCategory(e.target.value)}>
             <option value="">Any of my categories</option>
             {categories.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
         </label>
-        <fieldset style={{ border: 'none', margin: 0, padding: 0, flex: '2 1 300px' }}>
+      </div>
+      <div className="between" style={{ alignItems: 'flex-end' }}>
+        <fieldset style={{ border: 'none', margin: 0, padding: 0 }}>
           <legend className="field" style={{ padding: '0 0 6px' }}>Publish to</legend>
           <div className="inline" style={{ gap: 8 }}>
             {PLATFORMS.map((p) => (
@@ -83,7 +85,8 @@ function Detail({ id, onChanged, setToast }) {
   };
   const scenes = (v.script && v.script.scenes) || [];
   return (
-    <section className="card grow-1" aria-labelledby="det-h" style={{ alignSelf: 'flex-start' }}>
+    // Sticky with its own scroll, so a long script or log never leaves the list side of the page empty.
+    <section className="card grow-1 detail-panel" aria-labelledby="det-h">
       <div className="stack" style={{ gap: 6 }}>
         <h2 id="det-h" className="eyebrow">Video</h2>
         <p className="big-title bn" lang="bn">{v.title || v.topic || 'Topic not picked yet'}</p>
@@ -121,7 +124,7 @@ function Detail({ id, onChanged, setToast }) {
             {scenes.map((s, i) => (
               <li key={i} className="bn" lang="bn">
                 {s.narration}
-                {s.broll && s.keywords ? <span className="faint mono"> · B-roll: {s.keywords.join(', ')}</span> : null}
+                <span className="faint mono" lang="en"> · {s.broll && s.keywords ? `B-roll: ${s.keywords.join(', ')} (graphic if no clip: ${graphicLabel(s.visual)})` : `Graphic: ${graphicLabel(s.visual)}`}</span>
               </li>
             ))}
           </ol>
@@ -159,6 +162,17 @@ export default function Queue() {
   const { data: settings } = usePoll('/api/settings', 60000);
   const [toast, setToast] = useToast();
   const categories = (settings && settings.values.TOPIC_CATEGORIES) || [];
+  const lang = contentLang(settings && settings.values.LANGUAGE);
+  // Tabs keyboard pattern: arrow keys move between tabs, only the selected tab is in the Tab order.
+  const onTabKey = (e) => {
+    const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    const i = TABS.findIndex(([id]) => id === tab);
+    const next = TABS[(i + step + TABS.length) % TABS.length][0];
+    setParams({ tab: next });
+    document.getElementById(`tab-${next}`)?.focus();
+  };
 
   const groups = useMemo(() => Object.fromEntries(TABS.map(([id, , fn]) => [id, (videos || []).filter(fn)])), [videos]);
   const list = groups[tab] || [];
@@ -173,20 +187,30 @@ export default function Queue() {
         <h1>Queue</h1>
         <p className="muted" style={{ margin: 0 }}>The worker makes one video at a time, from topic to render. Finished videos wait for their posting slot.</p>
       </header>
-      <AddVideo categories={categories} onAdded={reload} setToast={setToast} />
+      <AddVideo categories={categories} lang={lang} onAdded={reload} setToast={setToast} />
       <div className="row" style={{ alignItems: 'flex-start' }}>
         <section className="card grow-3" aria-label="Videos" style={{ paddingTop: 8 }}>
-          <div role="tablist" aria-label="Video status" className="tabs">
+          <div role="tablist" aria-label="Video status" className="tabs" onKeyDown={onTabKey}>
             {TABS.map(([id, label]) => (
-              <button key={id} type="button" role="tab" className="tab" aria-selected={tab === id} onClick={() => setParams({ tab: id })}>
+              <button
+                key={id}
+                id={`tab-${id}`}
+                type="button"
+                role="tab"
+                className="tab"
+                aria-selected={tab === id}
+                aria-controls="videos-panel"
+                tabIndex={tab === id ? 0 : -1}
+                onClick={() => setParams({ tab: id })}
+              >
                 {label}
                 <span className="badge">{(groups[id] || []).length}</span>
               </button>
             ))}
           </div>
-          {!videos && <p className="muted">Loading…</p>}
-          {videos && list.length === 0 && <p className="empty">Nothing here.</p>}
-          <div>
+          <div role="tabpanel" id="videos-panel" aria-labelledby={`tab-${tab}`}>
+            {!videos && <p className="muted">Loading…</p>}
+            {videos && list.length === 0 && <p className="empty">Nothing here.</p>}
             {list.map((v) => (
               <div className="list-row" key={v.id} style={{ background: v.id === selected ? '#f8faff' : undefined, borderRadius: 10, paddingLeft: 8, paddingRight: 8 }}>
                 <div className="stack" style={{ gap: 4, flex: '1 1 300px', minWidth: 0 }}>
