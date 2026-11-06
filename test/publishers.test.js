@@ -314,6 +314,7 @@ test('YouTube records the channel on the first upload and refuses one that anoth
   const res = await publishFor(b);
   assert.equal(res.url, 'https://youtu.be/yt_new');
   assert.equal(res.privacy, 'unlisted');
+  assert.equal(res.channelId, 'UC2', 'the channel it was uploaded to');
   assert.deepEqual((await brands.getBrand(r, b.id)).accounts.youtube, { id: 'UC2', name: 'Two' });
   assert.ok(google.made.length > 0);
   assert.ok(google.made.every((auth) => auth.credentials.refresh_token === 'rt-b'), "only B's sign-in is used");

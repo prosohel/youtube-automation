@@ -135,7 +135,7 @@ function BrandBody({ brand, onChanged, setToast }) {
             <div className="inline">
               {signedIn ? <Chip tone="ok">Signed in</Chip> : <Chip tone="danger">Not signed in</Chip>}
               <a className="btn btn-sm" href={`/api/youtube/connect?brand=${enc(brand.id)}`}>{signedIn ? 'Reconnect YouTube' : 'Connect YouTube'}</a>
-              <span className="faint">Reconnect once to allow status sync (read access).</span>
+              <span className="faint">Posting checks the channel first and needs read access. If YouTube posts fail with “Reconnect YouTube for this brand”, connect again.</span>
             </div>
           ),
         },

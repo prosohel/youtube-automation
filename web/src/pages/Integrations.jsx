@@ -202,9 +202,10 @@ export default function Integrations() {
   const [params] = useSearchParams();
   const [toast, setToast] = useToast();
   const yt = params.get('youtube');
+  const channel = params.get('channel');
   useEffect(() => {
-    if (yt) setToast(yt === 'connected' ? 'YouTube connected' : `YouTube: ${yt}`);
-  }, [yt, setToast]);
+    if (yt) setToast(yt === 'connected' ? `YouTube connected${channel ? `: ${channel}` : ''}` : `YouTube: ${yt}`);
+  }, [yt, channel, setToast]);
 
   if (!data) return <div className="container"><h1>Integrations</h1><p className="muted">Loading…</p></div>;
   return (

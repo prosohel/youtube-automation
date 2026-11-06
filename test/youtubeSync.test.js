@@ -12,9 +12,11 @@ test.after(closeAll);
 
 const CLIENT = { installed: { client_id: 'cid.apps.googleusercontent.com', client_secret: 'csec' } };
 
-async function trackedVideo(r, remoteId, brandId) {
+/** A video posted to YouTube. channelId: the channel it was uploaded to (none on records from before it was kept). */
+async function trackedVideo(r, remoteId, brandId, channelId) {
   const v = await store.createVideo(r, { brandId });
-  return store.updateVideo(r, v.id, { status: 'ready', platforms: { youtube: { status: 'published', remoteId, privacy: 'private' } } });
+  const rec = { status: 'published', remoteId, privacy: 'private', ...(channelId ? { channelId } : {}) };
+  return store.updateVideo(r, v.id, { status: 'ready', platforms: { youtube: rec } });
 }
 
 function fakeYoutube(items, calls = []) {
@@ -32,8 +34,9 @@ function fakeYoutube(items, calls = []) {
 test('sync stores privacy, processing state and views; a missing video is marked removed', async () => {
   const r = await freshRedis();
   const brand = await seedBrand(r, { name: 'A' });
-  const a = await trackedVideo(r, 'yt_a', brand.id);
-  const b = await trackedVideo(r, 'yt_b', brand.id);
+  await brands.setAccount(r, brand.id, 'youtube', { id: 'UC_A', name: 'A' });
+  const a = await trackedVideo(r, 'yt_a', brand.id, 'UC_A');
+  const b = await trackedVideo(r, 'yt_b', brand.id, 'UC_A');
   const yt = fakeYoutube([
     { id: 'yt_a', status: { privacyStatus: 'public', uploadStatus: 'processed' }, processingDetails: { processingStatus: 'succeeded' }, statistics: { viewCount: '1234' } },
   ]);
@@ -132,4 +135,42 @@ test('authUrl asks for upload + read access, offline, back to the dashboard', ()
   assert.equal(url.searchParams.get('access_type'), 'offline');
   assert.equal(url.searchParams.get('redirect_uri'), 'http://localhost:3000/oauth2callback');
   assert.throws(() => authUrl({ YOUTUBE_CLIENT_SECRET: null }, 'http://x'), /client_secret/);
+});
+
+test('F3: a video uploaded to another channel than the brand has now is never marked removed', async () => {
+  const r = await freshRedis();
+  const brand = await seedBrand(r, { name: 'A' });
+  // The brand was reconnected to UC_NEW: its sign-in no longer sees the videos uploaded to UC_OLD.
+  await brands.setAccount(r, brand.id, 'youtube', { id: 'UC_NEW', name: 'New' });
+  const old = await trackedVideo(r, 'yt_old', brand.id, 'UC_OLD');
+  const seen = await trackedVideo(r, 'yt_seen', brand.id, 'UC_OLD');
+  const yt = fakeYoutube([{ id: 'yt_seen', status: { privacyStatus: 'unlisted' }, statistics: { viewCount: '9' } }]);
+  assert.equal(await syncYoutube({ redis: r, clientFor: async () => yt }), 1);
+  const ro = (await store.getVideo(r, old.id)).platforms.youtube;
+  assert.equal(ro.status, 'published');
+  assert.equal(ro.channelId, 'UC_OLD');
+  const rs = (await store.getVideo(r, seen.id)).platforms.youtube;
+  assert.equal(rs.privacy, 'unlisted', 'still gets its stats when YouTube returns it');
+  assert.equal(rs.views, 9);
+});
+
+test('F3: a record without a channel id (posted before it was kept) is never marked removed, but still gets stats', async () => {
+  const r = await freshRedis();
+  const brand = await seedBrand(r, { name: 'A' });
+  await brands.setAccount(r, brand.id, 'youtube', { id: 'UC_A', name: 'A' });
+  const legacy = await trackedVideo(r, 'yt_legacy', brand.id);
+  const shown = await trackedVideo(r, 'yt_shown', brand.id);
+  const yt = fakeYoutube([{ id: 'yt_shown', status: { privacyStatus: 'public' }, statistics: { viewCount: '3' } }]);
+  assert.equal(await syncYoutube({ redis: r, clientFor: async () => yt }), 1);
+  assert.equal((await store.getVideo(r, legacy.id)).platforms.youtube.status, 'published');
+  assert.equal((await store.getVideo(r, shown.id)).platforms.youtube.views, 3);
+});
+
+test('F3: a brand whose channel is not recorded yet marks nothing removed', async () => {
+  const r = await freshRedis();
+  const brand = await seedBrand(r, { name: 'A' });
+  await brands.setAccount(r, brand.id, 'youtube', { id: null, name: null }); // brand 1 right after the move
+  const v = await trackedVideo(r, 'yt_x', brand.id, 'UC_A');
+  await syncYoutube({ redis: r, clientFor: async () => fakeYoutube([]) });
+  assert.equal((await store.getVideo(r, v.id)).platforms.youtube.status, 'published');
 });

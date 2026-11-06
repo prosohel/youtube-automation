@@ -148,11 +148,14 @@ async function writeValues(redis, values) {
   if (entries.length) await redis.hset(HASH, Object.fromEntries(entries.map(([k, v]) => [k, JSON.stringify(v)])));
 }
 
+// Set the flag (NX) and, only then, write the values, in one step: the worker waits for the flag, then reads them.
+const IMPORT_ONCE = "if not redis.call('set', KEYS[1], ARGV[1], 'NX') then return 0 end if #ARGV > 1 then redis.call('hset', KEYS[2], unpack(ARGV, 2)) end return 1";
+
 /** First start only: copy .env and the YouTube files into Redis. Later edits are never overwritten. */
 async function ensureImported(redis, env, rootDir) {
-  const first = await redis.set(IMPORTED_FLAG, new Date().toISOString(), 'NX');
-  if (first) await writeValues(redis, importFromEnv(env, rootDir));
-  return Boolean(first);
+  if (await redis.exists(IMPORTED_FLAG)) return false;
+  const pairs = Object.entries(importFromEnv(env, rootDir)).flatMap(([k, v]) => [k, JSON.stringify(v)]);
+  return (await redis.eval(IMPORT_ONCE, 2, IMPORTED_FLAG, HASH, new Date().toISOString(), ...pairs)) === 1;
 }
 
 /** The known settings of a stored hash (key -> JSON string) as values. Unknown keys and corrupt values are left out. */
@@ -249,6 +252,7 @@ function effectiveValues(settings, platform = process.platform) {
 module.exports = {
   SETTINGS_SCHEMA,
   SETTINGS_HASH: HASH,
+  IMPORTED_FLAG,
   BRAND_KEYS,
   isBrandKey,
   parseHash,

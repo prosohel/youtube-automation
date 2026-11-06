@@ -15,6 +15,7 @@ const { syncYoutube, clientForBrand } = require('./youtubeSync');
 
 const HEARTBEAT_KEY = 'worker:heartbeat';
 const log = (...a) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...a);
+const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
 // A loadConfig while a video is being made must not change that video halfway (format, voice, theme...): only the
 // fields below are refreshed meanwhile. (Posting and the YouTube sync no longer load config at all.)
@@ -80,6 +81,20 @@ const defaultProcessors = () => ({
   },
 });
 
+/**
+ * On a fresh install the API imports .env into Redis; the first brand must be made from those settings, so the worker
+ * waits for the import flag (it never imports by itself). Asked again every `everyMs`; said once. Throws once stopped().
+ */
+async function waitForImport(redis, { everyMs, stopped }) {
+  let told = false;
+  while (!(await redis.exists(settings.IMPORTED_FLAG))) {
+    if (!told) log('Waiting for the dashboard to import the settings before setting up brands...');
+    told = true;
+    await sleep(everyMs);
+    if (stopped()) throw new Error('Worker stopped');
+  }
+}
+
 const YOUTUBE_SYNC_EVERY_MS = 3 * 60 * 60 * 1000;
 const PUBLISH_RECHECK_EVERY_MS = 10 * 60 * 1000; // posts a platform was still processing when the upload job ended
 
@@ -112,24 +127,33 @@ function createVideoProcessor({ redis, deps, outDir, log: say = log, ready = Pro
   };
 }
 
+/** Brands or settings could not be set up, so the worker can do nothing: its own process exits and Docker restarts it. */
+function exitOnFatal(e) {
+  log(`Brands could not be set up: ${e.message}`);
+  if (require.main === module) process.exit(1);
+}
+
 /**
  * Start the background worker.
  * workerOpts: BullMQ overrides (tests shorten lockDuration/stalledInterval).
  * processors: extra { [queueName]: fn(job, ctx) } registered by later features (ticks, publish, maintenance).
+ * importPollMs: how often a fresh install looks for the dashboard's .env import.
+ * onFatal(err): the setup below failed (default: log, and exit when this is the worker's own process).
  */
-function startWorker({ redis, deps, outDir, workerOpts = {}, processors = {}, onReady } = {}) {
+function startWorker({ redis, deps, outDir, workerOpts = {}, processors = {}, onReady, importPollMs = 3000, onFatal = exitOnFatal } = {}) {
   redis = redis || createRedis();
   const queues = createQueues(redis);
   const ctx = { redis, queues, log };
   const workers = [];
+  let closing = false;
 
-  // Workers start taking jobs as soon as they exist, and the worker may start before the API: so today's setup
-  // is moved into a brand first, and every processor waits for that (and the shared settings) before it runs.
+  // The worker may start before the API: so it waits for the .env import, moves today's setup into a brand, and
+  // loads the shared settings. No worker takes a job (autorun off) and no heartbeat is sent before that.
   const ready = (async () => {
+    await waitForImport(redis, { everyMs: importPollMs, stopped: () => closing });
     await brands.ensureBrands(redis);
     await loadConfig(redis);
   })();
-  ready.catch((e) => log(`Brands could not be set up: ${e.message}`));
 
   const videoWorker = new Worker(
     QUEUE.videos,
@@ -140,6 +164,7 @@ function startWorker({ redis, deps, outDir, workerOpts = {}, processors = {}, on
       maxStalledCount: 1000, // a PC shutdown mid-job is a stall; it must never fail the job
       lockDuration: 60000,
       stalledInterval: 30000,
+      autorun: false,
       ...workerOpts,
     }
   );
@@ -156,15 +181,24 @@ function startWorker({ redis, deps, outDir, workerOpts = {}, processors = {}, on
   workers.push(videoWorker);
 
   for (const [name, fn] of Object.entries({ ...defaultProcessors(), ...processors })) {
-    const w = new Worker(name, async (job) => (await ready, fn(job, ctx)), { connection: redis, concurrency: 1, maxStalledCount: 1000, ...workerOpts });
+    const w = new Worker(name, async (job) => (await ready, fn(job, ctx)), { connection: redis, concurrency: 1, maxStalledCount: 1000, autorun: false, ...workerOpts });
     // A publish job BullMQ gave up on must not leave its record 'pending'/'uploading' forever.
     if (name === QUEUE.publish) w.on('failed', (job, err) => job && markPublishJobFailed(redis, job, err).catch(() => {}));
     workers.push(w);
   }
 
+  // The dashboard shows the worker alive only once it can work: a failed setup never beats.
   const beat = () => redis.set(HEARTBEAT_KEY, new Date().toISOString(), 'EX', 30).catch(() => {});
-  beat();
-  const timer = setInterval(beat, 10000);
+  let timer = null;
+  ready.then(
+    () => {
+      if (closing) return;
+      for (const w of workers) w.run().catch((e) => log(`Worker ${w.name} stopped: ${e.message}`));
+      beat();
+      timer = setInterval(beat, 10000);
+    },
+    (e) => closing || onFatal(e)
+  );
 
   // Schedules follow the saved rules; a video record that lost its BullMQ job is queued again.
   const recover = (async () => {
@@ -185,6 +219,7 @@ function startWorker({ redis, deps, outDir, workerOpts = {}, processors = {}, on
   return {
     ctx,
     async close() {
+      closing = true;
       clearInterval(timer);
       await Promise.all(workers.map((w) => w.close()));
       await Promise.all(Object.values(queues).map((q) => q.close()));

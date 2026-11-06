@@ -10,6 +10,8 @@ const ACCOUNT_PLATFORMS = ['youtube', 'tiktok', 'facebook', 'instagram'];
 const ACCOUNT_ID_FIELD = { youtube: 'id', facebook: 'id', instagram: 'id', tiktok: 'username' };
 // Settings that hold the id of a Page or user: one brand each, recorded in `accounts`.
 const ACCOUNT_SETTINGS = { FACEBOOK_PAGE_ID: 'facebook', INSTAGRAM_USER_ID: 'instagram' };
+// TikTok's account is only known once a post or Test asks TikTok; until then its tokens are what tell it apart.
+const TOKEN_SETTINGS = ['TIKTOK_ACCESS_TOKEN', 'TIKTOK_REFRESH_TOKEN'];
 // A copy of a brand starts without any of these: credentials, account ids and the handle (a brand's own identity).
 const NOT_COPIED = (spec) => spec.secret || spec.key in ACCOUNT_SETTINGS || spec.key === 'BRAND_HANDLE';
 
@@ -127,6 +129,13 @@ async function accountHolder(redis, exceptId, platform, value) {
   return all.find((b) => b.id !== exceptId && b.accounts?.[platform]?.[field] === value) || null;
 }
 
+/** The brand that already stores this token under this key, other than `exceptId` (archived brands count). */
+async function tokenHolder(redis, exceptId, key, value) {
+  const all = await listBrands(redis, { includeArchived: true });
+  for (const b of all) if (b.id !== exceptId && (await redis.hget(settingsKey(b.id), key)) === JSON.stringify(value)) return b;
+  return null;
+}
+
 /** Record which account a brand posts to. Throws (conflict = true) when another brand already has it. */
 async function setAccount(redis, brandId, platform, identity) {
   if (!ACCOUNT_PLATFORMS.includes(platform)) throw fail(`Unknown platform: ${platform}`, { status: 400 });
@@ -144,15 +153,15 @@ async function setAccount(redis, brandId, platform, identity) {
 
 /**
  * Apply a partial update to one brand's settings, with the same rules as saveSettings.
- * Shared keys are refused. A Page or Instagram id another brand already uses is refused (conflict = true).
- * Nothing is written when anything throws.
+ * Shared keys are refused. A Page or Instagram id, or a TikTok token, another brand already uses is refused
+ * (conflict = true; the message never repeats the token). Nothing is written when anything throws.
  */
 async function saveBrandSettings(redis, brandId, patch = {}) {
   for (const k of Object.keys(patch)) {
     if (settings.SETTINGS_SCHEMA.some((s) => s.key === k) && !settings.isBrandKey(k)) throw new Error(`Setting ${k} is shared, not part of a brand`);
   }
   const { set, del } = settings.planPatch(patch);
-  const touchesAccounts = Object.keys(ACCOUNT_SETTINGS).some((k) => k in set || del.includes(k));
+  const touchesAccounts = Object.keys(ACCOUNT_SETTINGS).some((k) => k in set || del.includes(k)) || TOKEN_SETTINGS.some((k) => set[k]);
 
   const write = async () => {
     const brand = await requireBrand(redis, brandId);
@@ -165,12 +174,16 @@ async function saveBrandSettings(redis, brandId, patch = {}) {
       if (id) accounts[platform] = { id };
       else delete accounts[platform];
     }
+    for (const key of TOKEN_SETTINGS) {
+      const other = set[key] ? await tokenHolder(redis, brandId, key, set[key]) : null;
+      if (other) throw fail(`Already used by brand "${other.name}"`, { conflict: true, status: 409 });
+    }
 
     if (del.length) await redis.hdel(settingsKey(brandId), ...del);
     await writeBrandValues(redis, brandId, set);
     if (JSON.stringify(accounts) !== JSON.stringify(brand.accounts)) await putBrand(redis, { ...brand, accounts });
   };
-  // A Page or Instagram id is checked against every brand: under the shared accounts lock too.
+  // A Page or Instagram id, or a TikTok token, is checked against every brand: under the shared accounts lock too.
   await withBrandLock(redis, brandId, () => (touchesAccounts ? withAccountsLock(redis, write) : write()));
   return brandSettings(redis, brandId);
 }

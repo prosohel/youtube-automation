@@ -1,5 +1,5 @@
 /**
- * Every publisher: publish(ctx) -> { remoteId, url, privacy, state: 'published'|'processing' },
+ * Every publisher: publish(ctx) -> { remoteId, url, privacy, state: 'published'|'processing', channelId? (YouTube) },
  * findExisting(ctx) -> { remoteId, url, state? } | null, test(ctx) -> { ok, detail }.
  * ctx = { video, brand, settings, record, caption, privacy?, onRemoteId(id), saveSettings(patch), setAccount(platform, identity),
  *         log(line), fetch?, sleep?, youtube? }

@@ -4,15 +4,16 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { DelayedError } = require('bullmq');
-const { freshRedis, closeAll } = require('./helpers/redis');
+const { spawn } = require('child_process');
+const { freshRedis, closeAll, REDIS_TEST_URL } = require('./helpers/redis');
 const { seedBrand } = require('./helpers/brands');
 const { fakeDeps } = require('./helpers/fakeDeps');
 const settings = require('../server/settings');
 const brands = require('../server/brands');
 const cfg = require('../src/config');
 const store = require('../server/store');
-const { createQueues, enqueueVideo } = require('../server/queues');
-const { loadConfig, loadHistory, runWithVideoConfig, createVideoProcessor, startWorker } = require('../server/worker');
+const { QUEUE, createQueues, enqueueVideo } = require('../server/queues');
+const { loadConfig, loadHistory, runWithVideoConfig, createVideoProcessor, startWorker, HEARTBEAT_KEY } = require('../server/worker');
 
 test.after(closeAll);
 
@@ -162,6 +163,7 @@ async function waitFor(fn, ms, what) {
 test('the worker moves today\'s setup into a brand at start, before it makes any video', { timeout: 30000 }, async (t) => {
   const r = await freshRedis();
   await r.hset(settings.SETTINGS_HASH, 'LANGUAGE', JSON.stringify('Bangla'));
+  await r.set('settings:imported', new Date().toISOString()); // the dashboard has imported .env
   const queues = createQueues(r);
   const v = await store.createVideo(r, {}); // brandless, as before brands existed
   await enqueueVideo(queues, v.id);
@@ -191,4 +193,82 @@ test('the worker moves today\'s setup into a brand at start, before it makes any
   }, 20000, 'the video to be made');
   assert.equal(done.brandId, list[0].id);
   assert.deepEqual(seen, [{ brandName: list[0].name, language: 'Bangla' }]);
+});
+
+test('F1: on an empty Redis the worker sets up no brand until the dashboard has imported .env', { timeout: 30000 }, async (t) => {
+  const r = await freshRedis();
+  let isReady = false;
+  const w = startWorker({ redis: r, importPollMs: 50, onReady: () => (isReady = true) });
+  t.after(() => w.close());
+  await sleep(500);
+  assert.deepEqual(await brands.listBrands(r, { includeArchived: true }), [], 'no brand yet');
+  assert.equal(await r.exists('brands:migrated'), 0);
+  assert.equal(await r.exists('settings:imported'), 0, 'the worker never imports by itself');
+  assert.equal(isReady, false);
+
+  // What the dashboard's import writes: the values, and the flag.
+  await r.hset(settings.SETTINGS_HASH, 'LANGUAGE', JSON.stringify('Bangla'));
+  await r.set('settings:imported', new Date().toISOString());
+  await waitFor(async () => isReady, 10000, 'the worker to be ready');
+  const list = await brands.listBrands(r);
+  assert.equal(list.length, 1);
+  assert.equal((await brands.brandSettings(r, list[0].id)).LANGUAGE, 'Bangla');
+  assert.equal(await r.hget(settings.SETTINGS_HASH, 'LANGUAGE'), null, 'moved into the brand');
+});
+
+test('F2: no heartbeat and no job before the worker is ready', { timeout: 30000 }, async (t) => {
+  const r = await freshRedis();
+  const queues = createQueues(r);
+  await queues.ticks.add('tick', { ruleId: 'r_1' });
+  const ticks = [];
+  const w = startWorker({ redis: r, importPollMs: 50, processors: { [QUEUE.ticks]: async (job) => void ticks.push(job.data.ruleId) } });
+  t.after(async () => {
+    await w.close();
+    await Promise.all(Object.values(queues).map((q) => q.close()));
+  });
+  await sleep(600);
+  assert.deepEqual(ticks, [], 'the tick waits for ready');
+  assert.equal(await r.exists(HEARTBEAT_KEY), 0, 'not shown as alive before ready');
+
+  await r.set('settings:imported', new Date().toISOString());
+  await waitFor(async () => ticks.length === 1, 10000, 'the tick to run');
+  assert.deepEqual(ticks, ['r_1']);
+  await waitFor(async () => (await r.exists(HEARTBEAT_KEY)) === 1, 5000, 'the heartbeat');
+});
+
+test('F2: a worker that cannot set up brands reports it as fatal, never beats and takes no job', { timeout: 30000 }, async (t) => {
+  const r = await freshRedis();
+  await r.set('settings:imported', new Date().toISOString());
+  await r.set('brands', 'not a hash'); // ensureBrands fails (WRONGTYPE)
+  const queues = createQueues(r);
+  await queues.ticks.add('tick', { ruleId: 'r_1' });
+  const ticks = [];
+  let fatal;
+  const gotFatal = new Promise((res) => (fatal = res));
+  const w = startWorker({ redis: r, importPollMs: 50, onFatal: (e) => fatal(e), processors: { [QUEUE.ticks]: async (job) => void ticks.push(job.data.ruleId) } });
+  t.after(async () => {
+    await w.close();
+    await Promise.all(Object.values(queues).map((q) => q.close()));
+  });
+  const err = await gotFatal;
+  assert.match(err.message, /WRONGTYPE/);
+  await sleep(300);
+  assert.equal(await r.exists(HEARTBEAT_KEY), 0);
+  assert.deepEqual(ticks, []);
+  assert.equal((await queues.ticks.getJobCounts('failed')).failed, 0, 'no job failed (no attempt used)');
+});
+
+test("F2: the worker's own process exits with code 1 when brands can't be set up, so Docker starts it again", { timeout: 30000 }, async (t) => {
+  const r = await freshRedis();
+  await r.set('settings:imported', new Date().toISOString());
+  await r.set('brands', 'not a hash'); // ensureBrands fails (WRONGTYPE)
+  // The real entry point, on the test database only (REDIS_URL wins over .env, which never overrides a set variable).
+  const child = spawn(process.execPath, [path.join(__dirname, '..', 'server', 'worker.js')], { env: { ...process.env, REDIS_URL: REDIS_TEST_URL }, stdio: 'ignore' });
+  t.after(() => {
+    if (child.exitCode === null) child.kill('SIGKILL');
+  });
+  const exited = new Promise((res) => child.once('exit', (code) => res(code)));
+  const code = await Promise.race([exited, sleep(15000).then(() => 'still running')]);
+  assert.equal(code, 1);
+  assert.equal(await r.exists(HEARTBEAT_KEY), 0);
 });

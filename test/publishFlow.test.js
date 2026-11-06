@@ -478,3 +478,93 @@ test('a video without a brand is never posted', async (t) => {
   assert.equal(rec.attempts, 0);
   assert.match(rec.error, /no brand/);
 });
+
+/* ---------- final review fixes ---------- */
+
+/** Publish one ready video of this brand to tiktok with a publisher that throws `err`; returns the saved record. */
+async function failWith(r, brand, err) {
+  const v = await readyVideo(r, brand);
+  const pub = {
+    findExisting: async () => null,
+    publish: async () => {
+      throw err;
+    },
+  };
+  await assert.rejects(runPublish({ redis: r, videoId: v.id, platform: 'tiktok', getPublisher: () => pub }));
+  return (await store.getVideo(r, v.id)).platforms.tiktok;
+}
+
+test('F8: a googleapis error (always carrying its request config) uses an attempt; quota and rate limits do not', async (t) => {
+  const { r, brand } = await setup(t);
+  const gaxios = (props) => Object.assign(new Error(props.message), props);
+  // A video YouTube rejects for good must use its attempts, or it is picked again every tick and blocks the queue.
+  assert.equal((await failWith(r, brand, gaxios({ config: { url: 'x' }, status: 400, message: 'invalidVideo' }))).attempts, 1);
+  assert.equal((await failWith(r, brand, gaxios({ config: { url: 'x' }, status: 500, message: 'Backend Error' }))).attempts, 1);
+  // A day's quota is not the video's fault.
+  assert.equal((await failWith(r, brand, gaxios({ config: { url: 'x' }, status: 403, message: 'quotaExceeded' }))).attempts, 0);
+  // gaxios 8 puts the reason in cause.errors / response.data.error.errors and the human text in the message.
+  const reasonOnly = (reason) =>
+    gaxios({
+      config: { url: 'x' },
+      status: 403,
+      message: 'The user has exceeded the number of videos they may upload.',
+      cause: { errors: [{ reason }] },
+      response: { data: { error: { errors: [{ reason }] } } },
+    });
+  for (const reason of ['uploadLimitExceeded', 'rateLimitExceeded', 'dailyLimitExceeded', 'quotaExceeded']) {
+    assert.equal((await failWith(r, brand, reasonOnly(reason))).attempts, 0, reason);
+  }
+  assert.equal((await failWith(r, brand, gaxios({ config: { url: 'x' }, status: 403, message: 'x', errors: [{ reason: 'rateLimitExceeded' }] }))).attempts, 0);
+  // Setup problems flagged by the publishers, and a rejected sign-in, as before.
+  assert.equal((await failWith(r, brand, gaxios({ config: true, message: 'not connected' }))).attempts, 0);
+  assert.equal((await failWith(r, brand, gaxios({ auth: true, message: 'bad token' }))).attempts, 0);
+  assert.equal((await failWith(r, brand, gaxios({ config: { url: 'x' }, status: 401, message: 'Invalid Credentials' }))).attempts, 0);
+  assert.equal((await failWith(r, brand, gaxios({ config: { url: 'x' }, code: 401, status: 'UNAUTHENTICATED', message: 'x' }))).attempts, 0);
+});
+
+test("F3: the YouTube record keeps the id of the channel it was uploaded to", async (t) => {
+  const { r, brand } = await setup(t);
+  await settings.saveSettings(r, { YOUTUBE_CLIENT_SECRET: CLIENT });
+  await brands.saveBrandSettings(r, brand.id, { YOUTUBE_TOKEN: { refresh_token: 'rt-main' } });
+  const google = fakeGoogle(t, { 'rt-main': { id: 'UC_MAIN', name: 'Main channel' } });
+  const v = await readyVideo(r, brand, { files: { video: __filename } });
+  const rec = await runPublish({ redis: r, videoId: v.id, platform: 'youtube' });
+  assert.equal(rec.status, 'published');
+  assert.equal(rec.channelId, 'UC_MAIN');
+  assert.equal((await store.getVideo(r, v.id)).platforms.youtube.channelId, 'UC_MAIN');
+  assert.equal(google.inserts.length, 1);
+  assert.ok(google.made.every((auth) => auth.credentials.refresh_token === 'rt-main'));
+});
+
+test('F9: a YouTube post of a signed-in brand without the shared Google client is a setup error, and no Google client is made', async (t) => {
+  const { r, brand } = await setup(t);
+  await brands.saveBrandSettings(r, brand.id, { YOUTUBE_TOKEN: { refresh_token: 'rt-main' } }); // no YOUTUBE_CLIENT_SECRET
+  const google = fakeGoogle(t, { 'rt-main': { id: 'UC_MAIN', name: 'Main channel' } });
+  const v = await readyVideo(r, brand, { files: { video: __filename } });
+  await assert.rejects(runPublish({ redis: r, videoId: v.id, platform: 'youtube' }), (e) => e.config === true && /client_secret/.test(e.message));
+  const rec = (await store.getVideo(r, v.id)).platforms.youtube;
+  assert.equal(rec.status, 'failed');
+  assert.equal(rec.attempts, 0);
+  assert.equal(google.made.length, 0);
+  assert.equal(google.inserts.length, 0);
+});
+
+test('F9: a Facebook post with a Page ID but no Page token is a setup error and calls nothing', async (t) => {
+  const { r, brand } = await setup(t);
+  await brands.saveBrandSettings(r, brand.id, { FACEBOOK_PAGE_ID: '55' });
+  const realFetch = globalThis.fetch;
+  const fetched = [];
+  globalThis.fetch = async (url) => {
+    fetched.push(String(url));
+    throw new Error('no network in tests');
+  };
+  t.after(() => {
+    globalThis.fetch = realFetch;
+  });
+  const v = await readyVideo(r, brand, { files: { video: __filename } });
+  await assert.rejects(runPublish({ redis: r, videoId: v.id, platform: 'facebook' }), (e) => e.config === true && /Facebook: not connected/.test(e.message));
+  const rec = (await store.getVideo(r, v.id)).platforms.facebook;
+  assert.equal(rec.status, 'failed');
+  assert.equal(rec.attempts, 0);
+  assert.deepEqual(fetched, []);
+});

@@ -46,7 +46,7 @@ function createApp({ redis, queues }) {
     return v;
   }
 
-  /** The brand a video or rule is made for: it must be named, exist and not be archived. */
+  /** The brand a video or rule is made for: it must be named, exist and not be archived. Store its .id, never the raw input. */
   async function activeBrandOr4xx(brandId) {
     if (!brandId) throw bad('brandId is required');
     const brand = await brands.getBrand(redis, String(brandId));
@@ -140,8 +140,8 @@ function createApp({ redis, queues }) {
   app.post('/api/videos', async (req, res) => {
     const { brandId, topic, category, platforms } = req.body || {};
     if (platforms !== undefined && !Array.isArray(platforms)) throw bad('platforms must be a list');
-    await activeBrandOr4xx(brandId);
-    const v = await store.createVideo(redis, { brandId, topic: String(topic || '').trim(), category: String(category || ''), platforms });
+    const brand = await activeBrandOr4xx(brandId);
+    const v = await store.createVideo(redis, { brandId: brand.id, topic: String(topic || '').trim(), category: String(category || ''), platforms });
     await enqueueVideo(queues, v.id);
     res.status(201).json(v);
   });
@@ -243,8 +243,8 @@ function createApp({ redis, queues }) {
 
   app.post('/api/rules', async (req, res) => {
     const rule = cleanRule(req.body);
-    await activeBrandOr4xx(rule.brandId);
-    const saved = await store.saveRule(redis, rule);
+    const brand = await activeBrandOr4xx(rule.brandId);
+    const saved = await store.saveRule(redis, { ...rule, brandId: brand.id });
     await resync();
     res.status(201).json(withNext(saved));
   });
@@ -253,8 +253,8 @@ function createApp({ redis, queues }) {
     const old = (await store.listRules(redis)).find((r) => r.id === req.params.id);
     if (!old) throw new HttpError(404, 'Rule not found');
     const rule = cleanRule(req.body);
-    await activeBrandOr4xx(rule.brandId);
-    const saved = await store.saveRule(redis, { ...rule, id: old.id, createdAt: old.createdAt });
+    const brand = await activeBrandOr4xx(rule.brandId);
+    const saved = await store.saveRule(redis, { ...rule, brandId: brand.id, id: old.id, createdAt: old.createdAt });
     await resync();
     res.json(withNext(saved));
   });
@@ -292,13 +292,17 @@ function createApp({ redis, queues }) {
     res.redirect(youtubeAuth.authUrl(await settings.loadSettings(redis), `${PUBLIC_URL}/oauth2callback`, brandId));
   });
 
+  // Back to the brand, naming the channel that was connected (the owner sees a wrong pick in Google's chooser at once).
   app.get('/oauth2callback', async (req, res) => {
     const brandId = String(req.query.state || '');
-    const back = (result) => res.redirect(`/integrations?${brandId ? `brand=${encodeURIComponent(brandId)}&` : ''}youtube=${encodeURIComponent(result)}`);
+    const back = (result, channel) =>
+      res.redirect(
+        `/integrations?${brandId ? `brand=${encodeURIComponent(brandId)}&` : ''}youtube=${encodeURIComponent(result)}${channel ? `&channel=${encodeURIComponent(channel)}` : ''}`
+      );
     if (!req.query.code) return back(req.query.error || 'cancelled');
     try {
-      await youtubeAuth.handleCallback(redis, String(req.query.code), `${PUBLIC_URL}/oauth2callback`, brandId);
-      back('connected');
+      const ch = await youtubeAuth.handleCallback(redis, String(req.query.code), `${PUBLIC_URL}/oauth2callback`, brandId);
+      back('connected', ch && ch.name);
     } catch (e) {
       back(e.message);
     }

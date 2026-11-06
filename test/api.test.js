@@ -403,3 +403,44 @@ test('the sign-in callback sends the user back to that brand', async (t) => {
   const bare = await call('GET', '/oauth2callback');
   assert.equal(bare.headers.get('location'), '/integrations?youtube=cancelled');
 });
+
+test('F3: after the sign-in the redirect names the channel that was connected', async (t) => {
+  const { call } = await boot(t);
+  const youtubeAuth = require('../server/youtubeAuth');
+  const real = youtubeAuth.handleCallback;
+  const seen = [];
+  // Never Google: the exchange is stubbed.
+  youtubeAuth.handleCallback = async (redis, code, redirect, brandId) => {
+    seen.push([code, brandId]);
+    if (code === 'bad') throw new Error('Already connected to brand "A"');
+    return { id: 'UC1', name: 'Tech & Co' };
+  };
+  t.after(() => {
+    youtubeAuth.handleCallback = real;
+  });
+  const ok = await call('GET', '/oauth2callback?state=b_one&code=good');
+  assert.equal(ok.status, 302);
+  assert.equal(ok.headers.get('location'), '/integrations?brand=b_one&youtube=connected&channel=Tech%20%26%20Co');
+  const refused = await call('GET', '/oauth2callback?state=b_one&code=bad');
+  assert.equal(refused.headers.get('location'), `/integrations?brand=b_one&youtube=${encodeURIComponent('Already connected to brand "A"')}`);
+  assert.deepEqual(seen, [['good', 'b_one'], ['bad', 'b_one']]);
+});
+
+test('F6: a brandId sent as a list is stored as the brand\'s id', async (t) => {
+  const { call, redis } = await boot(t);
+  const brand = await seedBrand(redis, { name: 'A' });
+  const video = await call('POST', '/api/videos', { brandId: [brand.id], topic: 'x' });
+  if (video.status === 201) assert.equal((await store.getVideo(redis, video.json.id)).brandId, brand.id);
+  else assert.equal(video.status, 400);
+  assert.ok((await store.listVideos(redis)).every((v) => v.brandId === brand.id));
+
+  const rule = { brandId: [brand.id], kind: 'publish', platform: 'youtube', cron: '0 18 * * *', tz: 'Asia/Dhaka' };
+  const made = await call('POST', '/api/rules', rule);
+  if (made.status === 201) assert.equal(made.json.brandId, brand.id);
+  else assert.equal(made.status, 400);
+  const plain = (await call('POST', '/api/rules', { ...rule, brandId: brand.id })).json;
+  const edited = await call('PUT', `/api/rules/${plain.id}`, rule);
+  if (edited.status === 200) assert.equal(edited.json.brandId, brand.id);
+  else assert.equal(edited.status, 400);
+  assert.ok((await store.listRules(redis)).every((x) => x.brandId === brand.id), 'every stored brandId is the id string');
+});

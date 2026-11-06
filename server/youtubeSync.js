@@ -21,7 +21,9 @@ async function clientForBrand(redis, brandId) {
  * Refresh the YouTube state (privacy, processing, views) of every uploaded video, each brand's videos with that
  * brand's client (clientFor(brandId) -> client, or null when it is not signed in). A brand without a client is
  * skipped, and one whose sync fails is logged and left: neither stops the other brands, and their videos are never
- * marked removed. A video YouTube no longer returns is marked 'removed'. Returns the number of videos updated.
+ * marked removed. A video YouTube no longer returns is marked 'removed' only when it was uploaded to the channel the
+ * brand has now (a brand reconnected to another channel no longer sees its old uploads; a record from before the
+ * channel was kept is never marked). Returns the number of videos updated.
  */
 async function syncYoutube({ redis, clientFor, log = () => {} }) {
   const tracked = (await store.listVideos(redis, { limit: 5000 })).filter(
@@ -35,6 +37,8 @@ async function syncYoutube({ redis, clientFor, log = () => {} }) {
     try {
       const youtube = await clientFor(brandId);
       if (!youtube) continue;
+      const brand = await brands.getBrand(redis, brandId);
+      const channelId = (brand && brand.accounts && brand.accounts.youtube && brand.accounts.youtube.id) || null;
       for (let i = 0; i < videos.length; i += BATCH) {
         const batch = videos.slice(i, i + BATCH);
         const res = await youtube.videos.list({
@@ -46,6 +50,7 @@ async function syncYoutube({ redis, clientFor, log = () => {} }) {
         const checkedAt = new Date().toISOString();
         for (const v of batch) {
           const it = byId.get(v.platforms.youtube.remoteId);
+          if (!it && !(channelId && v.platforms.youtube.channelId === channelId)) continue; // not ours to call removed
           const patch = it
             ? {
                 privacy: it.status && it.status.privacyStatus,

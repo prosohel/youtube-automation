@@ -271,3 +271,50 @@ test('two account updates at once on one brand both stay', async () => {
   assert.deepEqual(got.accounts, { youtube: { id: 'UC1', name: 'One' }, tiktok: { username: 'one' }, facebook: { id: '42' } });
   assert.equal(got.name, 'A renamed');
 });
+
+test('F9: a copy starts with no credential, no Page or Instagram id and no handle', async () => {
+  const r = await freshRedis();
+  const NOT_COPIED = [...S.SETTINGS_SCHEMA.filter((s) => s.secret && S.isBrandKey(s.key)).map((s) => s.key), 'FACEBOOK_PAGE_ID', 'INSTAGRAM_USER_ID', 'BRAND_HANDLE'];
+  assert.ok(NOT_COPIED.length >= 8);
+  const sample = { json: { refresh_token: 'rt' }, string: 'value-1' };
+  const values = Object.fromEntries(NOT_COPIED.map((k) => [k, sample[S.SETTINGS_SCHEMA.find((s) => s.key === k).type] || 'value-1']));
+  const a = await seedBrand(r, { name: 'A', settings: { ...values, LANGUAGE: 'Bangla' } });
+  for (const k of NOT_COPIED) assert.ok(await r.hexists(`brand:${a.id}:settings`, k), `${k} is set on the original`);
+  const copy = await B.createBrand(r, { name: 'Copy', copyFrom: a.id });
+  const stored = await r.hgetall(`brand:${copy.id}:settings`);
+  assert.equal(JSON.parse(stored.LANGUAGE), 'Bangla');
+  for (const k of NOT_COPIED) assert.equal(stored[k], undefined, `${k} is not copied`);
+  const defaults = S.defaults();
+  const s = await B.brandSettings(r, copy.id);
+  for (const k of NOT_COPIED) assert.deepEqual(s[k], defaults[k], k);
+});
+
+test("F4: a TikTok token another brand already stores is refused, without echoing it", async () => {
+  const r = await freshRedis();
+  await seedBrand(r, { name: 'A', settings: { TIKTOK_ACCESS_TOKEN: 'tt_access_1', TIKTOK_REFRESH_TOKEN: 'tt_refresh_1' } });
+  const b = await seedBrand(r, { name: 'B' });
+  for (const patch of [{ TIKTOK_ACCESS_TOKEN: 'tt_access_1' }, { TIKTOK_REFRESH_TOKEN: 'tt_refresh_1' }, { TIKTOK_ACCESS_TOKEN: 'tt_access_2', TIKTOK_REFRESH_TOKEN: 'tt_refresh_1' }]) {
+    const err = await B.saveBrandSettings(r, b.id, patch).catch((e) => e);
+    assert.ok(err instanceof Error, JSON.stringify(Object.keys(patch)));
+    assert.equal(err.conflict, true);
+    assert.equal(err.status, 409);
+    assert.equal(err.message, 'Already used by brand "A"');
+    assert.ok(!err.message.includes('tt_'));
+  }
+  const sb = await B.brandSettings(r, b.id);
+  assert.equal(sb.TIKTOK_ACCESS_TOKEN, '', 'nothing was written');
+  assert.equal(sb.TIKTOK_REFRESH_TOKEN, '');
+  // Its own token again, or a token of its own, is fine.
+  await B.saveBrandSettings(r, b.id, { TIKTOK_ACCESS_TOKEN: 'tt_access_b' });
+  await B.saveBrandSettings(r, b.id, { TIKTOK_ACCESS_TOKEN: 'tt_access_b', NICHE: 'x' });
+  assert.equal((await B.brandSettings(r, b.id)).TIKTOK_ACCESS_TOKEN, 'tt_access_b');
+});
+
+test('F4: two brands saving one TikTok token at the same moment: exactly one keeps it', async () => {
+  const r = await freshRedis();
+  const a = await seedBrand(r, { name: 'A' });
+  const b = await seedBrand(r, { name: 'B' });
+  const saves = await Promise.allSettled([a, b].map((x) => B.saveBrandSettings(r, x.id, { TIKTOK_ACCESS_TOKEN: 'tt_same' })));
+  assert.equal(saves.filter((c) => c.status === 'fulfilled').length, 1);
+  assert.equal(saves.find((c) => c.status === 'rejected').reason.conflict, true);
+});

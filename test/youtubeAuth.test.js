@@ -125,3 +125,30 @@ test('a Google account with no channel, or an unknown brand, is refused and save
   assert.equal(await tokenOf(r, a), null);
   await assert.rejects(handleCallback(r, 'a1', REDIRECT, 'b_gone', { makeClient, channelOf: channels({ 'rt-a1': UC1 }) }), /not found/);
 });
+
+test("F7: the refusal says why another brand's channel could not be confirmed", async () => {
+  const r = await boot();
+  const a = await seedBrand(r, { name: 'A', settings: { YOUTUBE_TOKEN: { refresh_token: 'rt-old' } } });
+  await brands.setAccount(r, a.id, 'youtube', { id: null, name: null });
+  const b = await seedBrand(r, { name: 'B' });
+  const failing = (err) => async (ctx) => {
+    if (ctx.settings.YOUTUBE_TOKEN.refresh_token === 'rt-old') throw err;
+    return UC2;
+  };
+  await assert.rejects(
+    handleCallback(r, 'b1', REDIRECT, b.id, { makeClient, channelOf: failing(new Error('invalid_grant: Token has been expired or revoked.')) }),
+    (e) => e.message === 'Could not confirm the channel of brand "A"; press Test YouTube on it first (invalid_grant: Token has been expired or revoked.)'
+  );
+  // A sign-in without read access: Test YouTube would fail the same way, so the owner must reconnect that brand.
+  const scope = Object.assign(new Error('Request had insufficient authentication scopes.'), { status: 403, code: 403 });
+  await assert.rejects(
+    handleCallback(r, 'b1', REDIRECT, b.id, { makeClient, channelOf: failing(scope) }),
+    (e) => e.message === 'Reconnect YouTube on brand "A" first (Request had insufficient authentication scopes.)'
+  );
+  const scopeText = new Error('insufficientPermissions: Insufficient Permission'); // no status, only the reason
+  await assert.rejects(handleCallback(r, 'b1', REDIRECT, b.id, { makeClient, channelOf: failing(scopeText) }), (e) =>
+    e.message.startsWith('Reconnect YouTube on brand "A" first (insufficientPermissions')
+  );
+  assert.equal(await tokenOf(r, b), null);
+  assert.equal(await accountOf(r, b), undefined);
+});

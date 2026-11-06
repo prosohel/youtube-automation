@@ -169,3 +169,28 @@ test('SHOW_BRAND is off by default and feeds cfg.showBrand; BRAND_HANDLE feeds c
   const cfg = require('../src/config');
   for (const field of ['brandName', 'brandHandle', 'showBrand']) assert.ok(Object.prototype.hasOwnProperty.call(cfg, field), field);
 });
+
+test('F1: the import flag never appears before the imported values (the worker waits for the flag, then reads them)', async () => {
+  const r = await freshRedis();
+  const watcher = await freshRedis(); // a second client, as the worker would be
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'set-')); // no client_secret.json or token.json here
+  const early = [];
+  // After every command the import sends, look from the other client: a flag without the values is the race.
+  const watched = new Proxy(r, {
+    get(target, prop) {
+      const v = target[prop];
+      if (typeof v !== 'function') return v;
+      return async (...args) => {
+        const out = await v.apply(target, args);
+        if ((await watcher.exists('settings:imported')) && !(await watcher.hexists('settings', 'CLAUDE_MODEL'))) early.push(prop);
+        return out;
+      };
+    },
+  });
+  assert.equal(await S.ensureImported(watched, { CLAUDE_MODEL: 'from env', LANGUAGE: 'Bangla' }, dir), true);
+  assert.deepEqual(early, []);
+  assert.equal(JSON.parse(await r.hget('settings', 'CLAUDE_MODEL')), 'from env');
+  assert.equal(JSON.parse(await r.hget('settings', 'LANGUAGE')), 'Bangla');
+  assert.equal(await S.ensureImported(r, { CLAUDE_MODEL: 'again' }, dir), false);
+  assert.equal(JSON.parse(await r.hget('settings', 'CLAUDE_MODEL')), 'from env');
+});

@@ -16,12 +16,31 @@ const mayBePosted = (rec) =>
 /** The record of a video that is being queued for a platform (by a tick or by "Publish now"). */
 const pendingRecord = (rec, extra = {}) => ({ ...(rec || {}), ...extra, status: 'pending', error: null, check: mayBePosted(rec) });
 
+// A day's quota or a rate limit (YouTube): not the video's fault either.
+const QUOTA = /quotaExceeded|uploadLimitExceeded|rateLimitExceeded|dailyLimitExceeded/i;
+
+/** The reasons a googleapis (gaxios) error carries: errors[].reason, kept on the error, its cause or the response. */
+const apiReasons = (e) =>
+  [e.errors, e.cause?.errors, e.response?.data?.error?.errors]
+    .filter(Array.isArray)
+    .flat()
+    .map((x) => x && x.reason)
+    .join(' ');
+
 /**
  * A missing or rejected sign-in is a setup problem, not the video's fault: it must not use up the video's
- * publish attempts. Publishers mark these errors (config/auth); Google reports 401 or invalid_grant.
+ * publish attempts. Publishers mark these errors (config/auth = true); Google reports 401 or invalid_grant;
+ * quota and rate limits count too. A googleapis error always carries `config` (its request options), so only
+ * `config === true` is a publisher's mark: any other error (e.g. a video YouTube rejects) uses an attempt.
  */
 const isConfigError = (e) =>
-  Boolean(e) && (Boolean(e.config || e.auth) || Number(e.status) === 401 || Number(e.code) === 401 || /invalid_grant/i.test(String(e.message || '')));
+  Boolean(e) &&
+  (e.config === true ||
+    e.auth === true ||
+    Number(e.status) === 401 ||
+    Number(e.code) === 401 ||
+    /invalid_grant/i.test(String(e.message || '')) ||
+    QUOTA.test(`${e.message || ''} ${apiReasons(e)}`));
 
 /**
  * The video a publish tick should post: ready, meant for this platform, not posted there yet
@@ -207,7 +226,8 @@ async function runPublish({ redis, videoId, platform, rule, getPublisher = requi
   try {
     const res = await pub.publish(ctx);
     await say(`${platform}: ${res.state}${res.url ? ` ${res.url}` : ''}`);
-    return setRec({ status: res.state, remoteId: res.remoteId, url: res.url, privacy: res.privacy, publishedAt: new Date().toISOString(), error: null });
+    const done = { status: res.state, remoteId: res.remoteId, url: res.url, privacy: res.privacy, publishedAt: new Date().toISOString(), error: null };
+    return setRec(res.channelId ? { ...done, channelId: res.channelId } : done);
   } catch (e) {
     const msg = String(e.message || e).slice(0, 500);
     await setRec({ status: 'failed', error: msg, attempts: (rec.attempts || 0) + (isConfigError(e) ? 0 : 1) });

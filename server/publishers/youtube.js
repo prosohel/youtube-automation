@@ -64,7 +64,7 @@ async function publish(ctx) {
   const s = ctx.settings;
   const v = ctx.video;
   const auth = authOf(ctx); // one sign-in for the check and the upload
-  await ownChannel(ctx, ctx.youtube || google.youtube({ version: 'v3', auth }));
+  const ch = await ownChannel(ctx, ctx.youtube || google.youtube({ version: 'v3', auth }));
   const privacy = ctx.privacy || s.PRIVACY_STATUS;
   const url = await uploadVideo({
     videoFile: v.files.video,
@@ -80,7 +80,8 @@ async function publish(ctx) {
   });
   const id = url.split('/').pop();
   await ctx.onRemoteId(id);
-  return { remoteId: id, url, privacy, state: 'published' };
+  // channelId: the channel it went to, so the status sync never takes it for removed after a switch of channel.
+  return { remoteId: id, url, privacy, state: 'published', channelId: ch.id };
 }
 
 /** After a crash mid-upload: look for this title among the channel's latest 50 uploads. */
