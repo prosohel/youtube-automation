@@ -285,17 +285,22 @@ function createApp({ redis, queues }) {
     }
   });
 
+  // ?brand=<id>: the channel signed in belongs to that brand. Google sends the id back as `state`.
   app.get('/api/youtube/connect', async (req, res) => {
-    res.redirect(youtubeAuth.authUrl(await settings.loadSettings(redis), `${PUBLIC_URL}/oauth2callback`));
+    const brandId = String(req.query.brand || '');
+    if (!brandId || !(await brands.getBrand(redis, brandId))) throw bad('Pick a brand to connect YouTube for');
+    res.redirect(youtubeAuth.authUrl(await settings.loadSettings(redis), `${PUBLIC_URL}/oauth2callback`, brandId));
   });
 
   app.get('/oauth2callback', async (req, res) => {
-    if (!req.query.code) return res.redirect(`/integrations?youtube=${encodeURIComponent(req.query.error || 'cancelled')}`);
+    const brandId = String(req.query.state || '');
+    const back = (result) => res.redirect(`/integrations?${brandId ? `brand=${encodeURIComponent(brandId)}&` : ''}youtube=${encodeURIComponent(result)}`);
+    if (!req.query.code) return back(req.query.error || 'cancelled');
     try {
-      await youtubeAuth.handleCallback(redis, String(req.query.code), `${PUBLIC_URL}/oauth2callback`);
-      res.redirect('/integrations?youtube=connected');
+      await youtubeAuth.handleCallback(redis, String(req.query.code), `${PUBLIC_URL}/oauth2callback`, brandId);
+      back('connected');
     } catch (e) {
-      res.redirect(`/integrations?youtube=${encodeURIComponent(e.message)}`);
+      back(e.message);
     }
   });
 

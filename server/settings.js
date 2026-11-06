@@ -191,8 +191,10 @@ function planPatch(patch) {
   return { set, del };
 }
 
-/** Apply a partial update to the shared settings (see planPatch). Nothing is written when it throws. */
+/** Apply a partial update to the shared settings (see planPatch). Brand keys are refused: they go through saveBrandSettings. Nothing is written when it throws. */
 async function saveSettings(redis, patch = {}) {
+  const own = Object.keys(patch).find(isBrandKey);
+  if (own) throw new Error(`Setting ${own} belongs to a brand`);
   const { set, del } = planPatch(patch);
   if (del.length) await redis.hdel(HASH, ...del);
   await writeValues(redis, set);

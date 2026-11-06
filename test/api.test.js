@@ -383,3 +383,23 @@ test('publish now refuses a switched-off brand', async (t) => {
   await call('PUT', `/api/brands/${brand.id}`, { active: true });
   assert.equal((await call('POST', `/api/videos/${v.id}/publish`, { platform: 'youtube' })).status, 200);
 });
+
+test('connect needs a brand', async (t) => {
+  const { call, redis } = await boot(t);
+  await require('../server/settings').saveSettings(redis, { YOUTUBE_CLIENT_SECRET: { installed: { client_id: 'cid', client_secret: 'csec' } } });
+  assert.equal((await call('GET', '/api/youtube/connect')).status, 400);
+  assert.equal((await call('GET', '/api/youtube/connect?brand=b_gone')).status, 400);
+  const brand = await seedBrand(redis, { name: 'A' });
+  const ok = await call('GET', `/api/youtube/connect?brand=${brand.id}`);
+  assert.equal(ok.status, 302);
+  assert.equal(new URL(ok.headers.get('location')).searchParams.get('state'), brand.id);
+});
+
+test('the sign-in callback sends the user back to that brand', async (t) => {
+  const { call } = await boot(t);
+  const res = await call('GET', '/oauth2callback?state=b_one&error=access_denied');
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get('location'), '/integrations?brand=b_one&youtube=access_denied');
+  const bare = await call('GET', '/oauth2callback');
+  assert.equal(bare.headers.get('location'), '/integrations?youtube=cancelled');
+});

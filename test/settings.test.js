@@ -28,10 +28,10 @@ test('importFromEnv coerces types and reads youtube files', () => {
 test('blank secret keeps the stored value, null clears it', async () => {
   const r = await freshRedis();
   await S.saveSettings(r, { ELEVENLABS_API_KEY: SECRET });
-  await S.saveSettings(r, { ELEVENLABS_API_KEY: '', NICHE: 'tech' });
+  await S.saveSettings(r, { ELEVENLABS_API_KEY: '', CLAUDE_MODEL: 'tech' });
   let s = await S.loadSettings(r);
   assert.equal(s.ELEVENLABS_API_KEY, SECRET);
-  assert.equal(s.NICHE, 'tech');
+  assert.equal(s.CLAUDE_MODEL, 'tech');
   await S.saveSettings(r, { ELEVENLABS_API_KEY: null });
   s = await S.loadSettings(r);
   assert.ok(!s.ELEVENLABS_API_KEY);
@@ -39,12 +39,22 @@ test('blank secret keeps the stored value, null clears it', async () => {
 
 test('masked settings never contain a secret value', async () => {
   const r = await freshRedis();
-  await S.saveSettings(r, { ELEVENLABS_API_KEY: SECRET, YOUTUBE_TOKEN: { refresh_token: 'rtok' } });
+  await S.saveSettings(r, { ELEVENLABS_API_KEY: SECRET, YOUTUBE_CLIENT_SECRET: { installed: { client_secret: 'csec_value' } } });
   const masked = S.maskSettings(await S.loadSettings(r));
   assert.deepEqual(masked.ELEVENLABS_API_KEY, { set: true });
+  assert.deepEqual(masked.YOUTUBE_CLIENT_SECRET, { set: true });
   assert.deepEqual(masked.PEXELS_API_KEY, { set: false });
   assert.ok(!JSON.stringify(masked).includes(SECRET));
-  assert.ok(!JSON.stringify(masked).includes('rtok'));
+  assert.ok(!JSON.stringify(masked).includes('csec_value'));
+});
+
+test('saveSettings refuses a brand key', async () => {
+  const r = await freshRedis();
+  await assert.rejects(S.saveSettings(r, { LANGUAGE: 'Bangla' }), /belongs to a brand/);
+  await assert.rejects(S.saveSettings(r, { NICHE: 'tech', YOUTUBE_TOKEN: { refresh_token: 'x' } }), /Setting (NICHE|YOUTUBE_TOKEN) belongs to a brand/);
+  const s = await S.loadSettings(r);
+  assert.equal(s.LANGUAGE, S.defaults().LANGUAGE);
+  assert.equal(s.NICHE, S.defaults().NICHE, 'nothing is written when one key is refused');
 });
 
 test('unknown keys and invalid values are rejected', async () => {
@@ -57,10 +67,10 @@ test('unknown keys and invalid values are rejected', async () => {
 test('ensureImported imports .env once and never overwrites later edits', async () => {
   const r = await freshRedis();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'set-'));
-  await S.ensureImported(r, { NICHE: 'from env' }, dir);
-  await S.saveSettings(r, { NICHE: 'edited' });
-  await S.ensureImported(r, { NICHE: 'from env' }, dir);
-  assert.equal((await S.loadSettings(r)).NICHE, 'edited');
+  await S.ensureImported(r, { CLAUDE_MODEL: 'from env' }, dir);
+  await S.saveSettings(r, { CLAUDE_MODEL: 'edited' });
+  await S.ensureImported(r, { CLAUDE_MODEL: 'from env' }, dir);
+  assert.equal((await S.loadSettings(r)).CLAUDE_MODEL, 'edited');
 });
 
 test('toConfig maps to config field names and swaps the Windows caption font on Linux', () => {

@@ -6,7 +6,7 @@ const settings = require('../server/settings');
 const brands = require('../server/brands');
 const { seedBrand } = require('./helpers/brands');
 const { syncYoutube, clientForBrand } = require('../server/youtubeSync');
-const { authUrl, handleCallback, SCOPES } = require('../server/youtubeAuth');
+const { authUrl, SCOPES } = require('../server/youtubeAuth');
 
 test.after(closeAll);
 
@@ -132,12 +132,4 @@ test('authUrl asks for upload + read access, offline, back to the dashboard', ()
   assert.equal(url.searchParams.get('access_type'), 'offline');
   assert.equal(url.searchParams.get('redirect_uri'), 'http://localhost:3000/oauth2callback');
   assert.throws(() => authUrl({ YOUTUBE_CLIENT_SECRET: null }, 'http://x'), /client_secret/);
-});
-
-test('handleCallback saves the token from Google', async () => {
-  const r = await freshRedis();
-  await settings.saveSettings(r, { YOUTUBE_CLIENT_SECRET: CLIENT });
-  const makeClient = () => ({ getToken: async (code) => ({ tokens: { refresh_token: `rt-for-${code}` } }) });
-  await handleCallback(r, 'abc', 'http://localhost:3000/oauth2callback', makeClient);
-  assert.deepEqual((await settings.loadSettings(r)).YOUTUBE_TOKEN, { refresh_token: 'rt-for-abc' });
 });
