@@ -8,6 +8,7 @@ const { makeVoice } = require('./voice');
 const { renderWithRemotion } = require('./render');
 const { resolveStyle } = require('./style');
 const { resolveDirection } = require('./direction');
+const { resolveThumbnail } = require('./thumbnail');
 const { validateVisuals } = require('./graphics');
 
 (async () => {
@@ -26,7 +27,7 @@ const { validateVisuals } = require('./graphics');
 
   const scenes = await makeVoice(script.scenes, workDir);
   const direction = resolveDirection(script, cfg);
-  const { videoFile, thumbFile } = await renderWithRemotion({ scenes, workDir, slug, title: script.title, theme, direction });
+  const { videoFile, thumbFile } = await renderWithRemotion({ scenes, workDir, slug, title: script.title, theme, direction, thumbnail: resolveThumbnail(script, cfg) });
   log(`Done: ${videoFile}${thumbFile ? `\nThumbnail: ${thumbFile}` : ''}`);
 })().catch((e) => {
   console.error('\nFailed:', e.stack || e.message);

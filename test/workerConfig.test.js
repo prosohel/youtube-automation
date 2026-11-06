@@ -108,6 +108,22 @@ test('recent videos\' graphics come from Redis, so Claude avoids repeating them'
   }
 });
 
+test("recent videos' thumbnail styles come from Redis, so Claude varies them", async () => {
+  const { recentThumbStyles } = require('../src/thumbnail');
+  const r = await freshRedis();
+  const brand = await seedBrand(r, { name: 'A' });
+  for (const style of ['versus', 'number']) {
+    const v = await store.createVideo(r, { brandId: brand.id });
+    await store.updateVideo(r, v.id, { done: { topic: true, script: true }, theme: { id: 'neon' }, thumbnail: { style } });
+  }
+  await loadHistory(r, null, brand.id);
+  try {
+    assert.deepEqual(recentThumbStyles(), ['versus', 'number']);
+  } finally {
+    require('../src/history').setHistoryBackend(null);
+  }
+});
+
 const stubJob = (videoId) => {
   const moved = [];
   return { data: { videoId }, attemptsMade: 0, moved, moveToDelayed: async (...a) => void moved.push(a) };

@@ -8,7 +8,7 @@ import { buildPatch, Field } from './Integrations.jsx';
 
 // What each section of a brand card edits. Every key here is a brand key (the server sends no other in /api/brands/:id/settings).
 const CHANNEL_KEYS = ['NICHE', 'LANGUAGE', 'VIDEO_FORMAT', 'TARGET_MINUTES', 'TOPIC_CATEGORIES', 'PRIVACY_STATUS', 'YT_CATEGORY_ID', 'SYNTHETIC_MEDIA'];
-const LOOK_KEYS = ['THEME', 'VISUALS', 'SHOW_BRAND', 'BRAND_HANDLE'];
+const LOOK_KEYS = ['THEME', 'VISUALS', 'THUMB_STYLE', 'THUMB_INTRO', 'SHOW_BRAND', 'BRAND_HANDLE'];
 const SIGN_IN_KEYS = ['YOUTUBE_TOKEN', 'TIKTOK_ACCESS_TOKEN', 'TIKTOK_REFRESH_TOKEN'];
 
 const pick = (schema, keys) => keys.map((k) => schema.find((s) => s.key === k)).filter(Boolean);

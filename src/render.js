@@ -4,12 +4,17 @@ const cfg = require('./config');
 const { run, log, ensureDir } = require('./util');
 const { fetchClip } = require('./footage');
 const { SOUNDS, sceneDirection } = require('./direction');
+const { COLORS, pickPhotoScenes } = require('./thumbnail');
 
 const INTRO_SECONDS = 1.8;
 const OUTRO_SECONDS = 2.2;
 const OVERLAP_FRAMES = 15; // keep in sync with OVERLAP in src/remotion/timeline.js
 const ASSET_DIR = path.join(cfg.ROOT, 'assets'); // downloaded once, reused on every render
 const MUSIC_DIR = path.join(cfg.ROOT, 'music');
+const THUMB_COMPOSITION = 'Thumbnail'; // id in src/remotion/Root.jsx
+// TikTok's cover: a moment after the thumbnail intro has fully landed (LANDED_FRAME in src/remotion/Thumbnail.jsx).
+const COVER_MS = 1200;
+const YT_THUMB_MAX = 2 * 1024 * 1024; // YouTube refuses bigger thumbnails
 
 /* ---------- cached assets: sound effects, emoji, music ---------- */
 
@@ -38,13 +43,17 @@ async function prepSfx(publicDir) {
 }
 
 let emojiCodepoints;
-/** Google Noto animated emoji as Lottie JSON. Returns the emoji name if ready, else null. */
-async function prepEmoji(name, publicDir) {
-  if (!name) return null;
+const codepoint = (name) => {
   if (!emojiCodepoints) {
     emojiCodepoints = new Map(require('@remotion/animated-emoji').getAvailableEmojis().map((e) => [e.name, e.codepoint]));
   }
-  const cp = emojiCodepoints.get(name);
+  return emojiCodepoints.get(name);
+};
+
+/** Google Noto animated emoji as Lottie JSON. Returns the emoji name if ready, else null. */
+async function prepEmoji(name, publicDir) {
+  if (!name) return null;
+  const cp = codepoint(name);
   if (!cp) return null;
   try {
     const local = await cachedDownload(
@@ -58,6 +67,63 @@ async function prepEmoji(name, publicDir) {
     log(`Emoji "${name}" unavailable (${e.message})`);
     return null;
   }
+}
+
+/* ---------- thumbnail ---------- */
+
+/** An emoji as a still Google Noto PNG (512 px), downloaded once into assets/. Returns the local path, or null. */
+async function cachedEmojiPng(name) {
+  const cp = name && codepoint(name);
+  if (!cp) return null;
+  try {
+    return await cachedDownload(`https://fonts.gstatic.com/s/e/notoemoji/latest/${cp}/512.png`, path.join(ASSET_DIR, 'emoji-png', `${name}.png`));
+  } catch (e) {
+    log(`Thumbnail emoji "${name}" unavailable (${e.message})`);
+    return null;
+  }
+}
+
+/** The thumbnail's emoji, copied next to the composition. Returns its file name in publicDir, or null. */
+async function prepEmojiPng(name, publicDir) {
+  const local = await cachedEmojiPng(name);
+  if (!local) return null;
+  fs.copyFileSync(local, path.join(publicDir, 'thumb-emoji.png'));
+  return 'thumb-emoji.png';
+}
+
+/** One frame of a scene's prepared clip (a third of the way in) as a thumbnail photo. Returns its file name, or null. */
+async function framePhoto(scene, publicDir, name) {
+  const out = path.join(publicDir, name);
+  try {
+    const at = ((scene.frames / cfg.fps) * 0.35).toFixed(2);
+    await run('ffmpeg', ['-y', '-loglevel', 'error', '-ss', at, '-i', path.join(publicDir, scene.bg), '-frames:v', '1', '-q:v', '2', out]);
+    return fs.existsSync(out) ? name : null;
+  } catch (e) {
+    log(`Thumbnail photo from scene clip failed (${e.message})`);
+    return null;
+  }
+}
+
+/** The checked thumbnail plus what the composition draws it with: colour, photos from the scene clips, emoji image. */
+async function prepThumbnail(thumbnail, sceneProps, publicDir) {
+  if (!thumbnail) return null;
+  const { photo, photo2 } = pickPhotoScenes(thumbnail, sceneProps);
+  return {
+    ...thumbnail,
+    colorHex: COLORS[thumbnail.color] || COLORS.yellow,
+    photo: photo === null ? null : await framePhoto(sceneProps[photo], publicDir, 'thumb-photo-1.jpg'),
+    photo2: photo2 === null ? null : await framePhoto(sceneProps[photo2], publicDir, 'thumb-photo-2.jpg'),
+    emojiFile: await prepEmojiPng(thumbnail.emoji, publicDir),
+  };
+}
+
+/** Re-encode a JPG over YouTube's 2 MB limit at a lower quality. */
+async function fitThumbLimit(file) {
+  if (!fs.existsSync(file) || fs.statSync(file).size <= YT_THUMB_MAX) return;
+  const tmp = file.replace(/.jpg$/, '.small.jpg');
+  await run('ffmpeg', ['-y', '-loglevel', 'error', '-i', file, '-q:v', '6', tmp]);
+  fs.renameSync(tmp, file);
+  log(`Thumbnail re-encoded to ${Math.round(fs.statSync(file).size / 1024)} KB (YouTube allows 2 MB)`);
 }
 
 /** Random track from ./music (drop royalty-free mp3/wav/m4a files there). */
@@ -109,9 +175,9 @@ const subscribeLabel = () => (/bangla|bengali|bn\b/i.test(cfg.language) ? 'рж╕рж
 
 /**
  * Render the animated Remotion composition.
- * scenes: output of makeVoice. Returns { videoFile, thumbFile, credits[] }.
+ * scenes: output of makeVoice. Returns { videoFile, thumbFile, credits[], coverMs }.
  */
-async function renderWithRemotion({ scenes, workDir, slug, title, theme, direction }) {
+async function renderWithRemotion({ scenes, workDir, slug, title, theme, direction, thumbnail }) {
   // Required lazily so the ffmpeg-only fallback works even if Remotion is not installed.
   const { bundle } = require('@remotion/bundler');
   const { renderMedia, renderStill, selectComposition, ensureBrowser } = require('@remotion/renderer');
@@ -135,6 +201,7 @@ async function renderWithRemotion({ scenes, workDir, slug, title, theme, directi
     sceneProps.push({ frames, narration: sc.narration, headline: sc.headline || '', visual: sc.visual || null, emoji, bg, audio, ...sceneDirection(direction, i) });
   }
 
+  const thumb = await prepThumbnail(thumbnail, sceneProps, publicDir);
   const sfx = await prepSfx(publicDir);
   const music = prepMusic(publicDir);
   const credits = [];
@@ -157,6 +224,7 @@ async function renderWithRemotion({ scenes, workDir, slug, title, theme, directi
     sfx,
     music,
     theme: theme || require('./style').resolveStyle({}).theme,
+    thumb, // the designed thumbnail; with thumb.intro it also opens the video
   };
 
   log('Remotion: preparing browser...');
@@ -189,23 +257,35 @@ async function renderWithRemotion({ scenes, workDir, slug, title, theme, directi
     },
   });
 
-  // Thumbnail: the title card once its words have all landed.
+  // Thumbnail: the designed one (its own composition), or for a video without one the title card once its
+  // words have all landed.
   const thumbFile = path.join(cfg.OUT_DIR, `${slug}.jpg`);
   try {
-    await renderStill({
-      composition,
-      serveUrl,
-      output: thumbFile,
-      frame: Math.round(INTRO_SECONDS * fps * 0.85),
-      imageFormat: 'jpeg',
-      jpegQuality: 92,
-      inputProps,
-    });
+    if (thumb) {
+      const still = await selectComposition({ serveUrl, id: THUMB_COMPOSITION, inputProps });
+      await renderStill({ composition: still, serveUrl, output: thumbFile, frame: 0, imageFormat: 'jpeg', jpegQuality: 90, inputProps });
+      await fitThumbLimit(thumbFile);
+    } else {
+      await renderStill({
+        composition,
+        serveUrl,
+        output: thumbFile,
+        frame: Math.round(INTRO_SECONDS * fps * 0.85),
+        imageFormat: 'jpeg',
+        jpegQuality: 92,
+        inputProps,
+      });
+    }
   } catch (e) {
     log(`Thumbnail render failed: ${e.message}`);
   }
 
-  return { videoFile, thumbFile: fs.existsSync(thumbFile) ? thumbFile : null, credits };
+  return {
+    videoFile,
+    thumbFile: fs.existsSync(thumbFile) ? thumbFile : null,
+    credits,
+    coverMs: thumb && thumb.intro ? COVER_MS : null, // the video opens with the thumbnail: TikTok's cover frame
+  };
 }
 
-module.exports = { renderWithRemotion, brandLabel };
+module.exports = { renderWithRemotion, brandLabel, prepThumbnail, cachedEmojiPng, COVER_MS, THUMB_COMPOSITION };

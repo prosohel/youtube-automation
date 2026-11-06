@@ -47,7 +47,7 @@ function fakeDeps(calls, opts = {}) {
         throw new Error('chrome crashed');
       }
       fs.writeFileSync(mp4, 'mp4');
-      return { videoFile: mp4, thumbFile: null, credits: ['Emoji: CC BY'] };
+      return { videoFile: mp4, thumbFile: null, credits: ['Emoji: CC BY'], ...(opts.renderResult || {}) };
     },
   };
 }

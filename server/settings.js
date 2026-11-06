@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const THEMES = require('../src/remotion/themes.json');
+const { STYLES: THUMB_STYLES } = require('../src/thumbnail');
 
 /**
  * Every setting the dashboard can edit. `key` is the .env name (so the one-time import is 1:1),
@@ -42,6 +43,18 @@ const SETTINGS_SCHEMA = [
   { key: 'DIRECT_SFX', cfg: 'directSfx', group: 'visuals', subgroup: 'claude', requires: 'SFX', type: 'boolean', default: true, label: 'Sound cues', hint: 'Off: fixed sounds. Needs Sound effects on.' },
   { key: 'DIRECT_CAMERA', cfg: 'directCamera', group: 'visuals', subgroup: 'claude', type: 'boolean', default: true, label: 'Camera moves', hint: "Off: the theme's own camera." },
   { key: 'DIRECT_GRAPHICS', cfg: 'directGraphics', group: 'visuals', subgroup: 'claude', type: 'boolean', default: true, label: 'Graphics', hint: 'Off: only icon, stat, list and compare.' },
+  {
+    key: 'THUMB_STYLE', scope: 'brand', cfg: 'thumbStyle', group: 'visuals', type: 'enum', options: ['', ...THUMB_STYLES], default: '', label: 'Thumbnail style',
+    optionLabels: { bigText: 'Big text', versus: 'Versus (two sides)', question: 'Question', number: 'Big number' },
+    optionHints: {
+      '': 'Claude picks per video and avoids the style of the last videos.',
+      bigText: 'Photo, a bold line and its punch words in a coloured box.',
+      versus: 'Two photos split on a diagonal with a VS badge. Needs a comparison: other videos use Big text.',
+      question: 'A provocative question with a red arrow to a big emoji.',
+      number: 'One giant figure. Videos without a number use Big text.',
+    },
+  },
+  { key: 'THUMB_INTRO', scope: 'brand', cfg: 'thumbIntro', group: 'visuals', type: 'boolean', default: true, label: 'Open the video with the thumbnail', hint: 'TikTok uses this first second as the cover. Off: the old title card.' },
   { key: 'VISUALS', scope: 'brand', cfg: 'visuals', group: 'visuals', type: 'enum', options: ['mixed', 'motion', 'footage'], default: 'mixed', label: 'Visuals' },
   { key: 'CAPTION_FONT', cfg: 'captionFont', group: 'visuals', type: 'string', default: 'DejaVu Sans', label: 'Caption font (ffmpeg fallback)' },
   // Channel

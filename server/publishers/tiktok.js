@@ -120,6 +120,8 @@ async function publish(ctx) {
           disable_comment: false,
           disable_stitch: false,
           is_aigc: Boolean(ctx.settings.SYNTHETIC_MEDIA),
+          // The video opens with its thumbnail: that frame is the cover. Otherwise TikTok picks one.
+          ...(Number.isInteger(ctx.video.coverMs) ? { video_cover_timestamp_ms: ctx.video.coverMs } : {}),
         },
         source_info: { source: 'FILE_UPLOAD', video_size: buf.length, ...plan },
       }),

@@ -58,6 +58,7 @@ async function loadHistory(redis, exceptId, brandId) {
       theme: v.theme && v.theme.id,
       direction: summarizeDirection(v.direction),
       graphics: summarizeGraphics(v.script && v.script.scenes),
+      thumb: (v.thumbnail && v.thumbnail.style) || null,
       url: v.platforms?.youtube?.url || null,
     }));
   setHistoryBackend({ load: () => list, save: () => {} });
