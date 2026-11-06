@@ -1,5 +1,6 @@
 const store = require('./store');
 const settings = require('./settings');
+const brands = require('./brands');
 const { enqueueVideo, addUnique } = require('./queues');
 
 const MAX_PUBLISH_ATTEMPTS = 3;
@@ -15,12 +16,31 @@ const mayBePosted = (rec) =>
 /** The record of a video that is being queued for a platform (by a tick or by "Publish now"). */
 const pendingRecord = (rec, extra = {}) => ({ ...(rec || {}), ...extra, status: 'pending', error: null, check: mayBePosted(rec) });
 
+// A day's quota or a rate limit (YouTube): not the video's fault either.
+const QUOTA = /quotaExceeded|uploadLimitExceeded|rateLimitExceeded|dailyLimitExceeded/i;
+
+/** The reasons a googleapis (gaxios) error carries: errors[].reason, kept on the error, its cause or the response. */
+const apiReasons = (e) =>
+  [e.errors, e.cause?.errors, e.response?.data?.error?.errors]
+    .filter(Array.isArray)
+    .flat()
+    .map((x) => x && x.reason)
+    .join(' ');
+
 /**
  * A missing or rejected sign-in is a setup problem, not the video's fault: it must not use up the video's
- * publish attempts. Publishers mark these errors (config/auth); Google reports 401 or invalid_grant.
+ * publish attempts. Publishers mark these errors (config/auth = true); Google reports 401 or invalid_grant;
+ * quota and rate limits count too. A googleapis error always carries `config` (its request options), so only
+ * `config === true` is a publisher's mark: any other error (e.g. a video YouTube rejects) uses an attempt.
  */
 const isConfigError = (e) =>
-  Boolean(e) && (Boolean(e.config || e.auth) || Number(e.status) === 401 || Number(e.code) === 401 || /invalid_grant/i.test(String(e.message || '')));
+  Boolean(e) &&
+  (e.config === true ||
+    e.auth === true ||
+    Number(e.status) === 401 ||
+    Number(e.code) === 401 ||
+    /invalid_grant/i.test(String(e.message || '')) ||
+    QUOTA.test(`${e.message || ''} ${apiReasons(e)}`));
 
 /**
  * The video a publish tick should post: ready, meant for this platform, not posted there yet
@@ -51,18 +71,51 @@ function renderCaption(template, video) {
     .trim();
 }
 
-/** One cron tick of a rule: make new videos, or queue one video for one platform. */
+/**
+ * What a publisher gets from a brand: the brand, its settings, and saving (a renewed token) and recording an
+ * account back to that same brand. Nothing comes from the shared runtime config or another brand.
+ */
+async function brandContext(redis, brand) {
+  return {
+    brand,
+    settings: await brands.brandSettings(redis, brand.id),
+    saveSettings: (patch) => brands.saveBrandSettings(redis, brand.id, patch),
+    setAccount: (platform, identity) => brands.setAccount(redis, brand.id, platform, identity),
+  };
+}
+
+/** The brand a video may be posted for. No brand, or one switched off or archived: a setup error (no attempt used). */
+async function postingBrand(redis, video) {
+  const brand = video.brandId ? await brands.getBrand(redis, video.brandId) : null;
+  const refuse = (message) => Object.assign(new Error(message), { config: true });
+  if (!brand) throw refuse('This video has no brand');
+  if (brand.archived) throw refuse(`Brand "${brand.name}" is archived`);
+  if (!brand.active) throw refuse(`Brand "${brand.name}" is switched off`);
+  return brand;
+}
+
+/** One cron tick of a rule: make new videos for its brand, or queue one of its brand's videos for one platform. */
 async function processTick(job, { redis, queues, log = () => {} }) {
   const rule = (await store.listRules(redis)).find((r) => r.id === job.data.ruleId);
   if (!rule || !rule.enabled) return 'skipped';
 
+  const brand = rule.brandId ? await brands.getBrand(redis, rule.brandId) : null;
+  if (!brand) {
+    log(`Rule ${rule.id}: its brand no longer exists, slot skipped`);
+    return 'no brand';
+  }
+  if (!brand.active || brand.archived) {
+    log(`Rule ${rule.id}: brand "${brand.name}" is switched off, slot skipped`);
+    return 'brand off';
+  }
+  const s = await brands.brandSettings(redis, brand.id);
+
   if (rule.kind === 'make') {
-    const s = await settings.loadSettings(redis);
     const cats = Array.isArray(s.TOPIC_CATEGORIES) ? s.TOPIC_CATEGORIES : [];
     const n = rule.count || 1;
     for (let i = 0; i < n; i++) {
       const category = rule.category || (cats.length ? cats[Math.floor(Math.random() * cats.length)] : '');
-      const v = await store.createVideo(redis, { category, platforms: rule.platforms });
+      const v = await store.createVideo(redis, { brandId: brand.id, category, platforms: rule.platforms });
       await enqueueVideo(queues, v.id);
     }
     log(`Rule ${rule.id}: queued ${n} new video(s)`);
@@ -70,12 +123,12 @@ async function processTick(job, { redis, queues, log = () => {} }) {
   }
 
   const p = rule.platform;
-  // Not connected: skip the slot. Queueing would only fail and use up the attempts of every ready video.
-  if (!settings.connected(await settings.loadSettings(redis), p)) {
-    log(`Rule ${rule.id}: ${p} is not connected, slot skipped`);
+  // The brand is not connected: skip the slot. Queueing would only fail and use up the attempts of every ready video.
+  if (!settings.connected(s, p)) {
+    log(`Rule ${rule.id}: ${p} is not connected for brand "${brand.name}", slot skipped`);
     return 'not connected';
   }
-  const video = pickVideo(await store.listVideos(redis, { limit: 1000 }), p, rule.pick);
+  const video = pickVideo(await store.listVideos(redis, { limit: 1000, brandId: brand.id }), p, rule.pick);
   if (!video) {
     log(`Nothing ready for ${p}`);
     return 'nothing ready';
@@ -94,8 +147,8 @@ async function processTick(job, { redis, queues, log = () => {} }) {
 }
 
 /**
- * Publish one video to one platform. Never posts twice: if an earlier run stopped mid-upload
- * (or failed after the platform gave an id), the platform is asked first.
+ * Publish one video to one platform, with its own brand's accounts and settings only. Never posts twice: if an
+ * earlier run stopped mid-upload (or failed after the platform gave an id), the platform is asked first.
  */
 async function runPublish({ redis, videoId, platform, rule, getPublisher = require('./publishers').getPublisher, log = () => {} }) {
   const video = await store.getVideo(redis, videoId);
@@ -120,15 +173,25 @@ async function runPublish({ redis, videoId, platform, rule, getPublisher = requi
     return rec;
   }
 
+  // No brand, or a brand switched off since the post was queued: nothing is posted and no attempt is used.
+  // The "ask the platform first" mark is kept, in case an earlier run reached the platform.
+  let own;
+  try {
+    own = await brandContext(redis, await postingBrand(redis, video));
+  } catch (e) {
+    await setRec({ status: 'failed', error: e.message, attempts: rec.attempts || 0, check: mayBePosted(rec) });
+    await say(`${platform}: not posted: ${e.message}`);
+    throw e;
+  }
+
   const pub = getPublisher(platform);
   const ctx = {
     video,
-    settings: await settings.loadSettings(redis),
+    ...own,
     record: rec,
     caption: renderCaption(rule && rule.caption, video),
     privacy: rule && rule.privacy,
     onRemoteId: (id) => setRec({ remoteId: id }),
-    saveSettings: (patch) => settings.saveSettings(redis, patch),
     log: (l) => say(l),
   };
 
@@ -163,7 +226,8 @@ async function runPublish({ redis, videoId, platform, rule, getPublisher = requi
   try {
     const res = await pub.publish(ctx);
     await say(`${platform}: ${res.state}${res.url ? ` ${res.url}` : ''}`);
-    return setRec({ status: res.state, remoteId: res.remoteId, url: res.url, privacy: res.privacy, publishedAt: new Date().toISOString(), error: null });
+    const done = { status: res.state, remoteId: res.remoteId, url: res.url, privacy: res.privacy, publishedAt: new Date().toISOString(), error: null };
+    return setRec(res.channelId ? { ...done, channelId: res.channelId } : done);
   } catch (e) {
     const msg = String(e.message || e).slice(0, 500);
     await setRec({ status: 'failed', error: msg, attempts: (rec.attempts || 0) + (isConfigError(e) ? 0 : 1) });
@@ -173,13 +237,22 @@ async function runPublish({ redis, videoId, platform, rule, getPublisher = requi
 }
 
 /**
- * Posts a platform was still processing when their upload job ended (TikTok, Facebook): ask again.
+ * Posts a platform was still processing when their upload job ended (TikTok, Facebook): ask again, with the
+ * video's own brand's accounts (an archived or switched-off brand too: this only asks the platform).
  * Posted -> 'published'. No longer there (rejected, failed) -> 'failed', so a later tick or "Publish now" can
- * post it again. A check that itself fails (network, sign-in) leaves the record for the next round.
+ * post it again. A check that itself fails (network, sign-in, no brand) leaves the record for the next round.
  * Returns the number of records settled.
  */
 async function recheckProcessing({ redis, getPublisher = require('./publishers').getPublisher, log = () => {} }) {
-  const s = await settings.loadSettings(redis);
+  const contexts = new Map(); // brandId -> its brandContext, loaded once per round
+  const contextOf = async (brandId) => {
+    if (!contexts.has(brandId)) {
+      const brand = brandId ? await brands.getBrand(redis, brandId) : null;
+      if (!brand) throw new Error('this video has no brand');
+      contexts.set(brandId, await brandContext(redis, brand));
+    }
+    return contexts.get(brandId);
+  };
   let settled = 0;
   for (const video of await store.listVideos(redis, { limit: 5000 })) {
     for (const [platform, rec] of Object.entries(video.platforms || {})) {
@@ -188,10 +261,9 @@ async function recheckProcessing({ redis, getPublisher = require('./publishers')
       try {
         found = await getPublisher(platform).findExisting({
           video,
-          settings: s,
+          ...(await contextOf(video.brandId)),
           record: rec,
           onRemoteId: async () => {},
-          saveSettings: (patch) => settings.saveSettings(redis, patch),
           log,
         });
       } catch (e) {
@@ -259,6 +331,7 @@ module.exports = {
   pickVideo,
   pendingRecord,
   renderCaption,
+  brandContext,
   processTick,
   runPublish,
   recheckProcessing,

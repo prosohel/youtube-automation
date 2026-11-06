@@ -3,16 +3,17 @@ import { useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { usePoll } from '../usePoll.js';
 import { Chip, contentLang, PlatformBadge, Switch, useToast } from '../components/ui.jsx';
+import Brands from './Brands.jsx';
 
 const GROUPS = [
   { id: 'ai', title: 'AI models', sub: 'Who finds topics and writes scripts.', tests: [['claude', 'Test Claude']],
     note: 'Inside Docker, Claude Code has no browser login: run "claude setup-token" in a terminal on this PC and paste the token here. Or switch to the Anthropic API.' },
   { id: 'voice', title: 'Voice', sub: 'Narration for every scene. If the main voice fails, the whole video is redone with the free Edge voice.', tests: [['elevenlabs', 'Test ElevenLabs']] },
   { id: 'visuals', title: 'B-roll and visuals', sub: 'Your clips in the footage folder are used first, then stock sites.', tests: [['pixabay', 'Test Pixabay'], ['pexels', 'Test Pexels']] },
-  { id: 'channel', title: 'Channel defaults', sub: 'Used for every new video.', tests: [] },
-  { id: 'youtube', title: 'YouTube', platform: 'youtube', sub: 'Uploads stay private until Google approves your API project (YouTube API audit).', tests: [['youtube', 'Test YouTube']] },
-  { id: 'tiktok', title: 'TikTok', platform: 'tiktok', sub: 'Content Posting API. Until TikTok audits your app, posts can only be private (SELF_ONLY).', tests: [['tiktok', 'Test TikTok']] },
-  { id: 'meta', title: 'Instagram and Facebook', platform: 'instagram', sub: 'Instagram needs a Business or Creator account linked to a Facebook Page. Facebook posts Reels to a Page you manage.', tests: [['instagram', 'Test Instagram'], ['facebook', 'Test Facebook']] },
+  // The apps below are shared by every brand; each brand signs in to its own accounts on its card under Brands.
+  { id: 'youtube', title: 'YouTube app', platform: 'youtube', sub: 'The Google project every brand signs in through. Uploads stay private until Google approves it (YouTube API audit).', tests: [] },
+  { id: 'tiktok', title: 'TikTok app', platform: 'tiktok', sub: 'Content Posting API. Until TikTok audits your app, posts can only be private (SELF_ONLY).', tests: [] },
+  { id: 'meta', title: 'Instagram and Facebook app', platform: 'instagram', sub: 'The Meta app behind both. Each brand adds its own Page and Instagram account.', tests: [] },
 ];
 
 const isSecret = (spec) => Boolean(spec.secret);
@@ -20,24 +21,37 @@ const isSecret = (spec) => Boolean(spec.secret);
 // Channel text typed in these fields is in the channel's language (Bangla), so it gets lang="bn".
 const CHANNEL_TEXT = ['NICHE'];
 
-function Field({ spec, value, draft, setDraft, values, effective, lang }) {
+/** The patch for the keys typed in `draft`: a blank secret stays as it is, a list typed one per line becomes a list. */
+export function buildPatch(draft, specs) {
+  const patch = {};
+  for (const [k, val] of Object.entries(draft)) {
+    const spec = specs.find((s) => s.key === k);
+    if (isSecret(spec) && val === '') continue; // blank secret = unchanged
+    const isList = spec.type === 'json' && !isSecret(spec) && typeof val === 'string'; // typed one per line
+    patch[k] = isList ? val.split('\n').map((x) => x.trim()).filter(Boolean) : val;
+  }
+  return patch;
+}
+
+/** One setting as a form control. `requires` names a switch that must be on first (sound cues need sound effects). */
+export function Field({ spec, value, draft, setDraft, values, effective, lang, idPrefix = '' }) {
   const v = draft[spec.key] !== undefined ? draft[spec.key] : value;
   const set = (x) => setDraft((d) => ({ ...d, [spec.key]: x }));
-  const id = `f-${spec.key}`;
+  const id = `${idPrefix}f-${spec.key}`; // idPrefix keeps ids unique when several brand cards are open
   const current = (key) => (draft[key] !== undefined ? draft[key] : values[key]);
   // A value this machine swaps for another (a Windows path inside Docker): say what is really used.
   const used = effective && Object.prototype.hasOwnProperty.call(effective, spec.key) ? effective[spec.key] : undefined;
+  const blocked = Boolean(spec.requires && !current(spec.requires));
   const usedNote = used !== undefined && <span className="hint">Docker uses “{String(used)}” instead of this value.</span>;
 
-  if (spec.key === 'YOUTUBE_TOKEN') return null; // shown as the Connect button
+  if (spec.key === 'YOUTUBE_TOKEN') return null; // shown as a Connect button on the brand's card
   if (spec.type === 'boolean') {
     const hintId = spec.hint ? `${id}-hint` : undefined;
-    const blocked = spec.requires && !current(spec.requires); // e.g. sound cues need sound effects on
     return (
       <div className="stack" style={{ gap: 2 }}>
         <div className="between" style={{ minHeight: 44, flexWrap: 'nowrap' }}>
           <span id={id} className="field">{spec.label}</span>
-          <Switch checked={Boolean(v)} onChange={set} labelledBy={id} describedBy={hintId} disabled={Boolean(blocked)} />
+          <Switch checked={Boolean(v)} onChange={set} labelledBy={id} describedBy={hintId} disabled={blocked} />
         </div>
         {spec.hint && <span id={hintId} className="faint">{spec.hint}</span>}
       </div>
@@ -71,7 +85,7 @@ function Field({ spec, value, draft, setDraft, values, effective, lang }) {
     return (
       <label className="field">
         {spec.label}
-        <select value={v ?? ''} onChange={(e) => set(e.target.value)}>
+        <select value={v ?? ''} disabled={blocked} onChange={(e) => set(e.target.value)}>
           {spec.options.map((o) => <option key={o} value={o}>{o === '' ? 'Claude picks per video' : spec.optionLabels?.[o] || o}</option>)}
         </select>
         {spec.optionHints?.[v ?? ''] && <span className="hint">{spec.optionHints[v ?? '']}</span>}
@@ -84,7 +98,7 @@ function Field({ spec, value, draft, setDraft, values, effective, lang }) {
       <label className="field" style={{ gridColumn: '1 / -1' }}>
         {spec.label}
         {/* The draft keeps the text exactly as typed (new lines, spaces); it becomes a list only on Save. */}
-        <textarea lang="bn" value={text} onChange={(e) => set(e.target.value)} />
+        <textarea lang="bn" value={text} disabled={blocked} onChange={(e) => set(e.target.value)} />
         <span className="hint">One per line.</span>
       </label>
     );
@@ -96,7 +110,8 @@ function Field({ spec, value, draft, setDraft, values, effective, lang }) {
         type={spec.type === 'number' ? 'number' : 'text'}
         lang={CHANNEL_TEXT.includes(spec.key) ? lang : undefined}
         value={v ?? ''}
-        onChange={(e) => set(spec.type === 'number' ? e.target.value : e.target.value)}
+        disabled={blocked}
+        onChange={(e) => set(e.target.value)}
       />
       {spec.hint && <span className="hint">{spec.hint}</span>}
       {usedNote}
@@ -145,13 +160,6 @@ function GroupCard({ group, schema, values, effective, onSaved, setToast }) {
         </div>
       </div>
       {group.note && <div className="banner tone-info">{group.note}</div>}
-      {group.id === 'youtube' && (
-        <div className="inline">
-          {values.YOUTUBE_TOKEN && values.YOUTUBE_TOKEN.set ? <Chip tone="ok">Signed in</Chip> : <Chip tone="danger">Not signed in</Chip>}
-          <a className="btn" href="/api/youtube/connect">{values.YOUTUBE_TOKEN && values.YOUTUBE_TOKEN.set ? 'Reconnect YouTube' : 'Connect YouTube'}</a>
-          <span className="faint">Reconnect once to allow status sync (read access).</span>
-        </div>
-      )}
       <div className="fields">
         {specs.filter((s) => !s.subgroup).map((s) => (
           <Field key={s.key} spec={s} value={values[s.key]} {...fieldProps} />
@@ -194,9 +202,16 @@ export default function Integrations() {
   const [params] = useSearchParams();
   const [toast, setToast] = useToast();
   const yt = params.get('youtube');
+  const channel = params.get('channel');
+  const tt = params.get('tiktok');
+  const ttAccount = params.get('account');
   useEffect(() => {
-    if (yt) setToast(yt === 'connected' ? 'YouTube connected' : `YouTube: ${yt}`);
-  }, [yt, setToast]);
+    if (yt) setToast(yt === 'connected' ? `YouTube connected${channel ? `: ${channel}` : ''}` : `YouTube: ${yt}`);
+  }, [yt, channel, setToast]);
+  useEffect(() => {
+    // Errors from the server already start with "TikTok:"; TikTok's own (a cancelled sign-in) do not.
+    if (tt) setToast(tt === 'connected' ? `TikTok connected${ttAccount ? `: ${ttAccount}` : ''}` : /^TikTok/.test(tt) ? tt : `TikTok: ${tt}`);
+  }, [tt, ttAccount, setToast]);
 
   if (!data) return <div className="container"><h1>Integrations</h1><p className="muted">Loading…</p></div>;
   return (
@@ -205,9 +220,10 @@ export default function Integrations() {
         <h1>Integrations & settings</h1>
         <p className="muted" style={{ margin: 0 }}>Keys are saved on this PC only (in Redis, inside Docker) and are never shown again after saving.</p>
       </header>
-      {GROUPS.map((g) => (
+      {GROUPS.filter((g) => data.schema.some((s) => s.group === g.id)).map((g) => (
         <GroupCard key={g.id} group={g} schema={data.schema} values={data.values} effective={data.effective || {}} onSaved={reload} setToast={setToast} />
       ))}
+      <Brands setToast={setToast} />
       <section className="card" aria-labelledby="lib-h">
         <h2 id="lib-h" style={{ fontSize: 17 }}>Saved clip library</h2>
         <span className="faint">Files in the footage folder. A scene uses a clip when 2 or more words of its file name match the scene keywords.</span>

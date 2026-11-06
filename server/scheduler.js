@@ -2,11 +2,12 @@ const { CronExpressionParser } = require('cron-parser');
 const { PLATFORMS } = require('./store');
 
 /**
- * Rule: { id, kind: 'make'|'publish', cron (5 fields), tz, enabled,
+ * Rule: { id, brandId, kind: 'make'|'publish', cron (5 fields), tz, enabled,
  *         make: count (1-10), category? | publish: platform, pick ('oldest'|'newest'), privacy?, caption? }
  */
 function validateRule(rule = {}) {
   const fail = (error) => ({ ok: false, error });
+  if (!rule.brandId) return fail('brandId is required');
   if (!['make', 'publish'].includes(rule.kind)) return fail('kind must be "make" or "publish"');
   if (String(rule.cron || '').trim().split(/\s+/).length !== 5) return fail('cron must have 5 fields: minute hour day month weekday');
   if (!rule.tz) return fail('time zone is required');

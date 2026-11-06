@@ -82,14 +82,34 @@ function pickProvider() {
 /** The free fallback voice. `edge: true` lets callers tell it apart (never mix two voices in one video). */
 const edgeProvider = () => ({ name: `Edge ${cfg.voice}`, fn: edgeTts, edge: true });
 
+const WORD = '\\p{L}\\p{M}\\p{N}'; // letters, Bangla vowel signs and digits: what counts as "inside a word"
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * The dashboard's "written = spoken" lines, applied to the text the voice reads. Whole words only,
+ * so "বাগ = বাগ্" leaves "ডিবাগিং" and "বাগানে" alone. Captions keep the narration as written.
+ */
+function applyPronunciation(text, fixes) {
+  let out = text;
+  for (const line of Array.isArray(fixes) ? fixes : []) {
+    const at = String(line).indexOf('=');
+    if (at < 0) continue;
+    const from = String(line).slice(0, at).trim();
+    const to = String(line).slice(at + 1).trim();
+    if (!from || !to) continue;
+    out = out.replace(new RegExp(`(?<![${WORD}])${escapeRe(from)}(?![${WORD}])`, 'gu'), () => to);
+  }
+  return out;
+}
+
 /** One scene's narration to one MP3 with the given provider. */
-const synthScene = (provider, text, file, workDir, i) => provider.fn(text, file, workDir, i);
+const synthScene = (provider, text, file, workDir, i) => provider.fn(applyPronunciation(text, cfg.pronunciationFixes), file, workDir, i);
 
 async function synthAll(provider, scenes, workDir) {
   const out = [];
   for (let i = 0; i < scenes.length; i++) {
     const file = path.join(workDir, `scene-${String(i).padStart(2, '0')}.mp3`);
-    await provider.fn(scenes[i].narration, file, workDir, i);
+    await synthScene(provider, scenes[i].narration, file, workDir, i);
     const duration = await audioDuration(file);
     out.push({ ...scenes[i], audioFile: file, duration });
     log(`Voice ${i + 1}/${scenes.length}: ${duration.toFixed(1)}s`);
@@ -116,4 +136,4 @@ async function makeVoice(scenes, workDir) {
   }
 }
 
-module.exports = { makeVoice, pickProvider, edgeProvider, synthScene, audioDuration };
+module.exports = { makeVoice, pickProvider, edgeProvider, synthScene, audioDuration, applyPronunciation };

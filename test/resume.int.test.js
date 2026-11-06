@@ -33,6 +33,7 @@ test('a worker killed mid-voice is resumed by the next worker without redoing fi
   const startChild = () => spawn(process.execPath, [path.join(__dirname, 'fixtures', 'fake-worker.js')], { env, stdio: 'ignore' });
   const marks = () => fs.readFileSync(env.MARKER, 'utf8').split('\n').filter(Boolean);
 
+  await r.set('settings:imported', new Date().toISOString()); // the dashboard has imported .env: the worker may start
   const v = await store.createVideo(r, {});
   await enqueueVideo(queues, v.id);
 

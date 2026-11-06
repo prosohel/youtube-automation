@@ -1,6 +1,7 @@
 import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom';
 import './styles.css';
 import { usePoll } from './usePoll.js';
+import { ALL, nameLang, useBrands, withBrand } from './brand.js';
 import { Icon, ICONS } from './components/ui.jsx';
 import Overview from './pages/Overview.jsx';
 import Queue from './pages/Queue.jsx';
@@ -9,7 +10,8 @@ import Integrations from './pages/Integrations.jsx';
 
 function Sidebar() {
   const { data: health } = usePoll('/api/health', 10000);
-  const { data: overview } = usePoll('/api/overview', 10000);
+  const { brands, picked, setPicked } = useBrands();
+  const { data: overview } = usePoll(withBrand('/api/overview', picked), 10000);
   const alive = health && health.worker.alive;
   const inQueue = overview ? overview.counts.queued + overview.counts.working : 0;
   return (
@@ -22,6 +24,17 @@ function Sidebar() {
           <div className="brand-name">Automation Studio</div>
           <div className="brand-sub">Video automation</div>
         </div>
+      </div>
+      <div className="brand-picker">
+        <label htmlFor="brand-select" className="nav-label">Brand</label>
+        <select id="brand-select" value={picked} onChange={(e) => setPicked(e.target.value)}>
+          <option value={ALL}>All brands</option>
+          {brands.map((b) => (
+            <option key={b.id} value={b.id} lang={nameLang(b.name)}>
+              {b.name}{b.active ? '' : ' (off)'}
+            </option>
+          ))}
+        </select>
       </div>
       <div className="nav">
         <span className="nav-label">Workspace</span>

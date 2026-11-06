@@ -21,6 +21,17 @@ export function Chip({ tone = 'neutral', children }) {
   return <span className={`chip tone-${tone}`}>{children}</span>;
 }
 
+/** Small tag naming the brand a video, rule or slot belongs to (shown when every brand is listed together). */
+export function BrandChip({ name, lang }) {
+  if (!name) return null;
+  return (
+    <span className="chip tone-neutral brand-chip" title={`Brand: ${name}`}>
+      <span className="sr-only">Brand: </span>
+      <span lang={lang}>{name}</span>
+    </span>
+  );
+}
+
 export function Switch({ checked, onChange, label, labelledBy, describedBy, disabled }) {
   return (
     <button

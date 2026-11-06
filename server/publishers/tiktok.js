@@ -1,5 +1,5 @@
 const fs = require('fs');
-const { request, wait, notConnected } = require('./http');
+const { request, wait, notConnected, recordAccount } = require('./http');
 
 // TikTok Content Posting API, Direct Post with FILE_UPLOAD (docs read 2026-11-05).
 const API = 'https://open.tiktokapis.com/v2/post/publish';
@@ -78,6 +78,11 @@ async function creatorInfo(ctx, t) {
   return body.data || {};
 }
 
+/** Record the TikTok account the brand's token belongs to; one another brand already has is refused (config). */
+async function recordCreator(ctx, info) {
+  if (info.creator_username) await recordAccount(ctx, 'tiktok', { username: info.creator_username });
+}
+
 async function postStatus(ctx, t, publishId) {
   const { body } = await request(
     ctx,
@@ -91,6 +96,7 @@ async function postStatus(ctx, t, publishId) {
 
 async function publish(ctx) {
   const { t, info } = await withToken(ctx, async (tok) => ({ t: tok, info: await creatorInfo(ctx, tok) }));
+  await recordCreator(ctx, info); // before anything is uploaded
   const privacy = ctx.settings.TIKTOK_PRIVACY;
   const allowed = info.privacy_level_options || [];
   if (!allowed.includes(privacy)) {
@@ -168,7 +174,8 @@ async function findExisting(ctx) {
 
 async function test(ctx) {
   const info = await withToken(ctx, (t) => creatorInfo(ctx, t));
+  await recordCreator(ctx, info);
   return { ok: true, detail: `@${info.creator_username || '?'} can post as: ${(info.privacy_level_options || []).join(', ')}` };
 }
 
-module.exports = { publish, findExisting, test, chunkPlan };
+module.exports = { publish, findExisting, test, chunkPlan, creatorInfo };

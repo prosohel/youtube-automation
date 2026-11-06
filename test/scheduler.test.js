@@ -6,18 +6,23 @@ const { validateRule, nextRuns, syncSchedulers } = require('../server/scheduler'
 
 test.after(closeAll);
 
-const base = { kind: 'publish', platform: 'youtube', cron: '0 18 * * *', tz: 'Asia/Dhaka', enabled: true };
+const base = { brandId: 'b_one', kind: 'publish', platform: 'youtube', cron: '0 18 * * *', tz: 'Asia/Dhaka', enabled: true };
 
 test('validateRule accepts a normal rule and rejects bad cron, time zone, kind and platform', () => {
   assert.deepEqual(validateRule(base), { ok: true });
-  assert.equal(validateRule({ kind: 'make', cron: '0 2 * * *', tz: 'Asia/Dhaka', count: 3 }).ok, true);
+  assert.equal(validateRule({ brandId: 'b_one', kind: 'make', cron: '0 2 * * *', tz: 'Asia/Dhaka', count: 3 }).ok, true);
   assert.match(validateRule({ ...base, cron: '61 * * * *' }).error, /cron/i);
   assert.match(validateRule({ ...base, cron: '* * * * * *' }).error, /5 fields/);
   assert.match(validateRule({ ...base, tz: 'Mars/Base' }).error, /time zone/i);
   assert.match(validateRule({ ...base, platform: undefined }).error, /platform/i);
   assert.match(validateRule({ ...base, platform: 'myspace' }).error, /platform/i);
   assert.match(validateRule({ ...base, kind: 'dance' }).error, /kind/i);
-  assert.match(validateRule({ kind: 'make', cron: '0 2 * * *', tz: 'UTC', count: 50 }).error, /count/i);
+  assert.match(validateRule({ brandId: 'b_one', kind: 'make', cron: '0 2 * * *', tz: 'UTC', count: 50 }).error, /count/i);
+});
+
+test('a rule needs a brand', () => {
+  assert.match(validateRule({ ...base, brandId: undefined }).error, /brandId is required/);
+  assert.match(validateRule({ ...base, brandId: '' }).error, /brandId is required/);
 });
 
 test('nextRuns follows the rule time zone', () => {

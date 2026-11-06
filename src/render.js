@@ -102,6 +102,9 @@ async function prepBackground(scene, i, workDir, publicDir) {
   return name;
 }
 
+/** The text drawn on the video to name its brand, or null when the brand is not shown. */
+const brandLabel = (c) => (c.showBrand ? c.brandHandle || c.brandName || null : null);
+
 const subscribeLabel = () => (/bangla|bengali|bn\b/i.test(cfg.language) ? 'সাবস্ক্রাইব করুন' : 'Subscribe');
 
 /**
@@ -143,6 +146,7 @@ async function renderWithRemotion({ scenes, workDir, slug, title, theme, directi
     title,
     kicker: (direction && direction.kicker) || null, // never the NICHE sentence: that is only for picking topics
     subscribeText: subscribeLabel(),
+    brandLabel: brandLabel(cfg),
     width: cfg.width,
     height: cfg.height,
     fps,
@@ -204,4 +208,4 @@ async function renderWithRemotion({ scenes, workDir, slug, title, theme, directi
   return { videoFile, thumbFile: fs.existsSync(thumbFile) ? thumbFile : null, credits };
 }
 
-module.exports = { renderWithRemotion };
+module.exports = { renderWithRemotion, brandLabel };

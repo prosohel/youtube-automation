@@ -1,8 +1,11 @@
 /**
- * Every publisher: publish(ctx) -> { remoteId, url, privacy, state: 'published'|'processing' },
+ * Every publisher: publish(ctx) -> { remoteId, url, privacy, state: 'published'|'processing', channelId? (YouTube) },
  * findExisting(ctx) -> { remoteId, url, state? } | null, test(ctx) -> { ok, detail }.
- * ctx = { video, settings, record, caption, privacy?, onRemoteId(id), saveSettings?(patch), log(line), fetch?, sleep?, youtube? }
- * saveSettings stores a renewed token (TikTok). Errors with `config` or `auth` set are setup problems, not the video's.
+ * ctx = { video, brand, settings, record, caption, privacy?, onRemoteId(id), saveSettings(patch), setAccount(platform, identity),
+ *         log(line), fetch?, sleep?, youtube? }
+ * settings, saveSettings and setAccount all belong to the video's brand (publishFlow.brandContext): saveSettings stores a
+ * renewed token, setAccount records which account the brand posts to. Errors with `config` or `auth` set are setup
+ * problems, not the video's.
  */
 const PUBLISHERS = {
   youtube: require('./youtube'),

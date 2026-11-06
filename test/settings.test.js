@@ -28,10 +28,10 @@ test('importFromEnv coerces types and reads youtube files', () => {
 test('blank secret keeps the stored value, null clears it', async () => {
   const r = await freshRedis();
   await S.saveSettings(r, { ELEVENLABS_API_KEY: SECRET });
-  await S.saveSettings(r, { ELEVENLABS_API_KEY: '', NICHE: 'tech' });
+  await S.saveSettings(r, { ELEVENLABS_API_KEY: '', CLAUDE_MODEL: 'tech' });
   let s = await S.loadSettings(r);
   assert.equal(s.ELEVENLABS_API_KEY, SECRET);
-  assert.equal(s.NICHE, 'tech');
+  assert.equal(s.CLAUDE_MODEL, 'tech');
   await S.saveSettings(r, { ELEVENLABS_API_KEY: null });
   s = await S.loadSettings(r);
   assert.ok(!s.ELEVENLABS_API_KEY);
@@ -39,12 +39,22 @@ test('blank secret keeps the stored value, null clears it', async () => {
 
 test('masked settings never contain a secret value', async () => {
   const r = await freshRedis();
-  await S.saveSettings(r, { ELEVENLABS_API_KEY: SECRET, YOUTUBE_TOKEN: { refresh_token: 'rtok' } });
+  await S.saveSettings(r, { ELEVENLABS_API_KEY: SECRET, YOUTUBE_CLIENT_SECRET: { installed: { client_secret: 'csec_value' } } });
   const masked = S.maskSettings(await S.loadSettings(r));
   assert.deepEqual(masked.ELEVENLABS_API_KEY, { set: true });
+  assert.deepEqual(masked.YOUTUBE_CLIENT_SECRET, { set: true });
   assert.deepEqual(masked.PEXELS_API_KEY, { set: false });
   assert.ok(!JSON.stringify(masked).includes(SECRET));
-  assert.ok(!JSON.stringify(masked).includes('rtok'));
+  assert.ok(!JSON.stringify(masked).includes('csec_value'));
+});
+
+test('saveSettings refuses a brand key', async () => {
+  const r = await freshRedis();
+  await assert.rejects(S.saveSettings(r, { LANGUAGE: 'Bangla' }), /belongs to a brand/);
+  await assert.rejects(S.saveSettings(r, { NICHE: 'tech', YOUTUBE_TOKEN: { refresh_token: 'x' } }), /Setting (NICHE|YOUTUBE_TOKEN) belongs to a brand/);
+  const s = await S.loadSettings(r);
+  assert.equal(s.LANGUAGE, S.defaults().LANGUAGE);
+  assert.equal(s.NICHE, S.defaults().NICHE, 'nothing is written when one key is refused');
 });
 
 test('unknown keys and invalid values are rejected', async () => {
@@ -57,10 +67,10 @@ test('unknown keys and invalid values are rejected', async () => {
 test('ensureImported imports .env once and never overwrites later edits', async () => {
   const r = await freshRedis();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'set-'));
-  await S.ensureImported(r, { NICHE: 'from env' }, dir);
-  await S.saveSettings(r, { NICHE: 'edited' });
-  await S.ensureImported(r, { NICHE: 'from env' }, dir);
-  assert.equal((await S.loadSettings(r)).NICHE, 'edited');
+  await S.ensureImported(r, { CLAUDE_MODEL: 'from env' }, dir);
+  await S.saveSettings(r, { CLAUDE_MODEL: 'edited' });
+  await S.ensureImported(r, { CLAUDE_MODEL: 'from env' }, dir);
+  assert.equal((await S.loadSettings(r)).CLAUDE_MODEL, 'edited');
 });
 
 test('toConfig maps to config field names and swaps the Windows caption font on Linux', () => {
@@ -128,4 +138,69 @@ test('the video length setting applies to every video and warns about the 3-minu
   assert.doesNotMatch(spec.label, /long/i);
   assert.match(spec.hint, /Shorts/);
   assert.match(spec.hint, /3 minutes/);
+});
+
+test('BRAND_KEYS is exactly what each brand keeps for itself', () => {
+  const expected = [
+    // channel
+    'NICHE', 'LANGUAGE', 'VIDEO_FORMAT', 'TARGET_MINUTES', 'TOPIC_CATEGORIES', 'PRIVACY_STATUS', 'YT_CATEGORY_ID', 'SYNTHETIC_MEDIA',
+    // look
+    'THEME', 'VISUALS',
+    // voice
+    'TTS_PROVIDER', 'ELEVENLABS_VOICE_ID', 'ELEVENLABS_STYLE_TAGS', 'VOICE', 'TTS_RATE', 'GOOGLE_TTS_VOICE',
+    // accounts
+    'YOUTUBE_TOKEN', 'TIKTOK_ACCESS_TOKEN', 'TIKTOK_REFRESH_TOKEN', 'TIKTOK_PRIVACY', 'FACEBOOK_PAGE_ID', 'FACEBOOK_PAGE_TOKEN', 'INSTAGRAM_USER_ID', 'INSTAGRAM_ACCESS_TOKEN',
+    // on the video
+    'BRAND_HANDLE', 'SHOW_BRAND',
+  ];
+  assert.deepEqual([...S.BRAND_KEYS].sort(), [...expected].sort());
+  assert.equal(S.isBrandKey('LANGUAGE'), true);
+  assert.equal(S.isBrandKey('ELEVENLABS_API_KEY'), false);
+  assert.equal(S.isBrandKey('YOUTUBE_CLIENT_SECRET'), false);
+});
+
+test('SHOW_BRAND is off by default and feeds cfg.showBrand; BRAND_HANDLE feeds cfg.brandHandle', () => {
+  const show = S.SETTINGS_SCHEMA.find((s) => s.key === 'SHOW_BRAND');
+  assert.equal(show.default, false);
+  assert.equal(show.type, 'boolean');
+  assert.equal(S.defaults().SHOW_BRAND, false);
+  assert.equal(S.toConfig({ ...S.defaults(), BRAND_HANDLE: '@cats', SHOW_BRAND: true }).brandHandle, '@cats');
+  assert.equal(S.toConfig({ ...S.defaults(), SHOW_BRAND: true }).showBrand, true);
+  const cfg = require('../src/config');
+  for (const field of ['brandName', 'brandHandle', 'showBrand']) assert.ok(Object.prototype.hasOwnProperty.call(cfg, field), field);
+});
+
+test('F1: the import flag never appears before the imported values (the worker waits for the flag, then reads them)', async () => {
+  const r = await freshRedis();
+  const watcher = await freshRedis(); // a second client, as the worker would be
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'set-')); // no client_secret.json or token.json here
+  const early = [];
+  // After every command the import sends, look from the other client: a flag without the values is the race.
+  const watched = new Proxy(r, {
+    get(target, prop) {
+      const v = target[prop];
+      if (typeof v !== 'function') return v;
+      return async (...args) => {
+        const out = await v.apply(target, args);
+        if ((await watcher.exists('settings:imported')) && !(await watcher.hexists('settings', 'CLAUDE_MODEL'))) early.push(prop);
+        return out;
+      };
+    },
+  });
+  assert.equal(await S.ensureImported(watched, { CLAUDE_MODEL: 'from env', LANGUAGE: 'Bangla' }, dir), true);
+  assert.deepEqual(early, []);
+  assert.equal(JSON.parse(await r.hget('settings', 'CLAUDE_MODEL')), 'from env');
+  assert.equal(JSON.parse(await r.hget('settings', 'LANGUAGE')), 'Bangla');
+  assert.equal(await S.ensureImported(r, { CLAUDE_MODEL: 'again' }, dir), false);
+  assert.equal(JSON.parse(await r.hget('settings', 'CLAUDE_MODEL')), 'from env');
+});
+
+test('pronunciation fixes are one shared list in the Voice card', () => {
+  const spec = S.SETTINGS_SCHEMA.find((s) => s.key === 'PRONUNCIATION_FIXES');
+  assert.ok(spec);
+  assert.equal(spec.group, 'voice');
+  assert.equal(spec.type, 'json');
+  assert.deepEqual(spec.default, []);
+  assert.equal(spec.cfg, 'pronunciationFixes');
+  assert.ok(!S.isBrandKey('PRONUNCIATION_FIXES'), 'shared by every brand');
 });

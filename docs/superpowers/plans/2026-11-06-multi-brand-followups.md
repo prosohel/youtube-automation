@@ -1,0 +1,57 @@
+# Multiple brands: follow-ups
+
+Minor findings from the task reviews and the final review of the multi-brand build (branch `multi-brand`, 2026-11-06). None blocks use; each was triaged "can wait" by the final reviewer. Fix them when touching the area.
+
+- **Task 1:** deleteBrand takes no brand lock (concurrent update can resurrect the record).
+- **Task 1:** saveBrandSettings / createBrand write in separate commands (HDEL, HSET, putBrand) instead of one MULTI.
+- **Task 1:** ensureBrands fallback picks the oldest brand even if archived when the flag's brand is gone.
+- **Task 1:** listBrands "oldest first" ties within one millisecond (no sequence counter).
+- **Task 1:** ensureBrands returns created:false when a restart finishes a crashed move.
+- **Task 1:** newId and ACCOUNT_PLATFORMS duplicate store.newId / store.PLATFORMS.
+- **Task 1:** test gaps — move recording facebook/instagram accounts, createBrand unknown copyFrom, setAccount unknown platform.
+- **Task 2:** GET /api/brands?archived=0 is read as true (Boolean of a string).
+- **Task 2:** /api/rules/preview passes placeholder brandId 'preview' to validateRule.
+- **Task 2:** test gaps — PUT rule unknown/archived brand, publish 'This video has no brand' 409, overview isConnected swallowing brandSettings errors.
+- **Task 3:** runWithVideoConfig re-reads the brand the processor just fetched (extra read; tiny delete window).
+- **Task 4:** youtube findExisting skips the channel check (could adopt a same-titled upload from another channel).
+- **Task 4:** authFor swallows a failed token save silently (.catch(() => {})).
+- **Task 4:** ctx.youtube covers only the channel check; uploadVideo always builds google.youtube({auth}) — a future test setting only ctx.youtube would make a real HTTP call.
+- **Task 4:** brand "off" check (!active || archived) duplicated in 4 places — one brands.isOff helper.
+- **Task 4:** connectionTests PLATFORMS duplicates store.PLATFORMS.
+- **Task 4:** youtubeSync grouping copies arrays per video (quadratic).
+- **Task 4:** tests read googleapis internals (.context._options.auth, auth._clientId).
+- **Task 4:** uploadVideo prints to stdout during tests.
+- **Task 4:** leftovers — worker PLATFORM_CFG, stale src/auth.js comment, applyCfg/CLIENT duplicated across tests.
+- **Task 4:** coverage gap — first brand {id:null} record-on-first-upload path has no test.
+- **Task 4:** brand lock (5 s TTL) held while waiting up to 10 s for brands:accounts; a lock timeout inside a publish's setAccount would use an attempt.
+- **Task 5:** empty/missing state gives "Brand  not found" — use "Sign-in did not say which brand".
+- **Task 5:** an archived brand can claim a channel via state/?brand=.
+- **Task 5:** state is a bare brand id (no per-session nonce) — login-CSRF hardening note for a local dashboard.
+- **Task 5:** a backfilled channel conflicting with a third brand gives a message that doesn't say which brand it concerns.
+- **Task 5:** authUrl builds a URL without state when brandId is omitted.
+- **Task 5:** test gaps — API success redirect, archived brand with unrecorded token, unknown brand via state through HTTP.
+- **Task 6:** one-line label styling duplicated 3x in Main.jsx (kicker, intro label, outro label) with different shrink factors.
+- **Task 6:** a whitespace-only label renders an empty line (brandLabel() doesn't trim).
+- **Task 6:** dev-gallery --frame= with an empty value silently falls back to mid-scene.
+- **Task 6:** contract test doesn't assert the >16 threshold drives fontSize.
+- **Task 6:** intro/outro content shifts up by half the label height when set.
+- **Task 7:** archived brands labelled "(off)" like inactive ones in selects.
+- **Task 7:** rules of an archived brand can't be toggled off from the list (server 409; shown as toast).
+- **Task 7:** Add form resets the chosen brand whenever the sidebar pick changes (intended) — and submits '' category if brand settings haven't loaded yet.
+- **Task 7:** each useBrands() instance polls /api/brands separately; no cross-tab sync.
+- **Task 7:** .brand-picker margin-top:-12px offsets the sidebar gap (fragile).
+- **Task 8:** header chips go stale after Test YouTube/TikTok records an account (runTest doesn't call onChanged).
+- **Task 8:** "Confirm delete" not disabled while the request is in flight (double-click → spurious error toast).
+- **Task 8:** collapsing a card unmounts its body and drops unsaved drafts silently.
+- **Task 8:** Brands polls /api/brands?archived=1 alongside useBrands (two pollers, double fetch on change).
+- **Task 8:** test results stay on screen after credentials change.
+- **Task 8:** AddBrand keeps a copyFrom id of a brand archived while the form is open.
+- **Task 8:** TikTok username "@" alone renders "TikTok: @"; YouTube-return toast doesn't name the brand.
+- **Final:** M1 start-up backfill adopts brandless records silently (log each adoption).
+- **Final:** M2 deploy window — old worker runs briefly after the move (handled by stopping the worker before `up -d --build`).
+- **Final:** M4 switched-off brands still raise "not connected" alerts.
+- **Final:** M6 src/upload.js default `auth = getAuthorizedClient()` stays reachable for an undefined auth (safe today; authFor throws first).
+- **Final:** youtubeAuth noReadAccess treats every 403 (incl. quotaExceeded) as "Reconnect" — misleading hint only; sign-in refused either way.
+- **Final:** two brands that already shared a TikTok token before F4 — a renewal saving the same refresh token hits the conflict (no config flag) and uses an attempt; needs a manual duplicate entry.
+- **Final:** the F2 exit-code test spawns server/worker.js, which loads .env (no external call; fails on WRONGTYPE first).
+- **Final:** records recovered via findExisting, and every record posted before 264881b, have no channelId and are never marked removed (safe direction).

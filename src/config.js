@@ -50,6 +50,8 @@ const cfg = (module.exports = {
   elevenModel: process.env.ELEVENLABS_MODEL || 'eleven_v3',
   // Delivery tags sent before each scene (v3/v4 audio tags, not spoken). Set ELEVENLABS_STYLE_TAGS= (empty) to turn off.
   elevenStyleTags: process.env.ELEVENLABS_STYLE_TAGS ?? '[confident] [authoritative]',
+  // "written = spoken" lines from the dashboard (Voice card): how the voice should read a word.
+  pronunciationFixes: [],
   captionFont: process.env.CAPTION_FONT || 'DejaVu Sans',
   targetMinutes: Number(process.env.TARGET_MINUTES || 3),
 
@@ -62,6 +64,11 @@ const cfg = (module.exports = {
   // Tick YouTube's "altered or synthetic content" box (realistic AI clips in ./footage)
   syntheticMedia: (process.env.SYNTHETIC_MEDIA || 'true').toLowerCase() !== 'false',
   categoryId: process.env.YT_CATEGORY_ID || '28',
+
+  // The brand a dashboard video is made for (server/brands.js); the CLI has none.
+  brandName: '',
+  brandHandle: '',
+  showBrand: false,
 
   // Set by the dashboard/worker (server/settings.js); the CLI leaves them empty and uses files/.env.
   claudeOauthToken: process.env.CLAUDE_CODE_OAUTH_TOKEN || '',

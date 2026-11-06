@@ -1,5 +1,8 @@
 // Contact sheet of every scene graphic, so the look can be reviewed without making a video.
 // Usage: npm run render:gallery -- [--themes=neon,vox-paper,news] [--formats=shorts,landscape] [--only=bars,donut]
+//        [--brand=@TechBangla] [--frame=intro|outro]
+// --brand sets the brandLabel prop (the small channel name on the intro and outro). --frame=intro or outro takes the
+// still from the intro (frame 30) or the outro (20 frames before the end) instead of mid-scene.
 // --only matches a sample name or a graphic type. Output: output/gallery/<format>-<theme>-<name>.jpg
 // and output/gallery/sheet-<format>.jpg (one row per theme, one column per sample).
 const fs = require('fs');
@@ -21,12 +24,19 @@ const OUTRO_SECONDS = 2.2;
 const FORMATS = { shorts: { width: 1080, height: 1920, isShort: true }, landscape: { width: 1920, height: 1080, isShort: false } };
 // VISUAL_START in Visuals.jsx is OVERLAP + 2; read OVERLAP from the (ESM) timeline module so they never drift.
 const OVERLAP = Number(fs.readFileSync(path.join(__dirname, 'remotion', 'timeline.js'), 'utf8').match(/OVERLAP = (\d+)/)[1]);
+const SCENE_FRAMES = 150; // the one sample scene below
 const STILL_FRAME = Math.round(INTRO_SECONDS * FPS) + OVERLAP + 2 + 60; // the graphic, well after it landed
+const LAST_FRAME = Math.round(INTRO_SECONDS * FPS) + SCENE_FRAMES + Math.round(OUTRO_SECONDS * FPS) - 1;
+const FRAMES = { intro: 30, outro: LAST_FRAME - 20 };
 
 (async () => {
   const themes = arg('themes', ['neon', 'vox-paper', 'news']);
   const formats = arg('formats', ['shorts', 'landscape']);
   const only = arg('only', null);
+  const brand = (process.argv.find((a) => a.startsWith('--brand=')) || '').slice('--brand='.length) || null; // not split on commas
+  const [frameName] = arg('frame', [null]);
+  if (frameName && !FRAMES[frameName]) throw new Error(`Unknown --frame "${frameName}" (intro or outro)`);
+  const stillFrame = frameName ? FRAMES[frameName] : STILL_FRAME;
   const samples = SAMPLES.filter((s) => !only || only.includes(s.name) || only.includes(s.visual.type));
   if (!samples.length) throw new Error(`No sample matches --only=${only.join(',')}`);
 
@@ -53,6 +63,7 @@ const STILL_FRAME = Math.round(INTRO_SECONDS * FPS) + OVERLAP + 2 + 60; // the g
         const inputProps = {
           title: 'Gallery',
           kicker: null,
+          brandLabel: brand,
           subscribeText: 'Subscribe',
           ...size,
           fps: FPS,
@@ -63,12 +74,12 @@ const STILL_FRAME = Math.round(INTRO_SECONDS * FPS) + OVERLAP + 2 + 60; // the g
           theme,
           scenes: [
             // A realistic 4-word headline (wraps to two lines in some themes); the caption names the sample.
-            { frames: 150, narration: name, headline: 'অনলাইন প্রতারণার নতুন কৌশল', visual, emoji: null, bg: null, audio: null },
+            { frames: SCENE_FRAMES, narration: name, headline: 'অনলাইন প্রতারণার নতুন কৌশল', visual, emoji: null, bg: null, audio: null },
           ],
         };
-        const output = path.join(outDir, `${format}-${themeId}-${name}.jpg`);
+        const output = path.join(outDir, `${format}-${themeId}-${name}${frameName ? `-${frameName}` : ''}.jpg`);
         const composition = await selectComposition({ serveUrl, id: 'Main', inputProps });
-        await renderStill({ composition, serveUrl, output, frame: STILL_FRAME, imageFormat: 'jpeg', inputProps, scale: 0.5 });
+        await renderStill({ composition, serveUrl, output, frame: stillFrame, imageFormat: 'jpeg', inputProps, scale: 0.5 });
         stills.push(output);
         log(`Gallery: ${path.basename(output)}`);
       }
