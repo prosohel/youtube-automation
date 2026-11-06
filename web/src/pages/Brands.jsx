@@ -17,10 +17,12 @@ const enc = encodeURIComponent;
 function accountChips(accounts) {
   const a = accounts || {};
   const out = [];
-  if (a.youtube) out.push(['youtube', `YouTube: ${a.youtube.name || a.youtube.id}`]);
-  if (a.tiktok) out.push(['tiktok', a.tiktok.username ? `TikTok: @${String(a.tiktok.username).replace(/^@/, '')}` : 'TikTok: connected']);
-  if (a.facebook) out.push(['facebook', `Facebook: Page ${a.facebook.id}`]);
-  if (a.instagram) out.push(['instagram', `Instagram: ${a.instagram.id}`]);
+  // A recorded account may have no name or id yet (a migrated sign-in whose channel is not confirmed): never print null.
+  const text = (v) => (v === null || v === undefined ? '' : String(v).trim());
+  if (a.youtube) out.push(['youtube', `YouTube: ${text(a.youtube.name) || text(a.youtube.id) || 'signed in'}`]);
+  if (a.tiktok) out.push(['tiktok', text(a.tiktok.username) ? `TikTok: @${text(a.tiktok.username).replace(/^@/, '')}` : 'TikTok: connected']);
+  if (a.facebook) out.push(['facebook', text(a.facebook.id) ? `Facebook: Page ${text(a.facebook.id)}` : 'Facebook: connected']);
+  if (a.instagram) out.push(['instagram', text(a.instagram.id) ? `Instagram: ${text(a.instagram.id)}` : 'Instagram: connected']);
   return out;
 }
 
