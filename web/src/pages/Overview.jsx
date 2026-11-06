@@ -1,16 +1,19 @@
 import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { usePoll } from '../usePoll.js';
-import { Chip, fmtTime, Icon, ICONS, PlatformBadge, PlatformStatus, platformName, PLATFORMS, StageBar, useToast } from '../components/ui.jsx';
+import { ALL, nameLang, useBrands, withBrand } from '../brand.js';
+import { BrandChip, Chip, fmtTime, Icon, ICONS, PlatformBadge, PlatformStatus, platformName, PLATFORMS, StageBar, useToast } from '../components/ui.jsx';
 
 export default function Overview() {
-  const { data, error, reload } = usePoll('/api/overview', 3000);
+  const { picked, brandName } = useBrands();
+  const { data, error, reload } = usePoll(withBrand('/api/overview', picked), 3000);
+  const chip = (id) => (picked === ALL ? <BrandChip name={brandName(id)} lang={nameLang(brandName(id))} /> : null);
   const [toast, setToast] = useToast();
 
   const toggle = async () => {
     try {
       await api.send('POST', data.paused ? '/api/queue/resume' : '/api/queue/pause');
-      setToast(data.paused ? 'Queue resumed' : 'Queue paused: the current step finishes, nothing new starts');
+      setToast(data.paused ? 'All brands resumed' : 'All brands paused: the current step finishes, nothing new starts');
       reload();
     } catch (e) {
       setToast(e.message);
@@ -48,7 +51,7 @@ export default function Overview() {
         </div>
         <button type="button" className="btn" onClick={toggle} disabled={!worker.alive}>
           <Icon d={paused ? ICONS.play : ICONS.pause} size={16} />
-          {paused ? 'Resume queue' : 'Pause queue'}
+          {paused ? 'Resume all brands' : 'Pause all brands'}
         </button>
       </section>
 
@@ -77,6 +80,7 @@ export default function Overview() {
                 <>
                   <p className="big-title bn" lang="bn">{current.title || current.topic || 'Finding a topic…'}</p>
                   <span className="faint">{current.category ? `${current.category} · ` : ''}started {fmtTime(current.createdAt)}</span>
+                  {chip(current.brandId) && <div className="inline">{chip(current.brandId)}</div>}
                 </>
               ) : (
                 <p className="muted" style={{ margin: 0 }}>Nothing is being made right now.</p>
@@ -128,6 +132,7 @@ export default function Overview() {
               <div className="stack" style={{ gap: 2, flex: '1 1 240px', minWidth: 0 }}>
                 <span className="bn" lang="bn" style={{ fontWeight: 500 }}>{p.title || (i > 0 ? 'Next ready video' : 'No ready video yet')}</span>
                 <span className="faint">{platformName(p.platform)}</span>
+                {chip(p.brandId) && <div className="inline">{chip(p.brandId)}</div>}
               </div>
               {p.connected === false && <Chip tone="danger">Not connected</Chip>}
             </div>
@@ -154,7 +159,10 @@ export default function Overview() {
               </div>
               {recent.map((v) => (
                 <div className="tr" role="row" key={v.id}>
-                  <span role="cell" className="bn" lang="bn" style={{ fontWeight: 500 }}>{v.title}</span>
+                  <span role="cell" className="stack" style={{ gap: 4, alignItems: 'flex-start' }}>
+                    <span className="bn" lang="bn" style={{ fontWeight: 500 }}>{v.title}</span>
+                    {chip(v.brandId)}
+                  </span>
                   <span role="cell" className="faint">{fmtTime(v.createdAt)}</span>
                   {PLATFORMS.map((p) => (
                     <span role="cell" key={p.id}>

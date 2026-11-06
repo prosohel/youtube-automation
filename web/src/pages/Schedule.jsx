@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import { usePoll } from '../usePoll.js';
-import { Chip, fmtTime, Icon, ICONS, PlatformBadge, platformName, PLATFORMS, Switch, useToast } from '../components/ui.jsx';
+import { ALL, nameLang, useBrands, withBrand } from '../brand.js';
+import { BrandChip, Chip, contentLang, fmtTime, Icon, ICONS, PlatformBadge, platformName, PLATFORMS, Switch, useToast } from '../components/ui.jsx';
 
 const TIME_ZONES = ['Asia/Dhaka', 'Asia/Kolkata', 'UTC', 'Europe/London', 'America/New_York'];
 const DAYS = [['1', 'Mon'], ['2', 'Tue'], ['3', 'Wed'], ['4', 'Thu'], ['5', 'Fri'], ['6', 'Sat'], ['0', 'Sun']];
@@ -24,7 +25,7 @@ function parseCron(cron) {
   return { times, days: m[3] === '*' ? [] : m[3].split(',') };
 }
 
-const blank = { kind: 'publish', platform: 'youtube', mode: 'daily', times: '18:00', days: [], cron: '0 18 * * *', tz: 'Asia/Dhaka', count: 1, category: '', pick: 'oldest', privacy: '', caption: '', enabled: true };
+const blank = { brandId: '', kind: 'publish', platform: 'youtube', mode: 'daily', times: '18:00', days: [], cron: '0 18 * * *', tz: 'Asia/Dhaka', count: 1, category: '', pick: 'oldest', privacy: '', caption: '', enabled: true };
 
 function describe(rule) {
   const parsed = parseCron(rule.cron);
@@ -36,8 +37,13 @@ function describe(rule) {
     : { title: platformName(rule.platform), when, what: `Posts the ${rule.pick === 'newest' ? 'newest' : 'oldest'} ready video${rule.privacy ? ` · ${rule.privacy}` : ''}` };
 }
 
-function Editor({ initial, categories, onSaved, onCancel, setToast }) {
+function Editor({ initial, brands, brandName, onSaved, onCancel, setToast }) {
   const [f, setF] = useState(initial);
+  const { data: brandPage } = usePoll(f.brandId ? `/api/brands/${f.brandId}/settings` : null, 60000);
+  const categories = (brandPage && brandPage.values.TOPIC_CATEGORIES) || [];
+  const lang = contentLang(brandPage && brandPage.values.LANGUAGE);
+  // A rule whose brand has been archived keeps showing its brand; saving it is refused by the server.
+  const brandOptions = f.brandId && !brands.some((b) => b.id === f.brandId) ? [...brands, { id: f.brandId, name: brandName(f.brandId), active: false }] : brands;
   const [preview, setPreview] = useState({ next: [], error: null });
   const set = (k, v) => setF((o) => ({ ...o, [k]: v }));
   const built = f.mode === 'custom' ? { cron: f.cron } : buildCron(f.times, f.mode === 'weekly' ? f.days : []);
@@ -58,7 +64,7 @@ function Editor({ initial, categories, onSaved, onCancel, setToast }) {
   const save = async (e) => {
     e.preventDefault();
     if (built.error) return setToast(built.error);
-    const body = { kind: f.kind, cron: built.cron, tz: f.tz, enabled: f.enabled };
+    const body = { brandId: f.brandId, kind: f.kind, cron: built.cron, tz: f.tz, enabled: f.enabled };
     if (f.kind === 'make') Object.assign(body, { count: Number(f.count), category: f.category });
     else Object.assign(body, { platform: f.platform, pick: f.pick, privacy: f.privacy || undefined, caption: f.caption });
     try {
@@ -88,6 +94,15 @@ function Editor({ initial, categories, onSaved, onCancel, setToast }) {
         {seg('kind', [['publish', 'Publish a video'], ['make', 'Make new videos']])}
       </div>
       <div className="fields">
+        <label className="field">
+          Brand
+          <select required value={f.brandId} onChange={(e) => setF((o) => ({ ...o, brandId: e.target.value, category: '' }))}>
+            <option value="" disabled>Choose a brand</option>
+            {brandOptions.map((b) => (
+              <option key={b.id} value={b.id} lang={nameLang(b.name)}>{b.name}{b.active ? '' : ' (off)'}</option>
+            ))}
+          </select>
+        </label>
         {f.kind === 'publish' ? (
           <label className="field">
             Platform
@@ -103,7 +118,7 @@ function Editor({ initial, categories, onSaved, onCancel, setToast }) {
             </label>
             <label className="field">
               Category
-              <select value={f.category} onChange={(e) => set('category', e.target.value)}>
+              <select lang={lang} value={f.category} onChange={(e) => set('category', e.target.value)}>
                 <option value="">Any of my categories</option>
                 {categories.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
@@ -185,12 +200,14 @@ function Editor({ initial, categories, onSaved, onCancel, setToast }) {
 }
 
 export default function Schedule() {
-  const { data: rules, reload } = usePoll('/api/rules', 15000);
-  const { data: week, reload: reloadWeek } = usePoll('/api/schedule/week', 30000);
-  const { data: settings } = usePoll('/api/settings', 60000);
+  const { brands, picked, brandName } = useBrands();
+  const { data: rules, reload } = usePoll(withBrand('/api/rules', picked), 15000);
+  const { data: week, reload: reloadWeek } = usePoll(withBrand('/api/schedule/week', picked), 30000);
   const [editing, setEditing] = useState(null);
   const [toast, setToast] = useToast();
-  const categories = (settings && settings.values.TOPIC_CATEGORIES) || [];
+  const chip = (id) => (picked === ALL ? <BrandChip name={brandName(id)} lang={nameLang(brandName(id))} /> : null);
+  // A new rule starts on the picked brand, or on the only brand there is.
+  const newRule = () => ({ ...blank, brandId: brands.some((b) => b.id === picked) ? picked : brands.length === 1 ? brands[0].id : '' });
   const refresh = () => {
     reload();
     reloadWeek();
@@ -233,7 +250,7 @@ export default function Schedule() {
           <h1>Schedule</h1>
           <p className="muted" style={{ margin: 0 }}>When videos get made, and when each platform gets one. A slot missed while the PC was off runs once when it is back.</p>
         </div>
-        <button type="button" className="btn btn-primary" onClick={() => setEditing({ ...blank })}>
+        <button type="button" className="btn btn-primary" onClick={() => setEditing(newRule())}>
           <Icon d={ICONS.plus} size={16} /> New rule
         </button>
       </header>
@@ -250,6 +267,7 @@ export default function Schedule() {
                 <strong id={`rule-${r.id}`}>{d.title}</strong>
                 <span style={{ color: 'var(--ink-2)' }}>{d.when} <span className="faint">({r.tz})</span></span>
                 <span className="faint">{d.what}</span>
+                {chip(r.brandId) && <div className="inline">{chip(r.brandId)}</div>}
               </div>
               <code className="mono" style={{ background: 'var(--neutral-bg)', borderRadius: 8, padding: '6px 10px' }}>{r.cron}</code>
               <div className="stack" style={{ gap: 2, flex: '1 1 140px' }}>
@@ -269,7 +287,8 @@ export default function Schedule() {
           <Editor
             key={editing.id || 'new'}
             initial={editing}
-            categories={categories}
+            brands={brands}
+            brandName={brandName}
             onSaved={() => {
               setEditing(null);
               refresh();
@@ -296,6 +315,7 @@ export default function Schedule() {
                     <PlatformBadge id={s.kind === 'make' ? 'make' : s.platform} small />
                     {new Date(s.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                     {s.kind === 'make' && <Chip tone="info">make {s.count}</Chip>}
+                    {chip(s.brandId)}
                   </div>
                 ))}
               </div>

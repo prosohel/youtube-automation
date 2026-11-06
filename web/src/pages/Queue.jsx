@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { usePoll } from '../usePoll.js';
-import { Chip, contentLang, fmtTime, graphicLabel, Icon, ICONS, isPublished, PlatformBadge, PlatformStatus, PLATFORMS, StageBar, useToast, VideoStatus } from '../components/ui.jsx';
+import { ALL, nameLang, useBrands, withBrand } from '../brand.js';
+import { BrandChip, Chip, contentLang, fmtTime, graphicLabel, Icon, ICONS, isPublished, PlatformBadge, PlatformStatus, PLATFORMS, StageBar, useToast, VideoStatus } from '../components/ui.jsx';
 
 const TABS = [
   ['active', 'In progress', (v) => v.status === 'queued' || v.status === 'working'],
@@ -11,17 +12,25 @@ const TABS = [
   ['failed', 'Failed', (v) => v.status === 'failed' || Object.values(v.platforms || {}).some((p) => p.status === 'failed')],
 ];
 
-function AddVideo({ categories, lang, onAdded, setToast }) {
+function AddVideo({ brands, picked, onAdded, setToast }) {
   const [topic, setTopic] = useState('');
+  const [chosen, setChosen] = useState(null);
   const [category, setCategory] = useState('');
   const [platforms, setPlatforms] = useState(PLATFORMS.map((p) => p.id));
   const [busy, setBusy] = useState(false);
+  // The brand follows the one picked in the sidebar (or the only brand there is) until it is chosen here.
+  const defaultId = brands.some((b) => b.id === picked) ? picked : brands.length === 1 ? brands[0].id : '';
+  const brandId = chosen !== null && brands.some((b) => b.id === chosen) ? chosen : defaultId;
+  useEffect(() => setChosen(null), [picked]);
+  const { data: brandPage } = usePoll(brandId ? `/api/brands/${brandId}/settings` : null, 60000);
+  const categories = (brandPage && brandPage.values.TOPIC_CATEGORIES) || [];
+  const lang = contentLang(brandPage && brandPage.values.LANGUAGE);
   const flip = (id) => setPlatforms((ps) => (ps.includes(id) ? ps.filter((x) => x !== id) : [...ps, id]));
   const add = async (e) => {
     e.preventDefault();
     setBusy(true);
     try {
-      await api.send('POST', '/api/videos', { topic, category, platforms });
+      await api.send('POST', '/api/videos', { brandId, topic, category: categories.includes(category) ? category : '', platforms });
       setTopic('');
       setToast('Added to the queue');
       onAdded();
@@ -36,13 +45,22 @@ function AddVideo({ categories, lang, onAdded, setToast }) {
       <h2 id="add-h">Add a video to the queue</h2>
       {/* Two rows: what to make, then where it goes and the button, so the platform pills never wrap one by one. */}
       <div className="inline" style={{ alignItems: 'flex-end', gap: 14 }}>
+        <label className="field" style={{ flex: '1 1 180px' }}>
+          Brand
+          <select required value={brandId} onChange={(e) => { setChosen(e.target.value); setCategory(''); }}>
+            <option value="" disabled>Choose a brand</option>
+            {brands.map((b) => (
+              <option key={b.id} value={b.id} lang={nameLang(b.name)}>{b.name}{b.active ? '' : ' (off)'}</option>
+            ))}
+          </select>
+        </label>
         <label className="field" style={{ flex: '3 1 280px' }}>
           Topic
           <input lang={lang} value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="Leave empty and AI picks a trending topic" />
         </label>
         <label className="field" style={{ flex: '1 1 220px' }}>
           Category
-          <select lang={lang} value={category} onChange={(e) => setCategory(e.target.value)}>
+          <select lang={lang} value={categories.includes(category) ? category : ''} onChange={(e) => setCategory(e.target.value)}>
             <option value="">Any of my categories</option>
             {categories.map((c) => (
               <option key={c} value={c}>{c}</option>
@@ -157,12 +175,12 @@ function Detail({ id, onChanged, setToast }) {
 export default function Queue() {
   const [params, setParams] = useSearchParams();
   const tab = params.get('tab') || 'active';
+  // Switch tab but keep the other URL parameters (the picked brand).
+  const setTab = (id) => setParams((p) => { const n = new URLSearchParams(p); n.set('tab', id); return n; });
   const [selected, setSelected] = useState(null);
-  const { data: videos, reload } = usePoll('/api/videos?limit=300', 3000);
-  const { data: settings } = usePoll('/api/settings', 60000);
+  const { brands, picked, brandName } = useBrands();
+  const { data: videos, reload } = usePoll(withBrand('/api/videos?limit=300', picked), 3000);
   const [toast, setToast] = useToast();
-  const categories = (settings && settings.values.TOPIC_CATEGORIES) || [];
-  const lang = contentLang(settings && settings.values.LANGUAGE);
   // Tabs keyboard pattern: arrow keys move between tabs, only the selected tab is in the Tab order.
   const onTabKey = (e) => {
     const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
@@ -170,7 +188,7 @@ export default function Queue() {
     e.preventDefault();
     const i = TABS.findIndex(([id]) => id === tab);
     const next = TABS[(i + step + TABS.length) % TABS.length][0];
-    setParams({ tab: next });
+    setTab(next);
     document.getElementById(`tab-${next}`)?.focus();
   };
 
@@ -187,7 +205,7 @@ export default function Queue() {
         <h1>Queue</h1>
         <p className="muted" style={{ margin: 0 }}>The worker makes one video at a time, from topic to render. Finished videos wait for their posting slot.</p>
       </header>
-      <AddVideo categories={categories} lang={lang} onAdded={reload} setToast={setToast} />
+      <AddVideo brands={brands} picked={picked} onAdded={reload} setToast={setToast} />
       <div className="row" style={{ alignItems: 'flex-start' }}>
         <section className="card grow-3" aria-label="Videos" style={{ paddingTop: 8 }}>
           <div role="tablist" aria-label="Video status" className="tabs" onKeyDown={onTabKey}>
@@ -201,7 +219,7 @@ export default function Queue() {
                 aria-selected={tab === id}
                 aria-controls="videos-panel"
                 tabIndex={tab === id ? 0 : -1}
-                onClick={() => setParams({ tab: id })}
+                onClick={() => setTab(id)}
               >
                 {label}
                 <span className="badge">{(groups[id] || []).length}</span>
@@ -223,6 +241,7 @@ export default function Queue() {
                     {(v.targets || []).map((p) => (
                       <PlatformBadge key={p} id={p} small />
                     ))}
+                    {picked === ALL && <BrandChip name={brandName(v.brandId)} lang={nameLang(brandName(v.brandId))} />}
                   </div>
                 </div>
                 <VideoStatus video={v} />
