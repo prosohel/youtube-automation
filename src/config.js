@@ -36,6 +36,10 @@ const cfg = (module.exports = {
   directSfx: (process.env.DIRECT_SFX || 'true').toLowerCase() !== 'false',
   directCamera: (process.env.DIRECT_CAMERA || 'true').toLowerCase() !== 'false',
   directGraphics: (process.env.DIRECT_GRAPHICS || 'true').toLowerCase() !== 'false',
+  // The thumbnail: '' = Claude picks the style per video, or one of src/thumbnail.js STYLES for every video.
+  thumbStyle: (process.env.THUMB_STYLE || '').trim(),
+  // Open the video with the thumbnail (TikTok uses that frame as the cover). false = the old title card.
+  thumbIntro: (process.env.THUMB_INTRO || 'true').toLowerCase() !== 'false',
   // 'mixed' = animated graphics + stock footage as B-roll on some scenes (default)
   // 'motion' = animated graphics only, 'footage' = stock/local clips on every scene
   visuals: (process.env.VISUALS || 'mixed').toLowerCase(),

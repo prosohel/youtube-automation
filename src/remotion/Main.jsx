@@ -28,6 +28,7 @@ import { COUNT_FRAMES, ITEM_STAGGER } from './library/timing';
 import { MotionBg, Overlays, Particles } from './Backgrounds';
 import { Captions, HeadlineCard } from './Text';
 import { EmojiPop, LeakAt, Sfx } from './Effects';
+import { ThumbCard } from './Thumbnail';
 
 /**
  * Camera motion blur renders its children several times per frame, so it is only applied while things
@@ -414,7 +415,9 @@ const SceneSfx = ({ scene, start, index }) => {
 };
 
 export const Main = (props) => {
-  const { title, kicker, brandLabel, subscribeText, scenes, isShort, sfx, music } = props;
+  const { title, kicker, brandLabel, subscribeText, scenes, isShort, sfx, music, thumb } = props;
+  // The video opens with its thumbnail (TikTok's cover frame) unless it was switched off for this brand.
+  const thumbIntro = Boolean(thumb && thumb.intro);
   setTheme(props.theme);
   const T = theme();
   const { width, height } = useVideoConfig();
@@ -424,7 +427,7 @@ export const Main = (props) => {
     <AbsoluteFill style={{ background: T.bg[0] }}>
       <TransitionSeries>
         <TransitionSeries.Sequence durationInFrames={t.introFrames + OVERLAP}>
-          <Intro title={title} kicker={kicker} brandLabel={brandLabel} isShort={isShort} />
+          {thumbIntro ? <ThumbCard thumb={thumb} isShort={isShort} /> : <Intro title={title} kicker={kicker} brandLabel={brandLabel} isShort={isShort} />}
         </TransitionSeries.Sequence>
         {scenes.map((s, i) => (
           <React.Fragment key={i}>
@@ -440,7 +443,10 @@ export const Main = (props) => {
         </TransitionSeries.Sequence>
       </TransitionSeries>
 
-      <Overlays kicker={kicker} title={title} isShort={isShort} />
+      {/* Theme overlays (news ticker, grain) start after a thumbnail intro, so they never cover it. */}
+      <Sequence from={thumbIntro ? t.introFrames : 0} layout="none">
+        <Overlays kicker={kicker} title={title} isShort={isShort} />
+      </Sequence>
 
       {/* Light-leak flashes (dark themes only): opening, every other cut, and into the outro. */}
       {T.leaks ? (

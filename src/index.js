@@ -8,6 +8,7 @@ const { makeVoice } = require('./voice');
 const { renderAny } = require('./renderAny');
 const { resolveStyle } = require('./style');
 const { resolveDirection, summarizeDirection } = require('./direction');
+const { resolveThumbnail } = require('./thumbnail');
 const { validateVisuals, summarizeGraphics } = require('./graphics');
 
 const args = Object.fromEntries(
@@ -46,6 +47,7 @@ async function main() {
   const { theme, notes } = resolveStyle(script.style);
   log(`Design: ${theme.label} (${theme.id}), energy ${theme.energy}${script.style?.reason ? ` - ${script.style.reason}` : ''}${notes.length ? ` [${notes.join('; ')}]` : ''}`);
   const direction = resolveDirection(script, cfg);
+  const thumbnail = resolveThumbnail(script, cfg);
 
   // 3. Voice
   log('Generating voice...');
@@ -53,7 +55,7 @@ async function main() {
 
   // 4. Video
   log('Rendering video...');
-  const { videoFile, thumbFile, credits = [] } = await renderAny({ scenes, workDir, slug, title: script.title, theme, direction });
+  const { videoFile, thumbFile, credits = [] } = await renderAny({ scenes, workDir, slug, title: script.title, theme, direction, thumbnail });
   // Licence attributions (e.g. CC BY emoji) go at the end of the YouTube description.
   if (credits.length) script.description = `${script.description}\n\n${credits.join('\n')}`;
   log(`Video ready: ${videoFile}`);
@@ -70,10 +72,10 @@ async function main() {
       description: script.description,
       tags: script.tags,
     });
-    saveHistory({ topic: topic.topic, title: script.title, url, theme: theme.id, direction: summarizeDirection(direction), graphics: summarizeGraphics(script.scenes) });
+    saveHistory({ topic: topic.topic, title: script.title, url, theme: theme.id, direction: summarizeDirection(direction), graphics: summarizeGraphics(script.scenes), thumb: thumbnail.style });
     return;
   }
-  saveHistory({ topic: topic.topic, title: script.title, url: null, theme: theme.id, direction: summarizeDirection(direction), graphics: summarizeGraphics(script.scenes) });
+  saveHistory({ topic: topic.topic, title: script.title, url: null, theme: theme.id, direction: summarizeDirection(direction), graphics: summarizeGraphics(script.scenes), thumb: thumbnail.style });
 }
 
 main().catch((e) => {

@@ -94,6 +94,21 @@ test('tiktok: creator info, init, one chunk, status; private by default', async 
   assert.equal(res.state, 'published');
 });
 
+test('tiktok: the cover is the frame where the thumbnail intro has landed', async () => {
+  const replies = () => fakeFetch([
+    ['creator_info/query', 200, { data: { privacy_level_options: ['SELF_ONLY'], creator_username: 'banglatech' }, error: { code: 'ok' } }],
+    ['video/init', 200, { data: { publish_id: 'pub_1', upload_url: 'https://open-upload.tiktokapis.com/video/?upload_id=1' }, error: { code: 'ok' } }],
+    ['open-upload.tiktokapis.com', 201, ''],
+    ['status/fetch', 200, { data: { status: 'PUBLISH_COMPLETE', publicaly_available_post_id: [] }, error: { code: 'ok' } }],
+  ]);
+  const withCover = replies();
+  await getPublisher('tiktok').publish(ctx({ TIKTOK_ACCESS_TOKEN: TOKEN }, withCover, { video: { ...video, coverMs: 1200 } }));
+  assert.equal(JSON.parse(withCover.calls[1].body).post_info.video_cover_timestamp_ms, 1200);
+  const without = replies();
+  await getPublisher('tiktok').publish(ctx({ TIKTOK_ACCESS_TOKEN: TOKEN }, without));
+  assert.equal('video_cover_timestamp_ms' in JSON.parse(without.calls[1].body).post_info, false, 'TikTok picks its own cover');
+});
+
 test('tiktok: an account another brand already has is refused before upload', async () => {
   const fetch = fakeFetch([['creator_info/query', 200, { data: { privacy_level_options: ['SELF_ONLY'], creator_username: 'banglatech' }, error: { code: 'ok' } }]]);
   const setAccount = async () => {

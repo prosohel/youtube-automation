@@ -28,7 +28,7 @@ Ideas the project would benefit from. None of them is promised or assigned. If y
 - **Review before publishing:** preview a video, edit its script, title and description, then approve it.
 - **More than one channel** per platform, each with its own niche, voice and schedules.
 - **Analytics:** views and watch time per video and per theme, to learn what works.
-- **Thumbnail designer** with templates and A/B variants.
+- **Thumbnail A/B variants** and a button to redo one thumbnail (designed thumbnails are built: four styles, Claude picks per video).
 - **Subtitles in other languages** uploaded with the video.
 - **Notifications** (email, Telegram, Discord) when a video is published or a job fails.
 

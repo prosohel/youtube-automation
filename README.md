@@ -91,6 +91,8 @@ node src/index.js --topic="How to spot phishing emails"   # force a topic
 
 Outputs land in `output/` (`.mp4`, `.jpg` thumbnail, `.script.json`).
 
+**Thumbnails** are designed per video: Claude writes a short hook and picks one of four styles (big text, versus, question, big number); the photo comes from the video's own B-roll. The video opens with the same design, and TikTok uses that frame as its cover. Set a fixed style or turn the opening off per brand (Look). Review the designs without making a video: `npm run render:thumbs` (samples in `output/gallery/thumbs/`).
+
 ### Schedule it
 
 Cron (daily 9:00): `0 9 * * * cd /path/to/youtube-automation && /usr/bin/node src/index.js >> run.log 2>&1`

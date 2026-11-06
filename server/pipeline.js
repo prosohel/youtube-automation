@@ -4,6 +4,7 @@ const cfg = require('../src/config');
 const store = require('./store');
 const { resolveDirection } = require('../src/direction');
 const { validateVisuals } = require('../src/graphics');
+const { resolveThumbnail } = require('../src/thumbnail');
 
 /** The real stage functions. Tests pass their own. Required lazily: Remotion etc. load only when used. */
 function realDeps() {
@@ -59,6 +60,7 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
       description: script.description,
       theme, // full object incl. seed, so a resumed render looks the same
       direction: resolveDirection(script, cfg), // checked once, so later settings changes never alter a resumed render
+      thumbnail: resolveThumbnail(script, cfg),
       slug: `${new Date().toISOString().slice(0, 10)}-${v.id}`, // id, not title: Bangla titles slugify to the same name
     });
     await say(`Script: "${script.title}" (${script.scenes.length} scenes, theme ${theme.id})`);
@@ -125,10 +127,13 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
     await startStage('render', 'Rendering video...');
     // A half-written mp4 from an interrupted render cannot be continued.
     fs.rmSync(path.join(outDir, `${v.slug}.mp4`), { force: true });
-    const res = await deps.renderAny({ scenes: v.scenes, workDir, slug: v.slug, title: v.title, theme: v.theme, direction: v.direction });
+    // Videos scripted before thumbnails existed get one from their script now.
+    const thumbnail = v.thumbnail || resolveThumbnail(v.script, cfg);
+    const res = await deps.renderAny({ scenes: v.scenes, workDir, slug: v.slug, title: v.title, theme: v.theme, direction: v.direction, thumbnail });
     const credits = res.credits || [];
     v = await markDone('render', {
       files: { video: res.videoFile, thumb: res.thumbFile || null },
+      coverMs: res.coverMs ?? null, // where the thumbnail shows in the video: TikTok's cover frame
       description: credits.length ? `${v.script.description}\n\n${credits.join('\n')}` : v.script.description,
     });
     await say(`Video ready: ${path.basename(res.videoFile)}`);

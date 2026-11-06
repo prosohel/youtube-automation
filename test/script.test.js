@@ -103,3 +103,26 @@ test('every length gets a sensible scene range, and Shorts cut faster than lands
   }
   assert.equal(lengthPlan({ format: 'landscape', targetMinutes: 3, language: 'Bangla' }).scenes, '12-18');
 });
+
+test('the script asks for a thumbnail, with the style fields Claude can fill', async () => {
+  await writeScript(topic);
+  const { prompt, schema } = asked[0];
+  assert.ok(schema.required.includes('thumbnail'));
+  const t = schema.properties.thumbnail;
+  assert.deepEqual(t.properties.style.enum, ['bigText', 'versus', 'question', 'number']);
+  for (const k of ['text', 'highlight', 'tag', 'number', 'left', 'right', 'emoji', 'color']) assert.equal(t.properties[k].type, 'string', k);
+  for (const k of ['scene', 'scene2']) assert.equal(t.properties[k].type, 'integer', k);
+  assert.deepEqual(t.required, ['style', 'text', 'highlight', 'color']);
+  assert.match(prompt, /Thumbnail \("thumbnail"\)/);
+});
+
+test('the thumbnail prompt avoids the last styles, or asks for the one forced in the dashboard', async () => {
+  history.setHistoryBackend({ load: () => [{ thumb: 'question' }, { thumb: 'number' }], save: () => {} });
+  cfg.applySettings({ thumbStyle: '' });
+  await writeScript(topic);
+  assert.match(asked[0].prompt, /The last videos used question, number/);
+  cfg.applySettings({ thumbStyle: 'versus' });
+  await writeScript(topic);
+  assert.match(asked[1].prompt, /Use the style "versus"/);
+  cfg.applySettings({ thumbStyle: '' });
+});

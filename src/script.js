@@ -5,6 +5,8 @@ const { themeMenu, recentThemes } = require('./style');
 const { listLocalClips } = require('./footage');
 const { directionPrompt, recentDirection } = require('./direction');
 const { BASIC_TYPES, LIBRARY_TYPES, graphicsPrompt, recentGraphics } = require('./graphics');
+const { EMOJI_NAMES } = require('./emoji');
+const { STYLES: THUMB_STYLES, thumbnailPrompt, recentThumbStyles } = require('./thumbnail');
 
 // Icons the animated visuals can draw (lucide-react names; unknown names fall back to Sparkles).
 const ICON_NAMES =
@@ -29,6 +31,24 @@ const SCRIPT_SCHEMA = {
         reason: { type: 'string' },
       },
       required: ['theme', 'energy'],
+    },
+    // The thumbnail (checked by src/thumbnail.js).
+    thumbnail: {
+      type: 'object',
+      properties: {
+        style: { type: 'string', enum: THUMB_STYLES },
+        text: { type: 'string' },
+        highlight: { type: 'string' },
+        tag: { type: 'string' },
+        number: { type: 'string' },
+        left: { type: 'string' },
+        right: { type: 'string' },
+        emoji: { type: 'string' },
+        color: { type: 'string' },
+        scene: { type: 'integer' },
+        scene2: { type: 'integer' },
+      },
+      required: ['style', 'text', 'highlight', 'color'],
     },
     scenes: {
       type: 'array',
@@ -73,16 +93,8 @@ const SCRIPT_SCHEMA = {
       },
     },
   },
-  required: ['title', 'kicker', 'description', 'tags', 'scenes', 'style'],
+  required: ['title', 'kicker', 'description', 'tags', 'scenes', 'style', 'thumbnail'],
 };
-
-// Google animated emoji the video can pop in as stickers (names from @remotion/animated-emoji).
-const EMOJI_NAMES =
-  'mind-blown fire robot rocket money-with-wings money-face light-bulb thinking-face eyes check-mark cross-mark ' +
-  'exclamation question party-popper 100 sparkles scared screaming star-struck sunglasses-face nerd-face gear ' +
-  'graduation-cap alarm-clock battery-low gem-stone crystal-ball clap thumbs-up thumbs-down muscle raising-hands ' +
-  'bell direct-hit collision electricity globe-showing-asia-australia police-car-light construction skull liar ' +
-  'monocle raised-eyebrow flushed smirk wave shushing-face zipper-face';
 
 /* ---------- video length ---------- */
 
@@ -159,9 +171,11 @@ ${recent.length ? `  Do NOT pick these, they were used in the last videos: ${rec
 - accent (optional): one hex colour like "#ff3b30" that suits this specific topic (e.g. a brand colour of the company discussed). It must be bright enough to read on the theme's background; leave it out if unsure.
 - reason: one short sentence why.
 
+${thumbnailPrompt(cfg, recentThumbStyles())}
+
 Metadata rules:
 - title: under 70 characters, includes the search phrase naturally, no clickbait lies.
-- kicker: a 1-3 word tag in ${cfg.language} naming what kind of story this is (e.g. "স্ক্যাম সতর্কতা", "AI খবর", "প্রাইভেসি টিপস"), shown small above the title on the opening card. Not the title, not a sentence, no punctuation.
+- kicker: a 1-3 word tag in ${cfg.language} naming what kind of story this is (e.g. "স্ক্যাম সতর্কতা", "AI খবর", "প্রাইভেসি টিপস"), shown small on the video's title cards and used as the thumbnail tag when the thumbnail has none. Not the title, not a sentence, no punctuation.
 - description: 2-3 short paragraphs, then 3 relevant hashtags on the last line.
 - tags: 8-12 tags.`;
 

@@ -277,3 +277,34 @@ test('a video scripted before graphics were checked renders its visuals exactly 
   assert.deepEqual(renders[0].scenes[1].visual, raw[1]);
   cfg.applySettings({ directGraphics: true });
 });
+
+test('the script stage stores the checked thumbnail; the render gets it and its TikTok cover time is kept', async () => {
+  const cfg = require('../src/config');
+  cfg.applySettings({ thumbStyle: '', thumbIntro: true });
+  const r = await freshRedis();
+  const outDir = tmpOut();
+  const renders = [];
+  const deps = fakeDeps([], { outDir, onRender: (args) => renders.push(args), renderResult: { coverMs: 1200 } });
+  const write = deps.writeScript;
+  deps.writeScript = async (t) => ({ ...(await write(t)), thumbnail: { style: 'question', text: 'জুনিয়রদের দিন শেষ?', highlight: 'দিন শেষ?', color: 'beige' } });
+  const v = await store.createVideo(r, {});
+  const done = await runVideoJob(v.id, { redis: r, deps, outDir });
+  assert.equal(done.thumbnail.style, 'question');
+  assert.equal(done.thumbnail.highlight, 'দিন শেষ?');
+  assert.equal(done.thumbnail.color, 'red', 'checked: an unknown colour became the style default');
+  assert.deepEqual(renders[0].thumbnail, done.thumbnail);
+  assert.equal(done.coverMs, 1200);
+});
+
+test('a video scripted before thumbnails existed still gets one when it renders', async () => {
+  const r = await freshRedis();
+  const outDir = tmpOut();
+  const renders = [];
+  const deps = fakeDeps([], { outDir, onRender: (args) => renders.push(args) });
+  const v = await store.createVideo(r, {});
+  await runVideoJob(v.id, { redis: r, deps: { ...deps, renderAny: async () => { throw new Error('stop after the script'); } }, outDir }).catch(() => {});
+  await store.updateVideo(r, v.id, (o) => ({ ...o, thumbnail: undefined }));
+  const done = await runVideoJob(v.id, { redis: r, deps, outDir });
+  assert.equal(renders[0].thumbnail.style, 'bigText');
+  assert.equal(done.coverMs, null, 'no cover time from a render that gave none');
+});

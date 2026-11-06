@@ -145,7 +145,7 @@ test('BRAND_KEYS is exactly what each brand keeps for itself', () => {
     // channel
     'NICHE', 'LANGUAGE', 'VIDEO_FORMAT', 'TARGET_MINUTES', 'TOPIC_CATEGORIES', 'PRIVACY_STATUS', 'YT_CATEGORY_ID', 'SYNTHETIC_MEDIA',
     // look
-    'THEME', 'VISUALS',
+    'THEME', 'VISUALS', 'THUMB_STYLE', 'THUMB_INTRO',
     // voice
     'TTS_PROVIDER', 'ELEVENLABS_VOICE_ID', 'ELEVENLABS_STYLE_TAGS', 'VOICE', 'TTS_RATE', 'GOOGLE_TTS_VOICE',
     // accounts
@@ -203,4 +203,17 @@ test('pronunciation fixes are one shared list in the Voice card', () => {
   assert.deepEqual(spec.default, []);
   assert.equal(spec.cfg, 'pronunciationFixes');
   assert.ok(!S.isBrandKey('PRONUNCIATION_FIXES'), 'shared by every brand');
+});
+
+test('the thumbnail settings feed the config: style empty = Claude picks, the intro on by default', () => {
+  const style = S.SETTINGS_SCHEMA.find((s) => s.key === 'THUMB_STYLE');
+  assert.deepEqual(style.options, ['', 'bigText', 'versus', 'question', 'number']);
+  assert.equal(style.default, '');
+  assert.equal(style.cfg, 'thumbStyle');
+  const intro = S.SETTINGS_SCHEMA.find((s) => s.key === 'THUMB_INTRO');
+  assert.equal(intro.default, true);
+  assert.equal(intro.cfg, 'thumbIntro');
+  const cfg = require('../src/config');
+  assert.equal(typeof cfg.thumbStyle, 'string');
+  assert.equal(typeof cfg.thumbIntro, 'boolean');
 });
