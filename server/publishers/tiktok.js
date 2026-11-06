@@ -178,4 +178,4 @@ async function test(ctx) {
   return { ok: true, detail: `@${info.creator_username || '?'} can post as: ${(info.privacy_level_options || []).join(', ')}` };
 }
 
-module.exports = { publish, findExisting, test, chunkPlan };
+module.exports = { publish, findExisting, test, chunkPlan, creatorInfo };

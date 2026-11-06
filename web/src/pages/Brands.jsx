@@ -9,6 +9,7 @@ import { buildPatch, Field } from './Integrations.jsx';
 // What each section of a brand card edits. Every key here is a brand key (the server sends no other in /api/brands/:id/settings).
 const CHANNEL_KEYS = ['NICHE', 'LANGUAGE', 'VIDEO_FORMAT', 'TARGET_MINUTES', 'TOPIC_CATEGORIES', 'PRIVACY_STATUS', 'YT_CATEGORY_ID', 'SYNTHETIC_MEDIA'];
 const LOOK_KEYS = ['THEME', 'VISUALS', 'SHOW_BRAND', 'BRAND_HANDLE'];
+const SIGN_IN_KEYS = ['YOUTUBE_TOKEN', 'TIKTOK_ACCESS_TOKEN', 'TIKTOK_REFRESH_TOKEN'];
 
 const pick = (schema, keys) => keys.map((k) => schema.find((s) => s.key === k)).filter(Boolean);
 const enc = encodeURIComponent;
@@ -118,8 +119,11 @@ function BrandBody({ brand, onChanged, setToast }) {
   if (!data) return <p className="muted" role="status">{error || 'Loading…'}</p>;
 
   const { schema, values } = data;
-  const signedIn = Boolean(values.YOUTUBE_TOKEN && values.YOUTUBE_TOKEN.set);
-  const group = (id) => schema.filter((s) => s.group === id && s.key !== 'YOUTUBE_TOKEN');
+  const isSet = (key) => Boolean(values[key] && values[key].set);
+  const signedIn = isSet('YOUTUBE_TOKEN');
+  const tiktokSignedIn = isSet('TIKTOK_REFRESH_TOKEN') || isSet('TIKTOK_ACCESS_TOKEN');
+  // Sign-ins come from the Connect buttons, never typed in.
+  const group = (id) => schema.filter((s) => s.group === id && !SIGN_IN_KEYS.includes(s.key));
   const sections = [
     { id: 'channel', title: 'Channel', blocks: [{ id: 'channel', specs: pick(schema, CHANNEL_KEYS) }] },
     { id: 'voice', title: 'Voice', blocks: [{ id: 'voice', specs: group('voice') }] },
@@ -139,7 +143,17 @@ function BrandBody({ brand, onChanged, setToast }) {
             </div>
           ),
         },
-        { id: 'tiktok', platform: 'tiktok', title: 'TikTok', specs: group('tiktok'), tests: [['tiktok', 'Test TikTok']], sub: 'Until TikTok audits your app, posts can only be private (SELF_ONLY).' },
+        {
+          id: 'tiktok', platform: 'tiktok', title: 'TikTok', specs: group('tiktok'), tests: [['tiktok', 'Test TikTok']],
+          sub: 'This brand’s own TikTok account. Until TikTok audits your app, posts are “Only me” and the account must be set to Private.',
+          top: (
+            <div className="inline">
+              {tiktokSignedIn ? <Chip tone="ok">Signed in</Chip> : <Chip tone="danger">Not signed in</Chip>}
+              <a className="btn btn-sm" href={`/api/tiktok/connect?brand=${enc(brand.id)}`}>{tiktokSignedIn ? 'Reconnect TikTok' : 'Connect TikTok'}</a>
+              <span className="faint">Sign in with this brand’s TikTok account and allow posting. It must be a target user of your TikTok sandbox.</span>
+            </div>
+          ),
+        },
         {
           id: 'meta', platform: 'instagram', title: 'Instagram and Facebook', specs: group('meta'), tests: [['instagram', 'Test Instagram'], ['facebook', 'Test Facebook']],
           sub: 'A Page or Instagram account can belong to one brand only.',

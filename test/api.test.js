@@ -426,6 +426,56 @@ test('F3: after the sign-in the redirect names the channel that was connected', 
   assert.deepEqual(seen, [['good', 'b_one'], ['bad', 'b_one']]);
 });
 
+test('TikTok connect needs a brand and the TikTok app, then sends the person to TikTok', async (t) => {
+  const { call, redis } = await boot(t);
+  assert.equal((await call('GET', '/api/tiktok/connect')).status, 400);
+  assert.equal((await call('GET', '/api/tiktok/connect?brand=b_gone')).status, 400);
+  const brand = await seedBrand(redis, { name: 'A' });
+  const noApp = await call('GET', `/api/tiktok/connect?brand=${brand.id}`);
+  assert.equal(noApp.status, 302, 'no TikTok app yet: back to the brand with the reason');
+  assert.match(decodeURIComponent(noApp.headers.get('location')), /^\/integrations\?brand=b_\w+&tiktok=Add the TikTok client key and secret/);
+
+  await require('../server/settings').saveSettings(redis, { TIKTOK_CLIENT_KEY: 'key_1', TIKTOK_CLIENT_SECRET: 'sec_1' });
+  const ok = await call('GET', `/api/tiktok/connect?brand=${brand.id}`);
+  assert.equal(ok.status, 302);
+  const to = new URL(ok.headers.get('location'));
+  assert.equal(to.origin, 'https://www.tiktok.com');
+  assert.equal(to.searchParams.get('redirect_uri'), 'http://localhost:7000/tiktok/callback');
+  const pending = await require('../server/tiktokAuth').takePending(redis, to.searchParams.get('state'));
+  assert.equal(pending.brandId, brand.id);
+});
+
+test('the TikTok callback sends the person back to the brand it was started for', async (t) => {
+  const { call, redis } = await boot(t);
+  const tiktokAuth = require('../server/tiktokAuth');
+  const real = tiktokAuth.handleCallback;
+  const seen = [];
+  // Never TikTok: the exchange is stubbed.
+  tiktokAuth.handleCallback = async (r, code, pending, redirect) => {
+    seen.push([code, pending.brandId, redirect]);
+    if (code === 'bad') throw new Error('Already connected to brand "A"');
+    return { username: 'tech_co' };
+  };
+  t.after(() => {
+    tiktokAuth.handleCallback = real;
+  });
+  await require('../server/settings').saveSettings(redis, { TIKTOK_CLIENT_KEY: 'key_1', TIKTOK_CLIENT_SECRET: 'sec_1' });
+  const brand = await seedBrand(redis, { name: 'A' });
+  const state = async () => new URL((await call('GET', `/api/tiktok/connect?brand=${brand.id}`)).headers.get('location')).searchParams.get('state');
+
+  const ok = await call('GET', `/tiktok/callback?state=${await state()}&code=good`);
+  assert.equal(ok.status, 302);
+  assert.equal(ok.headers.get('location'), `/integrations?brand=${brand.id}&tiktok=connected&account=%40tech_co`);
+  const refused = await call('GET', `/tiktok/callback?state=${await state()}&code=bad`);
+  assert.equal(refused.headers.get('location'), `/integrations?brand=${brand.id}&tiktok=${encodeURIComponent('Already connected to brand "A"')}`);
+  const denied = await call('GET', `/tiktok/callback?state=${await state()}&error=access_denied&error_description=${encodeURIComponent('User cancelled')}`);
+  assert.equal(denied.headers.get('location'), `/integrations?brand=${brand.id}&tiktok=${encodeURIComponent('User cancelled')}`);
+  const stale = await call('GET', '/tiktok/callback?state=unknown&code=good');
+  assert.match(decodeURIComponent(stale.headers.get('location')), /^\/integrations\?tiktok=.*Connect TikTok again/);
+  assert.equal((await call('GET', '/tiktok/callback')).headers.get('location'), '/integrations?tiktok=cancelled');
+  assert.deepEqual(seen, [['good', brand.id, 'http://localhost:7000/tiktok/callback'], ['bad', brand.id, 'http://localhost:7000/tiktok/callback']]);
+});
+
 test('F6: a brandId sent as a list is stored as the brand\'s id', async (t) => {
   const { call, redis } = await boot(t);
   const brand = await seedBrand(redis, { name: 'A' });

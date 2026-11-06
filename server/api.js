@@ -10,6 +10,7 @@ const { validateRule, nextRuns, syncSchedulers } = require('./scheduler');
 const { computeOverview, workerState, slim } = require('./overview');
 const { pendingRecord } = require('./publishFlow');
 const youtubeAuth = require('./youtubeAuth');
+const tiktokAuth = require('./tiktokAuth');
 
 const WEB_DIST = path.join(cfg.ROOT, 'web', 'dist');
 const FOOTAGE_DIR = path.join(cfg.ROOT, 'footage');
@@ -305,6 +306,37 @@ function createApp({ redis, queues }) {
       back('connected', ch && ch.name);
     } catch (e) {
       back(e.message);
+    }
+  });
+
+  // TikTok only accepts the redirect registered on its developer site (Login Kit, Desktop): keep this path in sync there.
+  const TIKTOK_REDIRECT = `${PUBLIC_URL}/tiktok/callback`;
+  const backFromTiktok = (res, brandId, result, account) =>
+    res.redirect(
+      `/integrations?${brandId ? `brand=${encodeURIComponent(brandId)}&` : ''}tiktok=${encodeURIComponent(result)}${account ? `&account=${encodeURIComponent(account)}` : ''}`
+    );
+
+  // ?brand=<id>: the TikTok account signed in belongs to that brand (kept on this server under a random state).
+  app.get('/api/tiktok/connect', async (req, res) => {
+    const brandId = String(req.query.brand || '');
+    if (!brandId || !(await brands.getBrand(redis, brandId))) throw bad('Pick a brand to connect TikTok for');
+    try {
+      res.redirect(await tiktokAuth.startConnect(redis, TIKTOK_REDIRECT, brandId));
+    } catch (e) {
+      backFromTiktok(res, brandId, e.message); // e.g. no TikTok app yet: say so on the brand's card
+    }
+  });
+
+  app.get('/tiktok/callback', async (req, res) => {
+    const pending = await tiktokAuth.takePending(redis, String(req.query.state || ''));
+    const brandId = pending ? pending.brandId : '';
+    if (!req.query.code) return backFromTiktok(res, brandId, String(req.query.error_description || req.query.error || 'cancelled'));
+    if (!pending) return backFromTiktok(res, '', 'This TikTok sign-in expired. Press Connect TikTok again.');
+    try {
+      const account = await tiktokAuth.handleCallback(redis, String(req.query.code), pending, TIKTOK_REDIRECT);
+      backFromTiktok(res, brandId, 'connected', account && account.username && `@${account.username}`);
+    } catch (e) {
+      backFromTiktok(res, brandId, e.message);
     }
   });
 

@@ -203,9 +203,15 @@ export default function Integrations() {
   const [toast, setToast] = useToast();
   const yt = params.get('youtube');
   const channel = params.get('channel');
+  const tt = params.get('tiktok');
+  const ttAccount = params.get('account');
   useEffect(() => {
     if (yt) setToast(yt === 'connected' ? `YouTube connected${channel ? `: ${channel}` : ''}` : `YouTube: ${yt}`);
   }, [yt, channel, setToast]);
+  useEffect(() => {
+    // Errors from the server already start with "TikTok:"; TikTok's own (a cancelled sign-in) do not.
+    if (tt) setToast(tt === 'connected' ? `TikTok connected${ttAccount ? `: ${ttAccount}` : ''}` : /^TikTok/.test(tt) ? tt : `TikTok: ${tt}`);
+  }, [tt, ttAccount, setToast]);
 
   if (!data) return <div className="container"><h1>Integrations</h1><p className="muted">Loading…</p></div>;
   return (
