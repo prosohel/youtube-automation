@@ -122,3 +122,10 @@ test('effectiveValues shows what Docker really uses when a setting is swapped th
 test('the channel niche label says it is only used to pick topics', () => {
   assert.match(S.SETTINGS_SCHEMA.find((s) => s.key === 'NICHE').label, /topics/i);
 });
+
+test('the video length setting applies to every video and warns about the 3-minute Shorts limit', () => {
+  const spec = S.SETTINGS_SCHEMA.find((s) => s.key === 'TARGET_MINUTES');
+  assert.doesNotMatch(spec.label, /long/i);
+  assert.match(spec.hint, /Shorts/);
+  assert.match(spec.hint, /3 minutes/);
+});

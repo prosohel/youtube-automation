@@ -98,6 +98,7 @@ function Field({ spec, value, draft, setDraft, values, effective, lang }) {
         value={v ?? ''}
         onChange={(e) => set(spec.type === 'number' ? e.target.value : e.target.value)}
       />
+      {spec.hint && <span className="hint">{spec.hint}</span>}
       {usedNote}
     </label>
   );

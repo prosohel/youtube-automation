@@ -53,9 +53,11 @@ async function fetchTrendHints() {
 async function findTopic(category) {
   const done = loadHistory().map((h) => h.topic);
   const trends = await fetchTrendHints();
+  // TARGET_MINUTES sizes every video, Shorts included.
+  const length = `${cfg.targetMinutes} minute${Number(cfg.targetMinutes) === 1 ? '' : 's'}`;
 
   const prompt = `You are a YouTube strategist for a channel in this niche: "${cfg.niche}".
-Audience language: ${cfg.language}. Format: ${cfg.format === 'shorts' ? 'YouTube Shorts (under 60s)' : `~${cfg.targetMinutes} minute video`}.
+Audience language: ${cfg.language}. Format: ${cfg.format === 'shorts' ? `YouTube Shorts (vertical, ~${length})` : `~${length} landscape video`}.
 ${category ? `Every topic must belong to this category: "${category}".\n` : ''}
 Propose 8 distinct video topics that people are likely searching for right now.
 Prefer evergreen search demand with a fresh angle over pure news chasing.

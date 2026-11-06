@@ -21,3 +21,11 @@ test('findTopic without a category adds no category rule', async () => {
   await findTopic();
   assert.doesNotMatch(seen, /must belong to this category/);
 });
+
+test('topic ideas are sized to TARGET_MINUTES for Shorts too', async () => {
+  const cfg = require('../src/config');
+  cfg.applySettings({ format: 'shorts', targetMinutes: 2 });
+  await findTopic();
+  assert.match(seen, /YouTube Shorts \(vertical, ~2 minutes\)/);
+  assert.doesNotMatch(seen, /under 60s/);
+});

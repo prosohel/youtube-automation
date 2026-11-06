@@ -69,3 +69,37 @@ test('B-roll is kept off scenes that carry a data graphic', async () => {
   await writeScript(topic);
   assert.match(asked[0].prompt, /"broll": false for scenes that rely on a stat, list, comparison or data graphic \(bigNumber, bars, line, donut, timeline\)/);
 });
+
+/* ---------- video length: TARGET_MINUTES for every format ---------- */
+
+// Measured on this channel's ElevenLabs Bangla videos: ~142 spoken words a minute, plus ~4 s of
+// intro/outro and a 0.25 s tail per scene.
+const estimateSeconds = ({ words, scenes }) => {
+  const [lo, hi] = scenes.split('-').map(Number);
+  return (words / 142) * 60 + 4 + 0.25 * ((lo + hi) / 2);
+};
+
+test('a Short follows TARGET_MINUTES too: 2 minutes means about 2 minutes', async () => {
+  cfg.applySettings({ format: 'shorts', targetMinutes: 2, language: 'Bangla' });
+  await writeScript(topic);
+  assert.doesNotMatch(asked[0].prompt, /under 60 seconds/);
+  assert.match(asked[0].prompt, /~2 minutes when read aloud/);
+  const { lengthPlan } = require('../src/script');
+  const plan = lengthPlan({ format: 'shorts', targetMinutes: 2, language: 'Bangla' });
+  assert.ok(Math.abs(estimateSeconds(plan) - 120) <= 6, `estimated ${estimateSeconds(plan).toFixed(0)} s`);
+});
+
+test('every length gets a sensible scene range, and Shorts cut faster than landscape', () => {
+  const { lengthPlan } = require('../src/script');
+  for (const targetMinutes of [0.5, 1, 2, 3, 5]) {
+    const short = lengthPlan({ format: 'shorts', targetMinutes, language: 'Bangla' });
+    const long = lengthPlan({ format: 'landscape', targetMinutes, language: 'Bangla' });
+    for (const p of [short, long]) {
+      const [lo, hi] = p.scenes.split('-').map(Number);
+      assert.ok(lo >= 3 && lo < hi, `${targetMinutes} min: ${p.scenes}`);
+      assert.ok(Math.abs(estimateSeconds(p) - targetMinutes * 60) <= targetMinutes * 6 + 2, `${targetMinutes} min lands near the target`);
+    }
+    assert.ok(Number(short.scenes.split('-')[0]) > Number(long.scenes.split('-')[0]), `${targetMinutes} min: Shorts have more, shorter scenes`);
+  }
+  assert.equal(lengthPlan({ format: 'landscape', targetMinutes: 3, language: 'Bangla' }).scenes, '12-18');
+});

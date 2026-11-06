@@ -46,7 +46,7 @@ const SETTINGS_SCHEMA = [
   { key: 'NICHE', cfg: 'niche', group: 'channel', type: 'string', default: 'technology tips', label: 'Channel niche (used to pick topics)' },
   { key: 'LANGUAGE', cfg: 'language', group: 'channel', type: 'string', default: 'English', label: 'Language' },
   { key: 'VIDEO_FORMAT', cfg: 'format', group: 'channel', type: 'enum', options: ['shorts', 'landscape'], default: 'landscape', label: 'Video format' },
-  { key: 'TARGET_MINUTES', cfg: 'targetMinutes', group: 'channel', type: 'number', default: 3, label: 'Length of long videos (min)' },
+  { key: 'TARGET_MINUTES', cfg: 'targetMinutes', group: 'channel', type: 'number', default: 3, label: 'Video length (min)', hint: 'Every video, Shorts included. YouTube counts vertical videos up to 3 minutes as Shorts.' },
   { key: 'PRIVACY_STATUS', cfg: 'privacy', group: 'channel', type: 'enum', options: ['private', 'unlisted', 'public'], default: 'private', label: 'YouTube privacy' },
   { key: 'YT_CATEGORY_ID', cfg: 'categoryId', group: 'channel', type: 'string', default: '28', label: 'YouTube category ID' },
   { key: 'SYNTHETIC_MEDIA', cfg: 'syntheticMedia', group: 'channel', type: 'boolean', default: true, label: 'Mark as AI-made content' },
