@@ -104,6 +104,7 @@ async function deleteRule(redis, id) {
 
 module.exports = {
   PLATFORMS,
+  withLock,
   createVideo,
   getVideo,
   updateVideo,

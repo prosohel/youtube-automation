@@ -174,3 +174,82 @@ test('brands are listed oldest first', async () => {
   const c = await seedBrand(r, { name: 'C' });
   assert.deepEqual((await B.listBrands(r)).map((x) => x.id), [a.id, b.id, c.id]);
 });
+
+test('a move that died before backfilling is finished by the next call', async () => {
+  const r = await freshRedis();
+  const first = await B.ensureBrands(r); // the flag and the brand exist
+  // As if the first run died before it got to these: a video and a rule with no brand.
+  const v = await store.createVideo(r, { topic: 'late' });
+  const rule = await store.saveRule(r, { name: 'late rule' });
+  const again = await B.ensureBrands(r);
+  assert.equal(again.created, false);
+  assert.equal(again.brandId, first.brandId);
+  assert.equal((await store.getVideo(r, v.id)).brandId, first.brandId);
+  assert.equal((await store.listRules(r)).find((x) => x.id === rule.id).brandId, first.brandId);
+  assert.equal((await B.listBrands(r)).length, 1);
+});
+
+test('a move that died right after the flag still creates the brand once', async () => {
+  const r = await freshRedis();
+  await r.set('brands:migrated', 'b_firstid'); // the flag, but no brand yet
+  await r.hset('settings', { LANGUAGE: JSON.stringify('Bangla'), YOUTUBE_TOKEN: JSON.stringify({ t: 1 }) });
+  const v = await store.createVideo(r, { topic: 'x' });
+  const out = await B.ensureBrands(r);
+  assert.equal(out.created, false);
+  assert.equal(out.brandId, 'b_firstid');
+  assert.deepEqual((await B.listBrands(r)).map((b) => b.id), ['b_firstid']);
+  assert.equal((await B.brandSettings(r, 'b_firstid')).LANGUAGE, 'Bangla');
+  assert.equal(await r.hget('settings', 'LANGUAGE'), null);
+  assert.equal((await store.getVideo(r, v.id)).brandId, 'b_firstid');
+});
+
+test('the flag naming a brand that is gone falls back to the oldest brand', async () => {
+  const r = await freshRedis();
+  const first = await B.ensureBrands(r);
+  const other = await seedBrand(r, { name: 'Other' });
+  await B.deleteBrand(r, first.brandId);
+  const v = await store.createVideo(r, { topic: 'x' });
+  const out = await B.ensureBrands(r);
+  assert.equal(out.brandId, other.id);
+  assert.equal((await store.getVideo(r, v.id)).brandId, other.id);
+  assert.equal((await B.listBrands(r)).length, 1);
+});
+
+test('later calls never copy the shared hash again', async () => {
+  const r = await freshRedis();
+  await r.hset('settings', { LANGUAGE: JSON.stringify('Bangla') });
+  const first = await B.ensureBrands(r);
+  await B.saveBrandSettings(r, first.brandId, { LANGUAGE: 'Hindi' }); // the brand's newer value
+  await r.hset('settings', { LANGUAGE: JSON.stringify('Tamil') }); // a runtime caller that still writes the shared hash
+  await B.ensureBrands(r);
+  assert.equal((await B.brandSettings(r, first.brandId)).LANGUAGE, 'Hindi');
+  assert.equal(await r.hget('settings', 'LANGUAGE'), JSON.stringify('Tamil'));
+});
+
+test('two processes starting at once create one brand', async () => {
+  const r = await freshRedis();
+  await r.hset('settings', { YOUTUBE_TOKEN: JSON.stringify({ t: 1 }) });
+  const v = await store.createVideo(r, { topic: 'x' });
+  const outs = await Promise.all([B.ensureBrands(r), B.ensureBrands(r), B.ensureBrands(r)]);
+  assert.equal(outs.filter((o) => o.created).length, 1);
+  assert.equal(new Set(outs.map((o) => o.brandId)).size, 1);
+  const all = await B.listBrands(r);
+  assert.equal(all.length, 1);
+  assert.deepEqual(all[0].accounts.youtube, { id: null, name: null });
+  assert.deepEqual((await B.brandSettings(r, all[0].id)).YOUTUBE_TOKEN, { t: 1 });
+  assert.equal((await store.getVideo(r, v.id)).brandId, all[0].id);
+});
+
+test('two account updates at once on one brand both stay', async () => {
+  const r = await freshRedis();
+  const a = await seedBrand(r, { name: 'A' });
+  await Promise.all([
+    B.setAccount(r, a.id, 'youtube', { id: 'UC1', name: 'One' }),
+    B.setAccount(r, a.id, 'tiktok', { username: 'one' }),
+    B.saveBrandSettings(r, a.id, { FACEBOOK_PAGE_ID: '42' }),
+    B.updateBrand(r, a.id, { name: 'A renamed' }),
+  ]);
+  const got = await B.getBrand(r, a.id);
+  assert.deepEqual(got.accounts, { youtube: { id: 'UC1', name: 'One' }, tiktok: { username: 'one' }, facebook: { id: '42' } });
+  assert.equal(got.name, 'A renamed');
+});

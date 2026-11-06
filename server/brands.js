@@ -34,6 +34,9 @@ async function requireBrand(redis, id) {
 
 const putBrand = (redis, brand) => redis.hset(BRANDS, brand.id, JSON.stringify(brand));
 
+/** Run fn while holding this brand's lock, so two updates of its record (web + worker) never lose one another. */
+const withBrandLock = (redis, id, fn) => store.withLock(redis, `brand:${id}`, fn);
+
 /** Oldest first. Archived brands only with { includeArchived: true }. */
 async function listBrands(redis, { includeArchived = false } = {}) {
   const all = await redis.hgetall(BRANDS);
@@ -78,13 +81,15 @@ async function writeBrandValues(redis, brandId, values) {
 
 /** Rename, switch on/off, archive or restore. Archiving also switches the brand off. */
 async function updateBrand(redis, id, { name, active, archived } = {}) {
-  const brand = await requireBrand(redis, id);
-  if (name !== undefined) brand.name = cleanName(name);
-  if (active !== undefined) brand.active = Boolean(active);
-  if (archived !== undefined) brand.archived = Boolean(archived);
-  if (brand.archived) brand.active = false;
-  await putBrand(redis, brand);
-  return brand;
+  return withBrandLock(redis, id, async () => {
+    const brand = await requireBrand(redis, id);
+    if (name !== undefined) brand.name = cleanName(name);
+    if (active !== undefined) brand.active = Boolean(active);
+    if (archived !== undefined) brand.archived = Boolean(archived);
+    if (brand.archived) brand.active = false;
+    await putBrand(redis, brand);
+    return brand;
+  });
 }
 
 /** Only a brand nothing refers to can go; otherwise it is archived. */
@@ -118,12 +123,14 @@ async function accountHolder(redis, exceptId, platform, value) {
 /** Record which account a brand posts to. Throws (conflict = true) when another brand already has it. */
 async function setAccount(redis, brandId, platform, identity) {
   if (!ACCOUNT_PLATFORMS.includes(platform)) throw fail(`Unknown platform: ${platform}`, { status: 400 });
-  const brand = await requireBrand(redis, brandId);
-  const other = await accountHolder(redis, brandId, platform, identity?.[ACCOUNT_ID_FIELD[platform]]);
-  if (other) throw fail(`Already connected to brand "${other.name}"`, { conflict: true, status: 409 });
-  brand.accounts = { ...brand.accounts, [platform]: identity };
-  await putBrand(redis, brand);
-  return brand;
+  return withBrandLock(redis, brandId, async () => {
+    const brand = await requireBrand(redis, brandId);
+    const other = await accountHolder(redis, brandId, platform, identity?.[ACCOUNT_ID_FIELD[platform]]);
+    if (other) throw fail(`Already connected to brand "${other.name}"`, { conflict: true, status: 409 });
+    brand.accounts = { ...brand.accounts, [platform]: identity };
+    await putBrand(redis, brand);
+    return brand;
+  });
 }
 
 /**
@@ -132,56 +139,83 @@ async function setAccount(redis, brandId, platform, identity) {
  * Nothing is written when anything throws.
  */
 async function saveBrandSettings(redis, brandId, patch = {}) {
-  const brand = await requireBrand(redis, brandId);
   for (const k of Object.keys(patch)) {
     if (settings.SETTINGS_SCHEMA.some((s) => s.key === k) && !settings.isBrandKey(k)) throw new Error(`Setting ${k} is shared, not part of a brand`);
   }
   const { set, del } = settings.planPatch(patch);
 
-  const accounts = { ...brand.accounts };
-  for (const [key, platform] of Object.entries(ACCOUNT_SETTINGS)) {
-    if (!(key in set) && !del.includes(key)) continue;
-    const id = set[key] || '';
-    const other = await accountHolder(redis, brandId, platform, id);
-    if (other) throw fail(`Already used by brand "${other.name}"`, { conflict: true, status: 409 });
-    if (id) accounts[platform] = { id };
-    else delete accounts[platform];
-  }
+  await withBrandLock(redis, brandId, async () => {
+    const brand = await requireBrand(redis, brandId);
+    const accounts = { ...brand.accounts };
+    for (const [key, platform] of Object.entries(ACCOUNT_SETTINGS)) {
+      if (!(key in set) && !del.includes(key)) continue;
+      const id = set[key] || '';
+      const other = await accountHolder(redis, brandId, platform, id);
+      if (other) throw fail(`Already used by brand "${other.name}"`, { conflict: true, status: 409 });
+      if (id) accounts[platform] = { id };
+      else delete accounts[platform];
+    }
 
-  if (del.length) await redis.hdel(settingsKey(brandId), ...del);
-  await writeBrandValues(redis, brandId, set);
-  if (JSON.stringify(accounts) !== JSON.stringify(brand.accounts)) await putBrand(redis, { ...brand, accounts });
+    if (del.length) await redis.hdel(settingsKey(brandId), ...del);
+    await writeBrandValues(redis, brandId, set);
+    if (JSON.stringify(accounts) !== JSON.stringify(brand.accounts)) await putBrand(redis, { ...brand, accounts });
+  });
   return brandSettings(redis, brandId);
 }
 
 /**
- * First start with brands: today's single setup becomes the brand "My channel".
- * Its brand keys move out of the shared settings, and every video and rule gets its id.
- * Guarded by a flag, so later calls change nothing. Returns { created, brandId }.
+ * Brand 1 from today's single setup: the record, plus its brand keys moved out of the shared settings,
+ * in one MULTI so a crash leaves all of it or none. Does nothing when the brand already exists
+ * (checked under the brand's lock, so two starting processes never overwrite one another's record).
  */
-async function ensureBrands(redis) {
-  const id = newId();
-  if (!(await redis.set(MIGRATED_FLAG, id, 'NX'))) return { created: false, brandId: await redis.get(MIGRATED_FLAG) };
+async function createFirstBrand(redis, id) {
+  await withBrandLock(redis, id, async () => {
+    if (await getBrand(redis, id)) return;
+    const raw = await redis.hgetall(settings.SETTINGS_HASH);
+    const moving = Object.fromEntries(Object.entries(raw).filter(([k]) => settings.isBrandKey(k)));
+    const own = settings.parseHash(moving);
+    const accounts = {};
+    if (own.YOUTUBE_TOKEN) accounts.youtube = { id: null, name: null }; // filled by the first upload or test
+    if (own.FACEBOOK_PAGE_ID) accounts.facebook = { id: own.FACEBOOK_PAGE_ID };
+    if (own.INSTAGRAM_USER_ID) accounts.instagram = { id: own.INSTAGRAM_USER_ID };
+    const brand = { id, name: FIRST_BRAND_NAME, active: true, archived: false, createdAt: new Date().toISOString(), accounts };
 
-  const raw = await redis.hgetall(settings.SETTINGS_HASH);
-  const moving = Object.fromEntries(Object.entries(raw).filter(([k]) => settings.isBrandKey(k)));
-  const own = settings.parseHash(moving);
-  const accounts = {};
-  if (own.YOUTUBE_TOKEN) accounts.youtube = { id: null, name: null }; // filled by the first upload or test
-  if (own.FACEBOOK_PAGE_ID) accounts.facebook = { id: own.FACEBOOK_PAGE_ID };
-  if (own.INSTAGRAM_USER_ID) accounts.instagram = { id: own.INSTAGRAM_USER_ID };
+    const tx = redis.multi().hset(BRANDS, id, JSON.stringify(brand));
+    const keys = Object.keys(moving);
+    if (keys.length) tx.hset(settingsKey(id), moving).hdel(settings.SETTINGS_HASH, ...keys);
+    await tx.exec();
+  });
+}
 
-  await putBrand(redis, { id, name: FIRST_BRAND_NAME, active: true, archived: false, createdAt: new Date().toISOString(), accounts });
-  const keys = Object.keys(moving);
-  if (keys.length) await redis.multi().hset(settingsKey(id), moving).hdel(settings.SETTINGS_HASH, ...keys).exec();
-
+/** Give every video and rule without a brand to brand 1. Safe to repeat; never overwrites a brandId. */
+async function backfillBrandIds(redis, brandId) {
   for (const v of await store.listVideos(redis, { limit: Infinity })) {
-    if (!v.brandId) await store.updateVideo(redis, v.id, (old) => (old.brandId ? old : { ...old, brandId: id }));
+    if (!v.brandId) await store.updateVideo(redis, v.id, (old) => (old.brandId ? old : { ...old, brandId }));
   }
   for (const rule of await store.listRules(redis)) {
-    if (!rule.brandId) await store.saveRule(redis, { ...rule, brandId: id });
+    if (!rule.brandId) await store.saveRule(redis, { ...rule, brandId });
   }
-  return { created: true, brandId: id };
+}
+
+/**
+ * Start-up with brands. The first ever call turns today's single setup into the brand "My channel"
+ * (the `brands:migrated` flag, set NX, holds its id and decides who creates it). Every call, first or
+ * later, then gives brandless videos and rules to that brand, so a move that was interrupted is finished.
+ * The shared settings are copied only when the brand is first created, never on later calls.
+ * Returns { created, brandId }: created is true for the one call that set the flag.
+ */
+async function ensureBrands(redis) {
+  const fresh = newId();
+  const won = Boolean(await redis.set(MIGRATED_FLAG, fresh, 'NX'));
+  let brandId = won ? fresh : await redis.get(MIGRATED_FLAG);
+
+  if (won || !(await getBrand(redis, brandId))) {
+    const others = won ? [] : await listBrands(redis, { includeArchived: true });
+    if (others.length) brandId = others[0].id; // the flag's brand was deleted since
+    else await createFirstBrand(redis, brandId); // first call, or the first call died before creating it
+  }
+  await backfillBrandIds(redis, brandId);
+  return { created: won, brandId };
 }
 
 module.exports = {
