@@ -57,7 +57,7 @@ export default function Overview() {
           ['Waiting', counts.queued, 'Videos in the queue'],
           ['Being made', counts.working, 'Right now'],
           ['Ready to post', counts.ready, 'Rendered, waiting for a slot'],
-          ['Published', counts.published, 'On at least one platform'],
+          ['Published', counts.published, counts.privateOnly ? `${counts.privateOnly} still private (nobody can see ${counts.privateOnly > 1 ? 'them' : 'it'})` : 'On at least one platform'],
           ['Failed', counts.failed, 'Need a retry'],
         ].map(([label, value, note]) => (
           <div className="kpi" key={label}>
@@ -137,14 +137,14 @@ export default function Overview() {
 
       <section className="card" aria-labelledby="recent-h">
         <div className="between">
-          <h2 id="recent-h" className="eyebrow">Ready videos</h2>
+          <h2 id="recent-h" className="eyebrow">Latest videos</h2>
           <Link to="/queue" style={{ fontWeight: 600, textDecoration: 'none' }}>All videos</Link>
         </div>
         {recent.length === 0 ? (
           <p className="empty">No finished videos yet.</p>
         ) : (
           <div className="table-wrap">
-            <div className="vtable" role="table" aria-label="Ready videos">
+            <div className="vtable" role="table" aria-label="Latest videos">
               <div className="tr th" role="row">
                 <span role="columnheader">Video</span>
                 <span role="columnheader">Made</span>

@@ -62,13 +62,16 @@ function createApp({ redis, queues }) {
 
   const schemaForUi = () => settings.SETTINGS_SCHEMA.map((s) => ({ ...s, default: s.secret ? null : s.default }));
 
+  // effective: settings this machine swaps for another value (a Windows path inside Docker), so the form can say so.
+  const settingsView = (s) => ({ values: settings.maskSettings(s), schema: schemaForUi(), effective: settings.effectiveValues(s) });
+
   app.get('/api/settings', async (req, res) => {
-    res.json({ values: settings.maskSettings(await settings.loadSettings(redis)), schema: schemaForUi() });
+    res.json(settingsView(await settings.loadSettings(redis)));
   });
 
   app.put('/api/settings', async (req, res) => {
     const saved = await asBadRequest(() => settings.saveSettings(redis, req.body || {}));
-    res.json({ values: settings.maskSettings(saved), schema: schemaForUi() });
+    res.json(settingsView(saved));
   });
 
   /* ---------- videos ---------- */

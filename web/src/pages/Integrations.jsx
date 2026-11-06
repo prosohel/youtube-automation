@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { usePoll } from '../usePoll.js';
-import { Chip, PlatformBadge, Switch, useToast } from '../components/ui.jsx';
+import { Chip, contentLang, PlatformBadge, Switch, useToast } from '../components/ui.jsx';
 
 const GROUPS = [
   { id: 'ai', title: 'AI models', sub: 'Who finds topics and writes scripts.', tests: [['claude', 'Test Claude']],
@@ -17,17 +17,29 @@ const GROUPS = [
 
 const isSecret = (spec) => Boolean(spec.secret);
 
-function Field({ spec, value, draft, setDraft }) {
+// Channel text typed in these fields is in the channel's language (Bangla), so it gets lang="bn".
+const CHANNEL_TEXT = ['NICHE'];
+
+function Field({ spec, value, draft, setDraft, values, effective, lang }) {
   const v = draft[spec.key] !== undefined ? draft[spec.key] : value;
   const set = (x) => setDraft((d) => ({ ...d, [spec.key]: x }));
   const id = `f-${spec.key}`;
+  const current = (key) => (draft[key] !== undefined ? draft[key] : values[key]);
+  // A value this machine swaps for another (a Windows path inside Docker): say what is really used.
+  const used = effective && Object.prototype.hasOwnProperty.call(effective, spec.key) ? effective[spec.key] : undefined;
+  const usedNote = used !== undefined && <span className="hint">Docker uses “{String(used)}” instead of this value.</span>;
 
   if (spec.key === 'YOUTUBE_TOKEN') return null; // shown as the Connect button
   if (spec.type === 'boolean') {
+    const hintId = spec.hint ? `${id}-hint` : undefined;
+    const blocked = spec.requires && !current(spec.requires); // e.g. sound cues need sound effects on
     return (
-      <div className="between" style={{ minHeight: 44 }}>
-        <span id={id} className="field">{spec.label}</span>
-        <Switch checked={Boolean(v)} onChange={set} labelledBy={id} />
+      <div className="stack" style={{ gap: 2 }}>
+        <div className="between" style={{ minHeight: 44, flexWrap: 'nowrap' }}>
+          <span id={id} className="field">{spec.label}</span>
+          <Switch checked={Boolean(v)} onChange={set} labelledBy={id} describedBy={hintId} disabled={Boolean(blocked)} />
+        </div>
+        {spec.hint && <span id={hintId} className="faint">{spec.hint}</span>}
       </div>
     );
   }
@@ -37,7 +49,8 @@ function Field({ spec, value, draft, setDraft }) {
     const multiline = spec.type === 'json';
     return (
       <label className="field" style={multiline ? { gridColumn: '1 / -1' } : undefined}>
-        <span className="between">
+        {/* The badge stays beside the label even when a long label wraps. */}
+        <span className="between" style={{ flexWrap: 'nowrap', alignItems: 'flex-start' }}>
           {spec.label}
           {draft[spec.key] === null ? <Chip tone="warn">Will be cleared</Chip> : saved ? <Chip tone="ok">Saved</Chip> : <Chip>Not set</Chip>}
         </span>
@@ -79,15 +92,23 @@ function Field({ spec, value, draft, setDraft }) {
   return (
     <label className="field">
       {spec.label}
-      <input type={spec.type === 'number' ? 'number' : 'text'} value={v ?? ''} onChange={(e) => set(spec.type === 'number' ? e.target.value : e.target.value)} />
+      <input
+        type={spec.type === 'number' ? 'number' : 'text'}
+        lang={CHANNEL_TEXT.includes(spec.key) ? lang : undefined}
+        value={v ?? ''}
+        onChange={(e) => set(spec.type === 'number' ? e.target.value : e.target.value)}
+      />
+      {usedNote}
     </label>
   );
 }
 
-function GroupCard({ group, schema, values, onSaved, setToast }) {
+function GroupCard({ group, schema, values, effective, onSaved, setToast }) {
   const [draft, setDraft] = useState({});
   const [results, setResults] = useState({});
   const specs = schema.filter((s) => s.group === group.id);
+  const picks = specs.filter((s) => s.subgroup === 'claude');
+  const fieldProps = { draft, setDraft, values, effective, lang: contentLang(values.LANGUAGE) };
   const dirty = Object.keys(draft).length > 0;
 
   const save = async () => {
@@ -131,10 +152,20 @@ function GroupCard({ group, schema, values, onSaved, setToast }) {
         </div>
       )}
       <div className="fields">
-        {specs.map((s) => (
-          <Field key={s.key} spec={s} value={values[s.key]} draft={draft} setDraft={setDraft} />
+        {specs.filter((s) => !s.subgroup).map((s) => (
+          <Field key={s.key} spec={s} value={values[s.key]} {...fieldProps} />
         ))}
       </div>
+      {picks.length > 0 && (
+        <fieldset className="subpanel">
+          <legend>Claude decides per video</legend>
+          <div className="fields">
+            {picks.map((s) => (
+              <Field key={s.key} spec={s} value={values[s.key]} {...fieldProps} />
+            ))}
+          </div>
+        </fieldset>
+      )}
       <div className="between">
         <div className="stack" style={{ gap: 4 }}>
           {group.tests.map(([svc]) =>
@@ -174,7 +205,7 @@ export default function Integrations() {
         <p className="muted" style={{ margin: 0 }}>Keys are saved on this PC only (in Redis, inside Docker) and are never shown again after saving.</p>
       </header>
       {GROUPS.map((g) => (
-        <GroupCard key={g.id} group={g} schema={data.schema} values={data.values} onSaved={reload} setToast={setToast} />
+        <GroupCard key={g.id} group={g} schema={data.schema} values={data.values} effective={data.effective || {}} onSaved={reload} setToast={setToast} />
       ))}
       <section className="card" aria-labelledby="lib-h">
         <h2 id="lib-h" style={{ fontSize: 17 }}>Saved clip library</h2>

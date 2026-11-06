@@ -100,3 +100,25 @@ test('the "Claude picks" switches are in the Visuals card, on by default, and re
     cfg.applySettings({ [field]: true });
   }
 });
+
+test('the "Claude picks" switches form one group with short labels, and sound cues need sound effects', () => {
+  const picks = S.SETTINGS_SCHEMA.filter((s) => s.subgroup === 'claude').map((s) => s.key);
+  assert.deepEqual(picks, ['DIRECT_TRANSITIONS', 'DIRECT_SFX', 'DIRECT_CAMERA', 'DIRECT_GRAPHICS']);
+  for (const key of picks) {
+    const spec = S.SETTINGS_SCHEMA.find((s) => s.key === key);
+    assert.ok(spec.label.length <= 16, `${key} label "${spec.label}" is short`);
+    assert.ok(spec.hint, `${key} explains what "off" means`);
+  }
+  assert.equal(S.SETTINGS_SCHEMA.find((s) => s.key === 'DIRECT_SFX').requires, 'SFX');
+});
+
+test('effectiveValues shows what Docker really uses when a setting is swapped there', () => {
+  const s = { ...S.defaults(), CLAUDE_BIN: 'C:\Users\me\.local\bin\claude.exe', CAPTION_FONT: 'Nirmala UI' };
+  assert.deepEqual(S.effectiveValues(s, 'linux'), { CLAUDE_BIN: 'claude', CAPTION_FONT: 'Noto Sans Bengali' });
+  assert.deepEqual(S.effectiveValues(s, 'win32'), {});
+  assert.deepEqual(S.effectiveValues(S.defaults(), 'linux'), {});
+});
+
+test('the channel niche label says it is only used to pick topics', () => {
+  assert.match(S.SETTINGS_SCHEMA.find((s) => s.key === 'NICHE').label, /topics/i);
+});
