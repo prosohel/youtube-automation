@@ -11,3 +11,6 @@ web/node_modules
 web/dist
 redis-data/
 .superpowers/
+
+# Local Redis backups (contain secrets)
+backups/
