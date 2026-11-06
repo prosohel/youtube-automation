@@ -274,11 +274,13 @@ function createApp({ redis, queues }) {
     res.json(files.map((file, i) => ({ file, words: words[i] || '' })));
   });
 
+  // ?brand=<id>: a platform is tested with that brand's own accounts.
   app.post('/api/test/:service', async (req, res) => {
     const { testService } = require('./connectionTests');
     try {
-      res.json(await testService(req.params.service, redis));
+      res.json(await testService(req.params.service, redis, { brandId: req.query.brand || undefined }));
     } catch (e) {
+      if (e.status === 400) throw e; // no brand picked: a bad request, not a failed test
       res.json({ ok: false, detail: e.message });
     }
   });

@@ -242,6 +242,22 @@ test('two processes starting at once create one brand', async () => {
   assert.equal((await store.getVideo(r, v.id)).brandId, all[0].id);
 });
 
+test('two brands claiming one account at the same moment: exactly one gets it', async () => {
+  const r = await freshRedis();
+  const a = await seedBrand(r, { name: 'A' });
+  const b = await seedBrand(r, { name: 'B' });
+  const claims = await Promise.allSettled([a, b].map((x) => B.setAccount(r, x.id, 'youtube', { id: 'UC1', name: 'One' })));
+  assert.equal(claims.filter((c) => c.status === 'fulfilled').length, 1);
+  const lost = claims.find((c) => c.status === 'rejected');
+  assert.equal(lost.reason.conflict, true);
+  assert.equal((await B.listBrands(r)).filter((x) => x.accounts.youtube?.id === 'UC1').length, 1);
+
+  const pages = await Promise.allSettled([a, b].map((x) => B.saveBrandSettings(r, x.id, { FACEBOOK_PAGE_ID: '42' })));
+  assert.equal(pages.filter((c) => c.status === 'fulfilled').length, 1);
+  assert.equal(pages.find((c) => c.status === 'rejected').reason.conflict, true);
+  assert.equal((await B.listBrands(r)).filter((x) => x.accounts.facebook?.id === '42').length, 1);
+});
+
 test('two account updates at once on one brand both stay', async () => {
   const r = await freshRedis();
   const a = await seedBrand(r, { name: 'A' });

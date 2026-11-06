@@ -16,6 +16,19 @@ function redact(text, secrets = []) {
 const notConnected = (message) => Object.assign(new Error(message), { config: true });
 
 /**
+ * Record which account the brand posts to (ctx.setAccount). An account another brand already has is a setup
+ * problem (config): one account belongs to one brand, so nothing is posted.
+ */
+async function recordAccount(ctx, platform, identity) {
+  try {
+    return await ctx.setAccount(platform, identity);
+  } catch (e) {
+    if (!e.conflict) throw e;
+    throw Object.assign(notConnected(`${NAMES[platform]}: ${e.message}. Reconnect ${NAMES[platform]} for this brand.`), { conflict: true });
+  }
+}
+
+/**
  * fetch + JSON parse + uniform errors: "<Platform>: <API message> (HTTP n)".
  * TikTok reports errors as { error: { code != 'ok', message } }, Meta as { error: { message } }
  * or { debug_info: { message } } on its upload host, OAuth endpoints as { error: 'code', error_description }.
@@ -46,4 +59,4 @@ async function request(ctx, platform, url, opts = {}, secrets = []) {
 
 const wait = (ctx, ms) => (ctx.sleep || sleep)(ms);
 
-module.exports = { request, redact, wait, notConnected, NAMES };
+module.exports = { request, redact, wait, notConnected, recordAccount, NAMES };

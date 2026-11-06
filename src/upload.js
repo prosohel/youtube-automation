@@ -11,10 +11,22 @@ const youtubeTitle = (title, isShort = cfg.format === 'shorts') =>
 /**
  * Upload a finished video. Returns the watch URL.
  * privacy: overrides PRIVACY_STATUS (a schedule rule can set its own).
+ * auth, categoryId, syntheticMedia, isShort: the worker passes the video's brand's own; the CLI leaves them to cfg (.env, token.json).
  * Note: each upload costs ~1,600 quota units of the default 10,000/day.
  */
-async function uploadVideo({ videoFile, thumbFile, title, description, tags, privacy = cfg.privacy }) {
-  const youtube = google.youtube({ version: 'v3', auth: getAuthorizedClient() });
+async function uploadVideo({
+  videoFile,
+  thumbFile,
+  title,
+  description,
+  tags,
+  privacy = cfg.privacy,
+  auth = getAuthorizedClient(),
+  categoryId = cfg.categoryId,
+  syntheticMedia = cfg.syntheticMedia,
+  isShort = cfg.format === 'shorts',
+}) {
+  const youtube = google.youtube({ version: 'v3', auth });
 
   const res = await youtube.videos.insert(
     {
@@ -22,10 +34,10 @@ async function uploadVideo({ videoFile, thumbFile, title, description, tags, pri
       notifySubscribers: false,
       requestBody: {
         snippet: {
-          title: youtubeTitle(title),
+          title: youtubeTitle(title, isShort),
           description: description.slice(0, 4900),
           tags: (tags || []).slice(0, 15),
-          categoryId: cfg.categoryId,
+          categoryId,
           defaultLanguage: 'en',
         },
         status: {
@@ -33,7 +45,7 @@ async function uploadVideo({ videoFile, thumbFile, title, description, tags, pri
           selfDeclaredMadeForKids: false,
           // YouTube's "altered or synthetic content" disclosure. On by default because AI video clips
           // (Higgsfield) can look real. Set SYNTHETIC_MEDIA=false in .env for videos without them.
-          containsSyntheticMedia: cfg.syntheticMedia,
+          containsSyntheticMedia: syntheticMedia,
         },
       },
       media: { body: fs.createReadStream(videoFile) },

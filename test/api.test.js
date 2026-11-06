@@ -358,6 +358,18 @@ test('editing a rule keeps its brand, and an edit without a brand is refused', a
   assert.equal((await call('GET', `/api/rules?brand=${b.id}`)).json[0].cron, '0 19 * * *');
 });
 
+test('a platform connection test needs a brand', async (t) => {
+  const { call, redis } = await boot(t);
+  const brand = await seedBrand(redis, { name: 'A' });
+  const none = await call('POST', '/api/test/tiktok');
+  assert.equal(none.status, 400);
+  assert.equal(none.json.error, 'Pick a brand');
+  const res = await call('POST', `/api/test/tiktok?brand=${brand.id}`);
+  assert.equal(res.status, 200);
+  assert.equal(res.json.ok, false);
+  assert.match(res.json.detail, /not connected/);
+});
+
 test('publish now refuses a switched-off brand', async (t) => {
   const { call, redis, queues } = await boot(t);
   const brand = await seedBrand(redis, { name: 'Quiet' });

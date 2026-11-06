@@ -37,6 +37,13 @@ const putBrand = (redis, brand) => redis.hset(BRANDS, brand.id, JSON.stringify(b
 /** Run fn while holding this brand's lock, so two updates of its record (web + worker) never lose one another. */
 const withBrandLock = (redis, id, fn) => store.withLock(redis, `brand:${id}`, fn);
 
+/**
+ * Run fn while holding the lock every brand shares for its accounts, so two brands never claim one account at
+ * once (checking the other brands and writing in between). Always taken inside the brand's own lock, never the
+ * other way round, so the two can't deadlock.
+ */
+const withAccountsLock = (redis, fn) => store.withLock(redis, 'brands:accounts', fn);
+
 /** Oldest first. Archived brands only with { includeArchived: true }. */
 async function listBrands(redis, { includeArchived = false } = {}) {
   const all = await redis.hgetall(BRANDS);
@@ -123,14 +130,16 @@ async function accountHolder(redis, exceptId, platform, value) {
 /** Record which account a brand posts to. Throws (conflict = true) when another brand already has it. */
 async function setAccount(redis, brandId, platform, identity) {
   if (!ACCOUNT_PLATFORMS.includes(platform)) throw fail(`Unknown platform: ${platform}`, { status: 400 });
-  return withBrandLock(redis, brandId, async () => {
-    const brand = await requireBrand(redis, brandId);
-    const other = await accountHolder(redis, brandId, platform, identity?.[ACCOUNT_ID_FIELD[platform]]);
-    if (other) throw fail(`Already connected to brand "${other.name}"`, { conflict: true, status: 409 });
-    brand.accounts = { ...brand.accounts, [platform]: identity };
-    await putBrand(redis, brand);
-    return brand;
-  });
+  return withBrandLock(redis, brandId, () =>
+    withAccountsLock(redis, async () => {
+      const brand = await requireBrand(redis, brandId);
+      const other = await accountHolder(redis, brandId, platform, identity?.[ACCOUNT_ID_FIELD[platform]]);
+      if (other) throw fail(`Already connected to brand "${other.name}"`, { conflict: true, status: 409 });
+      brand.accounts = { ...brand.accounts, [platform]: identity };
+      await putBrand(redis, brand);
+      return brand;
+    })
+  );
 }
 
 /**
@@ -143,8 +152,9 @@ async function saveBrandSettings(redis, brandId, patch = {}) {
     if (settings.SETTINGS_SCHEMA.some((s) => s.key === k) && !settings.isBrandKey(k)) throw new Error(`Setting ${k} is shared, not part of a brand`);
   }
   const { set, del } = settings.planPatch(patch);
+  const touchesAccounts = Object.keys(ACCOUNT_SETTINGS).some((k) => k in set || del.includes(k));
 
-  await withBrandLock(redis, brandId, async () => {
+  const write = async () => {
     const brand = await requireBrand(redis, brandId);
     const accounts = { ...brand.accounts };
     for (const [key, platform] of Object.entries(ACCOUNT_SETTINGS)) {
@@ -159,7 +169,9 @@ async function saveBrandSettings(redis, brandId, patch = {}) {
     if (del.length) await redis.hdel(settingsKey(brandId), ...del);
     await writeBrandValues(redis, brandId, set);
     if (JSON.stringify(accounts) !== JSON.stringify(brand.accounts)) await putBrand(redis, { ...brand, accounts });
-  });
+  };
+  // A Page or Instagram id is checked against every brand: under the shared accounts lock too.
+  await withBrandLock(redis, brandId, () => (touchesAccounts ? withAccountsLock(redis, write) : write()));
   return brandSettings(redis, brandId);
 }
 

@@ -1,9 +1,24 @@
 const settings = require('./settings');
+const brands = require('./brands');
 
 const n = (x) => Number(x || 0).toLocaleString('en-US');
+const PLATFORMS = ['youtube', 'tiktok', 'instagram', 'facebook'];
+const badRequest = (message) => Object.assign(new Error(message), { status: 400 });
 
-/** "Test" buttons in Integrations. Returns { ok, detail }; never includes a key in the detail. */
-async function testService(service, redis, { fetch = globalThis.fetch } = {}) {
+/**
+ * "Test" buttons in Integrations. Returns { ok, detail }; never includes a key in the detail.
+ * A platform is tested with one brand's own accounts (brandId required, 400 without it); the shared keys need none.
+ */
+async function testService(service, redis, { fetch = globalThis.fetch, brandId } = {}) {
+  if (PLATFORMS.includes(service)) {
+    if (!brandId) throw badRequest('Pick a brand');
+    const brand = await brands.getBrand(redis, String(brandId));
+    if (!brand) throw badRequest('Unknown brand');
+    const { brandContext } = require('./publishFlow');
+    const { getPublisher } = require('./publishers');
+    return getPublisher(service).test({ ...(await brandContext(redis, brand)), fetch, log: () => {} });
+  }
+
   const s = await settings.loadSettings(redis);
   const getJson = async (url, headers = {}) => {
     const res = await fetch(url, { headers });
@@ -40,15 +55,6 @@ async function testService(service, redis, { fetch = globalThis.fetch } = {}) {
         schema: { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'] },
       });
       return { ok: out.ok === true, detail: `${s.LLM_PROVIDER === 'api' ? 'Anthropic API' : 'Claude Code'} answered (${s.CLAUDE_MODEL})` };
-    }
-    case 'youtube':
-    case 'tiktok':
-    case 'instagram':
-    case 'facebook': {
-      const cfg = require('../src/config');
-      cfg.applySettings(settings.toConfig(s));
-      const { getPublisher } = require('./publishers');
-      return getPublisher(service).test({ settings: s, fetch, saveSettings: (patch) => settings.saveSettings(redis, patch), log: () => {} });
     }
     default:
       throw new Error(`Unknown service: ${service}`);

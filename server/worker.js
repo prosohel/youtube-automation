@@ -11,13 +11,13 @@ const { runVideoJob } = require('./pipeline');
 const { QUEUE, createQueues, enqueueVideo } = require('./queues');
 const { processTick, runPublish, recheckProcessing, markPublishJobFailed, recoverPublishRecords } = require('./publishFlow');
 const { syncSchedulers } = require('./scheduler');
-const { syncYoutube } = require('./youtubeSync');
+const { syncYoutube, clientForBrand } = require('./youtubeSync');
 
 const HEARTBEAT_KEY = 'worker:heartbeat';
 const log = (...a) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...a);
 
-// While a video is being made, a publish/sync job that reloads settings must not change that video
-// halfway (format, voice, theme...): only the platform fields below are refreshed meanwhile.
+// A loadConfig while a video is being made must not change that video halfway (format, voice, theme...): only the
+// fields below are refreshed meanwhile. (Posting and the YouTube sync no longer load config at all.)
 let activeVideoJobs = 0;
 const PLATFORM_CFG = ['youtubeClientSecret'];
 // The settings every brand shares. Brand keys are never applied here: a brand's own values come in with its video.
@@ -38,7 +38,6 @@ async function runWithVideoConfig(redis, brandId, fn) {
   const brand = await brands.getBrand(redis, brandId);
   const own = await brands.brandSettings(redis, brandId); // throws (config) for an unknown brand
   cfg.applySettings({ ...settings.toConfig(own), brandName: brand.name });
-  cfg.onYoutubeTokens = null; // posting is a separate job; a video job never saves a sign-in
   activeVideoJobs++;
   try {
     return await fn();
@@ -66,22 +65,18 @@ async function loadHistory(redis, exceptId, brandId) {
 /** Cron ticks and publish jobs. */
 const defaultProcessors = () => ({
   [QUEUE.ticks]: (job, ctx) => processTick(job, ctx),
+  // Posting and the YouTube sync read each video's brand from Redis: never src/config.js, which may hold the
+  // settings of another brand's video being made at the same time.
   [QUEUE.publish]: async (job, ctx) => {
-    await loadConfig(ctx.redis); // shared keys only; Task 4 gives each post its brand's sign-in
     const rule = (await store.listRules(ctx.redis)).find((r) => r.id === job.data.ruleId);
     const rec = await runPublish({ redis: ctx.redis, videoId: job.data.videoId, platform: job.data.platform, rule, log: ctx.log });
     return rec.status;
   },
   [QUEUE.maintenance]: async (job, ctx) => {
-    if (job.name === 'publish-recheck') {
-      await loadConfig(ctx.redis);
-      return `settled ${await recheckProcessing({ redis: ctx.redis, log: ctx.log })}`;
-    }
+    if (job.name === 'publish-recheck') return `settled ${await recheckProcessing({ redis: ctx.redis, log: ctx.log })}`;
     if (job.name !== 'youtube-sync') return 'unknown';
-    const s = await loadConfig(ctx.redis);
-    if (!s.YOUTUBE_TOKEN || !s.YOUTUBE_CLIENT_SECRET) return 'youtube not connected';
-    const youtube = require('./publishers/youtube').client({});
-    return `updated ${await syncYoutube({ redis: ctx.redis, youtube })}`;
+    const clientFor = (brandId) => clientForBrand(ctx.redis, brandId);
+    return `updated ${await syncYoutube({ redis: ctx.redis, clientFor, log: ctx.log })}`;
   },
 });
 
