@@ -59,8 +59,9 @@ function Field({ spec, value, draft, setDraft }) {
       <label className="field">
         {spec.label}
         <select value={v ?? ''} onChange={(e) => set(e.target.value)}>
-          {spec.options.map((o) => <option key={o} value={o}>{o === '' ? 'Claude picks per video' : o}</option>)}
+          {spec.options.map((o) => <option key={o} value={o}>{o === '' ? 'Claude picks per video' : spec.optionLabels?.[o] || o}</option>)}
         </select>
+        {spec.optionHints?.[v ?? ''] && <span className="hint">{spec.optionHints[v ?? '']}</span>}
       </label>
     );
   }

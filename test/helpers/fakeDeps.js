@@ -3,7 +3,7 @@ const path = require('path');
 
 /**
  * Stand-ins for the real pipeline stages. Every call is pushed to `calls`.
- * opts: { title, scenes = 5, failVoiceOn: 'scene-02.mp3', renderFailsOnce, delayMs, outDir }
+ * opts: { title, scenes = 5, failVoiceOn: 'scene-02.mp3', renderFailsOnce, delayMs, outDir, onRender(args) }
  */
 function fakeDeps(calls, opts = {}) {
   const wait = () => new Promise((r) => setTimeout(r, opts.delayMs || 0));
@@ -35,7 +35,9 @@ function fakeDeps(calls, opts = {}) {
       fs.writeFileSync(file, `audio by ${provider.name}`);
     },
     audioDuration: async (file) => (fs.existsSync(file) ? 2.5 : 0),
-    renderAny: async ({ slug, scenes }) => {
+    renderAny: async (args) => {
+      const { slug, scenes } = args;
+      if (opts.onRender) opts.onRender(args);
       const mp4 = path.join(opts.outDir, `${slug}.mp4`);
       calls.push(`render:existed=${fs.existsSync(mp4)}:scenes=${scenes.length}`);
       await wait();

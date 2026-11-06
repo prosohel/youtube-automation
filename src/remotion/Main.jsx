@@ -20,8 +20,10 @@ import { pushCut } from '@remotion/transitions/push-cut';
 import { fade } from '@remotion/transitions/fade';
 import { CameraMotionBlur } from '@remotion/motion-blur';
 import { OVERLAP, buildTimeline } from './timeline';
-import { accentFor, energy, headFont, pop, setTheme, theme } from './shared';
+import { accentFor, cardStyle, energy, headFont, isVox, pop, setTheme, theme } from './shared';
+import { MarkerUnderline, Tape, draw } from './Vox';
 import { SceneVisual, VISUAL_START } from './Visuals';
+import { COUNT_FRAMES, ITEM_STAGGER } from './library/timing';
 import { MotionBg, Overlays, Particles } from './Backgrounds';
 import { Captions, HeadlineCard } from './Text';
 import { EmojiPop, LeakAt, Sfx } from './Effects';
@@ -31,7 +33,7 @@ import { EmojiPop, LeakAt, Sfx } from './Effects';
  * are actually flying in or out. The rest of the time the layer renders once (5x cheaper).
  */
 const BlurWhileMoving = ({ moving, children }) =>
-  moving ? (
+  moving && !isVox() ? ( // paper cutouts have no motion blur
     <CameraMotionBlur shutterAngle={200} samples={5}>
       {children}
     </CameraMotionBlur>
@@ -84,26 +86,47 @@ const Scene = ({ scene, index, total, isShort, kicker }) => {
   const dir = index % 2 === 0 ? 1 : -1;
   const pan = interpolate(f, [0, dur], [-1.5 * dir, 1.5 * dir]);
 
-  // Zoom punch + a short decaying camera shake as the scene lands (scaled by the video's energy).
-  const e = energy();
+  // Camera: Claude's pick for this scene, or (none picked) a zoom punch + short decaying shake as the
+  // scene lands, scaled by the video's energy. Vox keeps the camera locked whatever was picked.
+  const vox = isVox();
+  const cam = vox ? null : scene.camera;
+  const e = vox ? 0 : cam === 'punch' ? Math.max(1, energy()) : energy();
   const punch = Math.min(1, pop(f, fps, OVERLAP, 12));
   const shakeT = f - OVERLAP;
   const shake = shakeT >= 0 && shakeT < 12 ? (1 - shakeT / 12) * 9 * e : 0;
   const sx = (random(`sx-${index}-${f}`) - 0.5) * 2 * shake;
   const sy = (random(`sy-${index}-${f}`) - 0.5) * 2 * shake;
   const zoom = 0.07 * e;
+  const camera =
+    cam === 'still'
+      ? 'none'
+      : cam === 'push'
+        ? `scale(${interpolate(f, [0, dur], [1, 1.08])})`
+        : cam === 'pan'
+          ? `scale(1.06) translateX(${interpolate(f, [0, dur], [-1.8 * dir, 1.8 * dir])}%)`
+          : `translate(${sx}px, ${sy}px) scale(${1 + zoom - zoom * punch})`;
 
   return (
     <AbsoluteFill style={{ background: theme().bg[0], overflow: 'hidden' }}>
-      <AbsoluteFill style={{ transform: `translate(${sx}px, ${sy}px) scale(${1 + zoom - zoom * punch})` }}>
-        {scene.bg ? (
+      <AbsoluteFill style={{ transform: camera }}>
+        {scene.bg && vox ? (
+          // Footage as an archival print pinned on the paper: desaturated, framed, a little crooked.
+          <>
+            <MotionBg index={index} accent={accent} />
+            <AbsoluteFill style={{ padding: isShort ? '120px 50px 300px' : '70px 110px 190px', transform: `rotate(${index % 2 ? 0.8 : -0.8}deg)` }}>
+              <div style={{ width: '100%', height: '100%', overflow: 'hidden', border: `16px solid ${theme().surface}`, boxShadow: '6px 10px 30px rgba(60,40,10,0.45)', background: '#000' }}>
+                <OffthreadVideo src={staticFile(scene.bg)} muted style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'grayscale(0.8) sepia(0.3) contrast(1.05)' }} />
+              </div>
+            </AbsoluteFill>
+          </>
+        ) : scene.bg ? (
           <AbsoluteFill style={{ transform: `scale(${kb}) translateX(${pan}%)` }}>
             <OffthreadVideo src={staticFile(scene.bg)} muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </AbsoluteFill>
         ) : (
           <MotionBg index={index} accent={accent} />
         )}
-        {scene.bg ? (
+        {scene.bg && !vox ? (
           <AbsoluteFill style={{ background: 'linear-gradient(180deg, rgba(5,8,20,0.55) 0%, rgba(5,8,20,0.12) 38%, rgba(5,8,20,0.7) 100%)' }} />
         ) : null}
         <Particles count={isShort ? 14 : 18} seed={index + 7} />
@@ -143,7 +166,13 @@ const Intro = ({ title, kicker, isShort }) => {
             <div
               style={{
                 fontFamily: headFont(),
-                fontSize: isShort ? 44 : 34,
+                // A label is at most 28 characters (src/direction.js); longer ones get a smaller size and
+                // can never wrap or spill out of the bubble.
+                fontSize: (isShort ? 44 : 34) * (kicker.length > 16 ? 0.82 : 1),
+                whiteSpace: 'nowrap',
+                maxWidth: '100%',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
                 color: T.onAccent,
                 background: accentFor(0),
                 borderRadius: T.card === 'solid' || T.card === 'terminal' ? 4 : 999,
@@ -157,7 +186,20 @@ const Intro = ({ title, kicker, isShort }) => {
               {kicker}
             </div>
           ) : null}
-          <div style={{ textAlign: 'center', lineHeight: 1.3 }}>
+          <div
+            style={{
+              textAlign: 'center',
+              lineHeight: 1.3,
+              // Vox: the title sits on a taped sheet of paper
+              ...(isVox() ? { ...cardStyle(accentFor(0)), position: 'relative', padding: isShort ? '50px 44px 56px' : '40px 70px 46px', transform: `rotate(${-1.2 + (1 - Math.min(1, kick)) * 4}deg)` } : {}),
+            }}
+          >
+            {isVox() ? (
+              <>
+                <Tape style={{ left: 40, top: -22, transform: 'rotate(-14deg)' }} w={120} />
+                <Tape style={{ right: 40, top: -22, transform: 'rotate(11deg)' }} w={120} />
+              </>
+            ) : null}
             {words.map((w, i) => {
               const s = Math.min(1, pop(f, fps, 6 + i * 3));
               return (
@@ -179,15 +221,21 @@ const Intro = ({ title, kicker, isShort }) => {
               );
             })}
           </div>
-          <div
-            style={{
-              marginTop: 40,
-              height: 10,
-              borderRadius: 5,
-              width: `${Math.min(1, line) * (isShort ? 55 : 30)}%`,
-              background: `linear-gradient(90deg, ${accentFor(0)}, ${accentFor(1)})`,
-            }}
-          />
+          {isVox() ? (
+            <div style={{ marginTop: 34 }}>
+              <MarkerUnderline width={isShort ? 520 : 560} color={accentFor(0)} p={draw(f, 22, 16)} seed={2} stroke={9} />
+            </div>
+          ) : (
+            <div
+              style={{
+                marginTop: 40,
+                height: 10,
+                borderRadius: 5,
+                width: `${Math.min(1, line) * (isShort ? 55 : 30)}%`,
+                background: `linear-gradient(90deg, ${accentFor(0)}, ${accentFor(1)})`,
+              }}
+            />
+          )}
         </AbsoluteFill>
       </BlurWhileMoving>
     </AbsoluteFill>
@@ -281,8 +329,39 @@ const makePresentation = (name, width, height) => {
 
 const timing = linearTiming({ durationInFrames: OVERLAP, easing: Easing.inOut(Easing.cubic) });
 
+const SFX_VOLUME = { whoosh: 0.35, whip: 0.35, ding: 0.3, 'mouse-click': 0.45, switch: 0.4 };
+
+/** Frames at which one of Claude's cues plays. Footage scenes hide the graphic, so its cues are dropped there. */
+const cueFrames = (scene, start, at) => {
+  const v = scene.visual || {};
+  const graphic = !scene.bg;
+  const landed = start + VISUAL_START + (v.type === 'stat' || v.type === 'bigNumber' ? COUNT_FRAMES : 10);
+  const each = (list, max) => (list || []).slice(0, max).map((_, i) => start + VISUAL_START + i * ITEM_STAGGER);
+  if (at === 'enter') return [start];
+  if (at === 'visual') return graphic ? [landed] : [];
+  if (at === 'items') {
+    if (!graphic) return [];
+    if (v.type === 'list') return each(v.items, 4);
+    if (v.type === 'bars') return each(v.bars, 6);
+    if (v.type === 'timeline') return each(v.events, 6);
+    return [landed];
+  }
+  if (at === 'emoji') return scene.emoji ? [start + VISUAL_START + 10] : [];
+  return [];
+};
+
 /** Sound effects timed to the animation (only when the renderer cached the files). */
 const SceneSfx = ({ scene, start, index }) => {
+  if (Array.isArray(scene.sfx)) {
+    // Claude's cues for this scene ([] = a deliberately quiet scene).
+    return (
+      <>
+        {scene.sfx.flatMap((c, n) =>
+          cueFrames(scene, start, c.at).map((at, k) => <Sfx key={`${n}-${k}`} name={c.sound} at={at} volume={SFX_VOLUME[c.sound] ?? 0.35} />)
+        )}
+      </>
+    );
+  }
   const v = scene.visual || {};
   const out = [<Sfx key="w" name={index % 2 ? 'whip' : 'whoosh'} at={start} volume={0.35} />];
   if (!scene.bg && v.type === 'list') {
@@ -309,7 +388,7 @@ export const Main = (props) => {
         </TransitionSeries.Sequence>
         {scenes.map((s, i) => (
           <React.Fragment key={i}>
-            <TransitionSeries.Transition presentation={makePresentation(trans[i % trans.length], width, height)} timing={timing} />
+            <TransitionSeries.Transition presentation={makePresentation(s.transition || trans[i % trans.length], width, height)} timing={timing} />
             <TransitionSeries.Sequence durationInFrames={s.frames + OVERLAP}>
               <Scene scene={s} index={i} total={scenes.length} isShort={isShort} kicker={kicker} />
             </TransitionSeries.Sequence>

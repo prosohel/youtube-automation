@@ -3,6 +3,7 @@ const path = require('path');
 const cfg = require('./config');
 const { run, log, ensureDir } = require('./util');
 const { fetchClip } = require('./footage');
+const { SOUNDS, sceneDirection } = require('./direction');
 
 const INTRO_SECONDS = 1.8;
 const OUTRO_SECONDS = 2.2;
@@ -21,13 +22,10 @@ async function cachedDownload(url, dest) {
   return dest;
 }
 
-// Neutral UI sounds from @remotion/sfx (no meme sounds: those risk YouTube copyright claims).
-const SFX_FILES = ['whoosh', 'whip', 'ding', 'mouse-click', 'switch'];
-
 async function prepSfx(publicDir) {
   if (!cfg.sfx) return false;
   try {
-    for (const name of SFX_FILES) {
+    for (const name of SOUNDS) {
       const local = await cachedDownload(`https://remotion.media/${name}.wav`, path.join(ASSET_DIR, 'sfx', `${name}.wav`));
       ensureDir(path.join(publicDir, 'sfx'));
       fs.copyFileSync(local, path.join(publicDir, 'sfx', `${name}.wav`));
@@ -110,7 +108,7 @@ const subscribeLabel = () => (/bangla|bengali|bn\b/i.test(cfg.language) ? 'рж╕рж
  * Render the animated Remotion composition.
  * scenes: output of makeVoice. Returns { videoFile, thumbFile, credits[] }.
  */
-async function renderWithRemotion({ scenes, workDir, slug, title, theme }) {
+async function renderWithRemotion({ scenes, workDir, slug, title, theme, direction }) {
   // Required lazily so the ffmpeg-only fallback works even if Remotion is not installed.
   const { bundle } = require('@remotion/bundler');
   const { renderMedia, renderStill, selectComposition, ensureBrowser } = require('@remotion/renderer');
@@ -131,7 +129,7 @@ async function renderWithRemotion({ scenes, workDir, slug, title, theme }) {
     const wantsFootage = cfg.visuals === 'footage' || (cfg.visuals === 'mixed' && sc.broll);
     const bg = wantsFootage ? await prepBackground({ ...sc, frames }, i, workDir, publicDir) : null;
     const emoji = await prepEmoji(sc.emoji, publicDir);
-    sceneProps.push({ frames, narration: sc.narration, headline: sc.headline || '', visual: sc.visual || null, emoji, bg, audio });
+    sceneProps.push({ frames, narration: sc.narration, headline: sc.headline || '', visual: sc.visual || null, emoji, bg, audio, ...sceneDirection(direction, i) });
   }
 
   const sfx = await prepSfx(publicDir);
@@ -143,7 +141,7 @@ async function renderWithRemotion({ scenes, workDir, slug, title, theme }) {
 
   const inputProps = {
     title,
-    kicker: cfg.niche,
+    kicker: (direction && direction.kicker) || null, // never the NICHE sentence: that is only for picking topics
     subscribeText: subscribeLabel(),
     width: cfg.width,
     height: cfg.height,

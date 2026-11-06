@@ -27,10 +27,15 @@ const cfg = (module.exports = {
   voice: process.env.VOICE || 'en-US-AndrewNeural',
   // Animated Remotion video (set USE_REMOTION=false for the plain ffmpeg pipeline)
   useRemotion: (process.env.USE_REMOTION || 'true').toLowerCase() !== 'false',
-  // Force one design theme (neon, minimal, news, sunset, gold, pop, glass, hacker); empty = Claude picks per video
+  // Force one design theme (neon, minimal, news, sunset, gold, pop, glass, hacker, vox-paper, vox-newsprint, vox-marker); empty = Claude picks per video
   theme: (process.env.THEME || '').toLowerCase(),
   // Sound effects on transitions/cards (whoosh, click, ding). SFX=false to turn off.
   sfx: (process.env.SFX || 'true').toLowerCase() !== 'false',
+  // Claude picks each scene's transition / sound cues / camera move (false = the theme's fixed behaviour)
+  directTransitions: (process.env.DIRECT_TRANSITIONS || 'true').toLowerCase() !== 'false',
+  directSfx: (process.env.DIRECT_SFX || 'true').toLowerCase() !== 'false',
+  directCamera: (process.env.DIRECT_CAMERA || 'true').toLowerCase() !== 'false',
+  directGraphics: (process.env.DIRECT_GRAPHICS || 'true').toLowerCase() !== 'false',
   // 'mixed' = animated graphics + stock footage as B-roll on some scenes (default)
   // 'motion' = animated graphics only, 'footage' = stock/local clips on every scene
   visuals: (process.env.VISUALS || 'mixed').toLowerCase(),

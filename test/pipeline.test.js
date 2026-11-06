@@ -201,3 +201,79 @@ test('F6: the voice in use is recorded before the first scene is made', async ()
   await runVideoJob(v.id, { redis: r, deps, outDir });
   assert.equal(seen, 'eleven');
 });
+
+test('the script stage keeps Claude\'s checked picks and the render receives them', async () => {
+  const cfg = require('../src/config');
+  cfg.applySettings({ directTransitions: true, directSfx: true, directCamera: true, sfx: true });
+  const r = await freshRedis();
+  const outDir = tmpOut();
+  const calls = [];
+  const renders = [];
+  const deps = fakeDeps(calls, { outDir, onRender: (args) => renders.push(args) });
+  const write = deps.writeScript;
+  deps.writeScript = async (t) => {
+    const s = await write(t);
+    s.kicker = 'স্ক্যাম সতর্কতা।';
+    s.scenes[0] = { ...s.scenes[0], transition: 'iris', camera: 'push', sfx: [{ sound: 'ding', at: 'enter' }] };
+    s.scenes[1] = { ...s.scenes[1], transition: 'spiral' };
+    return s;
+  };
+  const v = await store.createVideo(r, {});
+  const done = await runVideoJob(v.id, { redis: r, deps, outDir });
+  assert.equal(done.direction.kicker, 'স্ক্যাম সতর্কতা');
+  assert.deepEqual(done.direction.scenes[0], { transition: 'iris', camera: 'push', sfx: [{ sound: 'ding', at: 'enter' }] });
+  assert.equal(done.direction.scenes[1].transition, null);
+  assert.equal(renders.length, 1);
+  assert.deepEqual(renders[0].direction, done.direction);
+});
+
+test('the script stage stores checked graphics and the render receives them', async () => {
+  const cfg = require('../src/config');
+  cfg.applySettings({ language: 'Bangla', directGraphics: true });
+  const r = await freshRedis();
+  const outDir = tmpOut();
+  const calls = [];
+  const renders = [];
+  const deps = fakeDeps(calls, { outDir, onRender: (args) => renders.push(args) });
+  const write = deps.writeScript;
+  deps.writeScript = async (t) => {
+    const s = await write(t);
+    s.scenes[0] = { ...s.scenes[0], visual: { type: 'bars', bars: [{ label: 'a', value: '৭০' }, { label: 'b', value: 30 }] } };
+    s.scenes[1] = { ...s.scenes[1], visual: { type: 'donut', slices: [{ label: 'x', share: 10 }, { label: 'y', share: 10 }] } };
+    return s;
+  };
+  const v = await store.createVideo(r, {});
+  const done = await runVideoJob(v.id, { redis: r, deps, outDir });
+  assert.equal(done.script.scenes[0].visual.bars[0].shown, '৭০');
+  assert.deepEqual(done.script.scenes[1].visual, { type: 'icon', icon: 'Sparkles' });
+  assert.equal(renders[0].scenes[0].visual.bars[0].value, 70);
+});
+
+test('a video scripted before graphics were checked renders its visuals exactly as stored, even with the switch off', async () => {
+  const cfg = require('../src/config');
+  cfg.applySettings({ directGraphics: false });
+  const r = await freshRedis();
+  const outDir = tmpOut();
+  const calls = [];
+  const renders = [];
+  const deps = fakeDeps(calls, { outDir, onRender: (args) => renders.push(args) });
+  const v = await store.createVideo(r, {});
+  const script = await deps.writeScript();
+  const raw = [{ type: 'bars', bars: [{ label: 'a', value: '৭০' }, { label: 'b', value: 30 }] }, { type: 'mystery', icon: 'Zap' }];
+  script.scenes[0].visual = raw[0];
+  script.scenes[1].visual = raw[1];
+  calls.length = 0;
+  await store.updateVideo(r, v.id, {
+    done: { topic: true, script: true },
+    topicInfo: { topic: 't' },
+    script,
+    title: script.title,
+    theme: { id: 'neon', seed: 7 },
+    slug: `2026-11-06-${v.id}`,
+  });
+  await runVideoJob(v.id, { redis: r, deps, outDir });
+  assert.equal(calls.filter((c) => c === 'script').length, 0);
+  assert.deepEqual(renders[0].scenes[0].visual, raw[0]);
+  assert.deepEqual(renders[0].scenes[1].visual, raw[1]);
+  cfg.applySettings({ directGraphics: true });
+});

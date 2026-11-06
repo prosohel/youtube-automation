@@ -3,6 +3,8 @@ const { log } = require('./util');
 const { askJson } = require('./llm');
 const { themeMenu, recentThemes } = require('./style');
 const { listLocalClips } = require('./footage');
+const { directionPrompt, recentDirection } = require('./direction');
+const { BASIC_TYPES, LIBRARY_TYPES, graphicsPrompt, recentGraphics } = require('./graphics');
 
 // Icons the animated visuals can draw (lucide-react names; unknown names fall back to Sparkles).
 const ICON_NAMES =
@@ -15,6 +17,7 @@ const SCRIPT_SCHEMA = {
   type: 'object',
   properties: {
     title: { type: 'string' },
+    kicker: { type: 'string' },
     description: { type: 'string' },
     tags: { type: 'array', items: { type: 'string' } },
     style: {
@@ -37,25 +40,40 @@ const SCRIPT_SCHEMA = {
           visual: {
             type: 'object',
             properties: {
-              type: { type: 'string', enum: ['icon', 'stat', 'list', 'compare'] },
+              type: { type: 'string', enum: [...BASIC_TYPES, ...LIBRARY_TYPES] },
               icon: { type: 'string' },
               value: { type: 'string' },
               label: { type: 'string' },
               items: { type: 'array', items: { type: 'string' } },
               left: { type: 'object', properties: { title: { type: 'string' }, points: { type: 'array', items: { type: 'string' } } } },
               right: { type: 'object', properties: { title: { type: 'string' }, points: { type: 'array', items: { type: 'string' } } } },
+              // Library graphics (checked by src/graphics.js; described only when switched on).
+              pre: { type: 'string' },
+              unit: { type: 'string' },
+              highlight: { type: 'integer' },
+              bars: { type: 'array', items: { type: 'object', properties: { label: { type: 'string' }, value: { type: 'number' } }, required: ['label', 'value'] } },
+              points: { type: 'array', items: { type: 'object', properties: { label: { type: 'string' }, value: { type: 'number' } }, required: ['label', 'value'] } },
+              slices: { type: 'array', items: { type: 'object', properties: { label: { type: 'string' }, share: { type: 'number' } }, required: ['label', 'share'] } },
+              events: { type: 'array', items: { type: 'object', properties: { when: { type: 'string' }, text: { type: 'string' } }, required: ['when', 'text'] } },
             },
             required: ['type'],
           },
           emoji: { type: 'string' },
           broll: { type: 'boolean' },
           keywords: { type: 'array', items: { type: 'string' } },
+          // Picked only when switched on in the dashboard; checked by src/direction.js.
+          transition: { type: 'string' },
+          camera: { type: 'string' },
+          sfx: {
+            type: 'array',
+            items: { type: 'object', properties: { sound: { type: 'string' }, at: { type: 'string' } }, required: ['sound', 'at'] },
+          },
         },
         required: ['narration', 'headline', 'visual'],
       },
     },
   },
-  required: ['title', 'description', 'tags', 'scenes', 'style'],
+  required: ['title', 'kicker', 'description', 'tags', 'scenes', 'style'],
 };
 
 // Google animated emoji the video can pop in as stickers (names from @remotion/animated-emoji).
@@ -77,6 +95,8 @@ async function writeScript(topic) {
   const sceneCount = isShort ? '6-8' : `${Math.max(8, cfg.targetMinutes * 4)}-${cfg.targetMinutes * 6}`;
 
   const recent = recentThemes();
+  const direction = directionPrompt(cfg, recentDirection());
+  const graphics = graphicsPrompt(cfg, recentGraphics());
   // Our own AI clips in ./footage; a scene only gets one if its keywords share 2+ words with the clip name
   const library = cfg.visuals === 'motion' ? [] : listLocalClips();
   const prompt = `Write a YouTube video script.
@@ -101,13 +121,13 @@ ${isBangla ? `- Narration is read by a text-to-speech voice, so write it for the
   - {"type":"stat","value":"70%","label":"short caption"}: ONLY when that scene's narration itself states a number or percentage. Never invent figures.
   - {"type":"list","items":["...","...","..."]}: 2-4 short points (max 4 words each) the narration lists.
   - {"type":"compare","left":{"title":"...","points":["..."]},"right":{"title":"...","points":["..."]}}: when the scene contrasts two things (max 3 short points each).
-  All visual text must be in ${cfg.language}. The final call-to-action scene uses the icon "Bell".
+${graphics ? `${graphics}\n` : ''}  All visual text must be in ${cfg.language}. The final call-to-action scene uses the icon "Bell".
 - Optionally give an "emoji": an animated sticker that pops in to add emotion. Use it on about 60% of scenes (the hook, surprises, warnings, wins), never the same emoji on two scenes in a row. It must be exactly one of: ${EMOJI_NAMES}. Omit it when nothing fits.
-${cfg.visuals === 'mixed' ? `- B-roll: stock video clips are mixed in with the animated graphics. Set "broll": true on about 40% of scenes: the ones about real-world things a camera can show (people, work, phones, cities, devices). Use "broll": false for scenes that rely on a stat, list or comparison graphic, and for the first and last scene. Never put two B-roll scenes in a row. On B-roll scenes give 2-3 "keywords": concrete, visual, English stock-footage search terms (e.g. "person typing laptop", "city traffic aerial"); avoid abstract words. The "visual" is still required (it is the fallback if no clip is found).
+${cfg.visuals === 'mixed' ? `- B-roll: stock video clips are mixed in with the animated graphics. Set "broll": true on about 40% of scenes: the ones about real-world things a camera can show (people, work, phones, cities, devices). Use "broll": false for scenes that rely on a ${cfg.directGraphics ? 'stat, list, comparison or data graphic (bigNumber, bars, line, donut, timeline)' : 'stat, list or comparison graphic'}, and for the first and last scene. Never put two B-roll scenes in a row. On B-roll scenes give 2-3 "keywords": concrete, visual, English stock-footage search terms (e.g. "person typing laptop", "city traffic aerial"); avoid abstract words. The "visual" is still required (it is the fallback if no clip is found).
 ` : cfg.visuals === 'footage' ? '- For each scene set "broll": true and give 2-3 "keywords": concrete, visual, English stock-footage search terms (e.g. "person typing laptop"). Avoid abstract words.\n' : ''}${library.length ? `- Our own B-roll library (looks better than stock footage, so prefer it whenever it fits). One clip per line:
 ${library.map((c) => `  - ${c}`).join('\n')}
   When a B-roll scene's subject fits one of these clips, make its FIRST keyword 2-4 words copied exactly from that clip's line (e.g. "humanoid robot face"), so that clip is chosen. A scene that fits a library clip may be a B-roll scene even when its subject is abstract (AI, privacy, security, job loss). Use each library clip at most once per video. Scenes that fit none of them still get normal stock-footage keywords.
-` : ''}
+` : ''}${direction ? `${direction}\n` : ''}
 Visual style of this video ("style"):
 - theme: pick the design that best fits this topic's mood. One of:
 ${themeMenu()}
@@ -118,6 +138,7 @@ ${recent.length ? `  Do NOT pick these, they were used in the last videos: ${rec
 
 Metadata rules:
 - title: under 70 characters, includes the search phrase naturally, no clickbait lies.
+- kicker: a 1-3 word tag in ${cfg.language} naming what kind of story this is (e.g. "স্ক্যাম সতর্কতা", "AI খবর", "প্রাইভেসি টিপস"), shown small above the title on the opening card. Not the title, not a sentence, no punctuation.
 - description: 2-3 short paragraphs, then 3 relevant hashtags on the last line.
 - tags: 8-12 tags.`;
 

@@ -2,6 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const cfg = require('../src/config');
 const store = require('./store');
+const { resolveDirection } = require('../src/direction');
+const { validateVisuals } = require('../src/graphics');
 
 /** The real stage functions. Tests pass their own. Required lazily: Remotion etc. load only when used. */
 function realDeps() {
@@ -48,13 +50,15 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
 
   if (!v.done.script) {
     await startStage('script', 'Writing script...');
-    const script = await deps.writeScript(v.topicInfo);
+    // Graphics are checked once here, so the stored script (and any resumed render) holds clean data.
+    const script = validateVisuals(await deps.writeScript(v.topicInfo), cfg);
     const { theme } = deps.resolveStyle(script.style || {});
     v = await markDone('script', {
       script,
       title: script.title,
       description: script.description,
       theme, // full object incl. seed, so a resumed render looks the same
+      direction: resolveDirection(script, cfg), // checked once, so later settings changes never alter a resumed render
       slug: `${new Date().toISOString().slice(0, 10)}-${v.id}`, // id, not title: Bangla titles slugify to the same name
     });
     await say(`Script: "${script.title}" (${script.scenes.length} scenes, theme ${theme.id})`);
@@ -121,7 +125,7 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
     await startStage('render', 'Rendering video...');
     // A half-written mp4 from an interrupted render cannot be continued.
     fs.rmSync(path.join(outDir, `${v.slug}.mp4`), { force: true });
-    const res = await deps.renderAny({ scenes: v.scenes, workDir, slug: v.slug, title: v.title, theme: v.theme });
+    const res = await deps.renderAny({ scenes: v.scenes, workDir, slug: v.slug, title: v.title, theme: v.theme, direction: v.direction });
     const credits = res.credits || [];
     v = await markDone('render', {
       files: { video: res.videoFile, thumb: res.thumbFile || null },

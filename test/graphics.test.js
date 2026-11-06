@@ -1,0 +1,197 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const G = require('../src/graphics');
+
+const ON = { directGraphics: true, language: 'Bangla' };
+
+/* ---------- numbers and text ---------- */
+
+test('parseNumber reads ASCII and Bangla digits, separators and percent', () => {
+  assert.equal(G.parseNumber(70), 70);
+  assert.equal(G.parseNumber('৭০'), 70);
+  assert.equal(G.parseNumber('১,২০০'), 1200);
+  assert.equal(G.parseNumber('1,200'), 1200);
+  assert.equal(G.parseNumber('45%'), 45);
+  assert.equal(G.parseNumber('-3.5'), -3.5);
+  for (const v of ['abc', '', null, undefined, NaN, Infinity, {}]) assert.equal(G.parseNumber(v), null, String(v));
+});
+
+test('formatNumber groups and uses Bangla digits for Bangla videos', () => {
+  assert.equal(G.formatNumber(1200, true), '১,২০০');
+  assert.equal(G.formatNumber(4.25, false), '4.25');
+  assert.equal(G.formatNumber(70, false), '70');
+});
+
+test('clip keeps short text and cuts long text at a word with an ellipsis', () => {
+  assert.equal(G.clip('  ছোট লেবেল ', 18), 'ছোট লেবেল');
+  assert.equal(G.clip('এক দুই তিন চার পাঁচ ছয়', 12), 'এক দুই তিন…');
+  assert.equal(G.clip(42, 10), '');
+});
+
+/* ---------- library types ---------- */
+
+test('bars: Bangla-digit values parse, shown uses Bangla digits, bad highlight dropped', () => {
+  const v = G.validateVisual({ type: 'bars', bars: [{ label: 'ঢাকা', value: '৭০' }, { label: 'চট্টগ্রাম', value: 30 }], unit: '%', highlight: 5 }, ON);
+  assert.deepEqual(v, { type: 'bars', bars: [{ label: 'ঢাকা', value: 70, shown: '৭০' }, { label: 'চট্টগ্রাম', value: 30, shown: '৩০' }], unit: '%', highlight: null });
+});
+
+test('bars: all-zero, negative, too few or unparsable values fall back to an icon', () => {
+  for (const bars of [[{ label: 'a', value: 0 }, { label: 'b', value: 0 }], [{ label: 'a', value: -1 }, { label: 'b', value: 2 }], [{ label: 'a', value: 1 }], [{ label: 'a', value: 'x' }, { label: 'b', value: 2 }]])
+    assert.deepEqual(G.validateVisual({ type: 'bars', bars, icon: 'ChartBar' }, ON), { type: 'icon', icon: 'ChartBar' });
+});
+
+test('donut: shares must add up to about 100', () => {
+  const v = G.validateVisual({ type: 'donut', slices: [{ label: 'হ্যাঁ', share: 60 }, { label: 'না', share: 41 }] }, ON);
+  assert.deepEqual(v, { type: 'donut', slices: [{ label: 'হ্যাঁ', share: 60, shown: '৬০%' }, { label: 'না', share: 41, shown: '৪১%' }] });
+  assert.deepEqual(G.validateVisual({ type: 'donut', slices: [{ label: 'হ্যাঁ', share: 60 }, { label: 'না', share: 20 }] }, ON), { type: 'icon', icon: 'Sparkles' });
+});
+
+test('line keeps 3-8 points; timeline keeps 3-5 complete events', () => {
+  assert.deepEqual(
+    G.validateVisual({ type: 'line', points: [{ label: '২০২২', value: 10 }, { label: '২০২৩', value: '১৫' }, { label: '২০২৪', value: 12.5 }], unit: 'লাখ' }, ON),
+    { type: 'line', points: [{ label: '২০২২', value: 10, shown: '১০' }, { label: '২০২৩', value: 15, shown: '১৫' }, { label: '২০২৪', value: 12.5, shown: '১২.৫' }], unit: 'লাখ' },
+  );
+  assert.deepEqual(G.validateVisual({ type: 'line', points: [{ label: 'a', value: 1 }, { label: 'b', value: 2 }], icon: 'TrendingUp' }, ON), { type: 'icon', icon: 'TrendingUp' });
+
+  const events = [{ when: '২০১৯', text: 'প্রথম সংস্করণ' }, { when: '২০২১', text: 'বড় আপডেট' }, { when: '২০২৪', text: 'সবার জন্য খোলা' }];
+  assert.deepEqual(G.validateVisual({ type: 'timeline', events }, ON), { type: 'timeline', events });
+  assert.deepEqual(G.validateVisual({ type: 'timeline', events: [...events.slice(0, 2), { when: '', text: 'তারিখ নেই' }] }, ON), { type: 'icon', icon: 'Sparkles' });
+});
+
+test('bigNumber needs a digit in value and clips its label', () => {
+  assert.deepEqual(
+    G.validateVisual({ type: 'bigNumber', value: '১৬ জন', label: 'প্রতি মিনিটে প্রতারিত', pre: 'এখন:' }, ON),
+    { type: 'bigNumber', value: '১৬ জন', label: 'প্রতি মিনিটে প্রতারিত', pre: 'এখন:' },
+  );
+  assert.deepEqual(G.validateVisual({ type: 'bigNumber', value: 'অনেক', label: 'মানুষ', icon: 'Users' }, ON), { type: 'icon', icon: 'Users' });
+
+  const long = 'এই লেবেলটি অনেক লম্বা কারণ এটি চল্লিশ অক্ষরের সীমা ছাড়িয়ে যায়';
+  const v = G.validateVisual({ type: 'bigNumber', value: '70%', label: long }, ON);
+  assert.equal(v.label, 'এই লেবেলটি অনেক লম্বা কারণ এটি চল্লিশ…');
+  assert.ok(v.label.length <= 40);
+  assert.equal(v.pre, null);
+});
+
+/* ---------- basics, switch, whole script ---------- */
+
+test('basic types pass through untouched', () => {
+  const list = { type: 'list', items: ['এক', 'দুই'] };
+  assert.equal(G.validateVisual(list, ON), list);
+});
+
+test('with the graphics switch off, library types become icons and basic types stay', () => {
+  const OFF = { ...ON, directGraphics: false };
+  assert.deepEqual(G.validateVisual({ type: 'bars', bars: [{ label: 'a', value: 1 }, { label: 'b', value: 2 }], icon: 'Zap' }, OFF), { type: 'icon', icon: 'Zap' });
+  assert.equal(G.validateVisual({ type: 'stat', value: '70%' }, OFF).type, 'stat');
+});
+
+test('validateVisuals returns a cleaned copy and leaves the script alone', () => {
+  const raw = { type: 'donut', slices: [{ label: 'x', share: 10 }, { label: 'y', share: 10 }] };
+  const script = { title: 'T', scenes: [{ narration: 'n', visual: raw }, { narration: 'm', visual: { type: 'icon', icon: 'Bell' } }] };
+  const out = G.validateVisuals(script, ON);
+  assert.deepEqual(out, {
+    title: 'T',
+    scenes: [{ narration: 'n', visual: { type: 'icon', icon: 'Sparkles' } }, { narration: 'm', visual: { type: 'icon', icon: 'Bell' } }],
+  });
+  assert.equal(script.scenes[0].visual, raw);
+});
+
+/* ---------- memory and prompt ---------- */
+
+test('summarizeGraphics counts graphic types except icons', () => {
+  const scenes = [{ visual: { type: 'bars' } }, { visual: { type: 'icon', icon: 'Bell' } }, { visual: { type: 'bars' } }, { visual: { type: 'stat' } }, {}];
+  assert.deepEqual(G.summarizeGraphics(scenes), { bars: 2, stat: 1 });
+  assert.equal(G.summarizeGraphics(undefined), null);
+});
+
+test('recentGraphics returns the two most-used graphics of the last 3 videos', () => {
+  const history = require('../src/history');
+  history.setHistoryBackend({
+    load: () => [
+      { topic: 't', graphics: { timeline: 9 } }, // 4th from the end: too old to count
+      { topic: 't', graphics: { bars: 2, donut: 1 } },
+      { topic: 'made before graphics existed' },
+      { topic: 't', graphics: { donut: 1, line: 1 } },
+      { topic: 't', graphics: { stat: 2 } },
+    ],
+  });
+  try {
+    assert.deepEqual(G.recentGraphics(), ['bars', 'donut']);
+  } finally {
+    history.setHistoryBackend(null);
+  }
+});
+
+test('graphicsPrompt describes every library type with the real-numbers and no-repeat rules', () => {
+  const p = G.graphicsPrompt(ON, []);
+  for (const t of G.LIBRARY_TYPES) assert.match(p, new RegExp(`"type":"${t}"`), t);
+  assert.match(p, /only when the narration/);
+  assert.match(p, /two scenes in a row/);
+  assert.doesNotMatch(p, /use them less/);
+  assert.match(G.graphicsPrompt(ON, ['bars']), /relied most on bars/);
+  assert.equal(G.graphicsPrompt({ ...ON, directGraphics: false }, ['bars']), '');
+});
+
+/* ---------- composition contract ---------- */
+
+const fs = require('fs');
+const path = require('path');
+const readRemotion = (f) => fs.readFileSync(path.join(__dirname, '..', 'src', 'remotion', f), 'utf8');
+// Library types whose component isn't built yet. Shrinks to [] as the components land.
+const NOT_YET = [];
+
+test('every library type the validator accepts has a component, and LIBRARY_RENDERED lists exactly those', () => {
+  const src = readRemotion('library/index.jsx');
+  const cases = [...src.matchAll(/case '(\w+)':/g)].map((m) => m[1]).sort();
+  assert.deepEqual(cases, G.LIBRARY_TYPES.filter((t) => !NOT_YET.includes(t)).sort());
+  const rendered = [...src.match(/LIBRARY_RENDERED = \[([^\]]*)\]/)[1].matchAll(/'(\w+)'/g)].map((m) => m[1]).sort();
+  assert.deepEqual(rendered, cases);
+});
+
+test('SceneVisual hands library graphics to LibraryVisual', () => {
+  assert.match(readRemotion('Visuals.jsx'), /import \{[^}]*\bLibraryVisual\b[^}]*\} from '\.\/library'/);
+});
+
+test('sound cues on bars and timeline events follow the library timing', () => {
+  const main = readRemotion('Main.jsx');
+  assert.match(main, /from '\.\/library\/timing'/);
+  assert.match(main, /COUNT_FRAMES/);
+  assert.match(main, /ITEM_STAGGER/);
+});
+
+/* ---------- final review fixes ---------- */
+
+test('common Bangla units, month-and-year labels and money values fit their limits', () => {
+  const bars = G.validateVisual({ type: 'bars', bars: [{ label: 'a', value: 1 }, { label: 'b', value: 2 }], unit: 'লাখ কোটি টাকা' }, ON);
+  assert.equal(bars.unit, 'লাখ কোটি টাকা');
+  const line = G.validateVisual({ type: 'line', points: [{ label: 'জানুয়ারি ২০২৪', value: 1 }, { label: 'মে ২০২৪', value: 2 }, { label: 'সেপ্টেম্বর ২০২৪', value: 3 }] }, ON);
+  assert.deepEqual(line.points.map((p) => p.label), ['জানুয়ারি ২০২৪', 'মে ২০২৪', 'সেপ্টেম্বর ২০২৪']);
+  assert.equal(G.validateVisual({ type: 'bigNumber', value: '৳১২,৫০০ কোটি', label: 'ক্ষতি' }, ON).value, '৳১২,৫০০ কোটি');
+});
+
+test('clip never cuts inside a Bangla letter cluster or leaves a dangling hasanta', () => {
+  const seg = new Intl.Segmenter('bn', { granularity: 'grapheme' });
+  for (const text of ['ক্ষক্ষক্ষক্ষ', 'প্রতিদ্বন্দ্বিতামূলক', 'স্বাস্থ্যসেবাক্ষেত্রে']) {
+    for (let max = 3; max < text.length; max++) {
+      const out = G.clip(text, max);
+      const head = out.replace(/…$/, '');
+      assert.ok(out.length <= max, `${text} @${max}: ${out}`);
+      assert.ok(!head.endsWith('্'), `${text} @${max}: ends with hasanta`);
+      const graphemes = [...seg.segment(text)].map((s) => s.segment);
+      assert.ok(graphemes.some((_, k) => graphemes.slice(0, k + 1).join('') === head) || head === '', `${text} @${max}: ${head} splits a cluster`);
+    }
+  }
+});
+
+test('the prompt describes limits in words Claude can follow', () => {
+  const p = G.graphicsPrompt(ON, []);
+  assert.match(p, /unit: 1-2 short words/);
+  assert.match(p, /a year or a short month and year/);
+});
+
+test('numbers keep up to two decimals, so the chart says what the narration says', () => {
+  assert.equal(G.formatNumber(9.92, false), '9.92');
+  assert.equal(G.formatNumber(0.04, true), '০.০৪');
+  const d = G.validateVisual({ type: 'donut', slices: [{ label: 'হ্যাঁ', share: 99.6 }, { label: 'না', share: 0.4 }] }, ON);
+  assert.deepEqual(d.slices.map((x) => x.shown), ['৯৯.৬%', '০.৪%']);
+});

@@ -1,6 +1,6 @@
 import React from 'react';
 import { AbsoluteFill, random, useCurrentFrame, useVideoConfig } from 'remotion';
-import { accentFor, bodyFont, energy, theme } from './shared';
+import { GRAIN, accentFor, bodyFont, boil, energy, halftone, theme, tornClip } from './shared';
 
 const baseGradient = () => {
   const T = theme();
@@ -247,6 +247,94 @@ const Matrix = ({ accent }) => {
   );
 };
 
+/* ---------- Vox family: paper on a table ---------- */
+
+/** Kraft table with torn paper scraps that sit still and "boil" a pixel or two, like stop-motion. */
+const Kraft = ({ seed, accent }) => {
+  const frame = useCurrentFrame();
+  const { width, height } = useVideoConfig();
+  const base = Math.min(width, height);
+  const tints = ['#f4ead2', '#d5c19a', '#efe3c8', '#cdb98f'];
+  return (
+    <>
+      <AbsoluteFill style={{ backgroundImage: GRAIN, opacity: 0.9 }} />
+      {[0, 1, 2, 3, 4].map((i) => {
+        const w = base * (0.34 + random(`kw-${seed}-${i}`) * 0.3);
+        const h = w * (0.55 + random(`kh-${seed}-${i}`) * 0.45);
+        const x = random(`kx-${seed}-${i}`) * (width - w * 0.4) - w * 0.3 + boil(`kbx-${i}`, frame, 2);
+        const y = random(`ky-${seed}-${i}`) * (height - h * 0.4) - h * 0.3 + boil(`kby-${i}`, frame, 2);
+        const rot = (random(`kr-${seed}-${i}`) - 0.5) * 24 + boil(`kbr-${i}`, frame, 0.5);
+        return (
+          <div key={i} style={{ position: 'absolute', left: x, top: y, width: w, height: h, transform: `rotate(${rot}deg)`, filter: 'drop-shadow(3px 6px 8px rgba(60,40,10,0.28))' }}>
+            <div style={{ width: '100%', height: '100%', clipPath: tornClip(`${seed}-${i}`), backgroundColor: tints[i % tints.length], backgroundImage: GRAIN, opacity: 0.85 }} />
+          </div>
+        );
+      })}
+      {/* a red offcut, the accent colour of the video */}
+      <div style={{ position: 'absolute', right: -base * 0.06, top: height * 0.62, width: base * 0.3, height: base * 0.14, transform: `rotate(${-8 + boil('kred', frame, 0.6)}deg)`, background: accent, opacity: 0.8, clipPath: tornClip(`red-${seed}`, 3), filter: 'drop-shadow(3px 5px 6px rgba(60,40,10,0.3))' }} />
+    </>
+  );
+};
+
+/** Newsprint: faint columns of set type and a halftone shadow in one corner. */
+const Newsprint = ({ seed }) => {
+  const frame = useCurrentFrame();
+  const { width, height } = useVideoConfig();
+  const cols = width > height ? 5 : 3;
+  const colW = (width - 120) / cols;
+  const lines = Math.ceil((height - 160) / 26);
+  const corner = seed % 2 === 0;
+  return (
+    <>
+      <AbsoluteFill style={{ backgroundImage: GRAIN, opacity: 0.8 }} />
+      <svg width={width} height={height} style={{ position: 'absolute', inset: 0, opacity: 0.08 }}>
+        {Array.from({ length: cols }).map((_, c) =>
+          Array.from({ length: lines }).map((__, l) => {
+            const w = colW - 28 - (random(`nl-${seed}-${c}-${l}`) > 0.82 ? colW * 0.45 : 0);
+            return <rect key={`${c}-${l}`} x={60 + c * colW} y={80 + l * 26} width={w} height={9} fill="#111" />;
+          })
+        )}
+      </svg>
+      <div
+        style={{
+          position: 'absolute',
+          left: corner ? -width * 0.1 : undefined,
+          right: corner ? undefined : -width * 0.1,
+          bottom: -height * 0.05,
+          width: width * 0.7,
+          height: height * 0.45,
+          backgroundImage: halftone('rgba(17,17,17,0.8)', 2.2),
+          backgroundSize: '13px 13px',
+          backgroundPosition: `${boil('nh', frame, 1.5)}px 0`,
+          WebkitMaskImage: `radial-gradient(ellipse at ${corner ? '0% 100%' : '100% 100%'}, black 0%, transparent 70%)`,
+          maskImage: `radial-gradient(ellipse at ${corner ? '0% 100%' : '100% 100%'}, black 0%, transparent 70%)`,
+          opacity: 0.35,
+        }}
+      />
+    </>
+  );
+};
+
+/** Squared notebook paper with a red margin line. */
+const Graph = ({ accent }) => {
+  const frame = useCurrentFrame();
+  const { width, height } = useVideoConfig();
+  const cell = 54;
+  return (
+    <>
+      <AbsoluteFill
+        style={{
+          backgroundImage: `linear-gradient(rgba(37,99,235,0.16) 2px, transparent 2px), linear-gradient(90deg, rgba(37,99,235,0.16) 2px, transparent 2px)`,
+          backgroundSize: `${cell}px ${cell}px`,
+          backgroundPosition: `${boil('gx', frame, 1)}px ${boil('gy', frame, 1)}px`,
+        }}
+      />
+      <div style={{ position: 'absolute', top: 0, bottom: 0, left: width > height ? 110 : 64, width: 4, background: `${accent}aa` }} />
+      <AbsoluteFill style={{ backgroundImage: GRAIN, opacity: 0.5 }} />
+    </>
+  );
+};
+
 /** Background for a scene/intro/outro, in the active theme's style. `variant` picks among the theme's styles. */
 export const MotionBg = ({ index, accent, variant }) => {
   const T = theme();
@@ -264,6 +352,9 @@ export const MotionBg = ({ index, accent, variant }) => {
       {style === 'sunbeams' && <Sunbeams seed={index} accent={accent} />}
       {style === 'glass' && <GlassBlobs seed={index} />}
       {style === 'matrix' && <Matrix accent={accent} />}
+      {style === 'kraft' && <Kraft seed={index} accent={accent} />}
+      {style === 'newsprint' && <Newsprint seed={index} />}
+      {style === 'graph' && <Graph accent={accent} />}
       {['grid', 'rings', 'waves', 'stripes'].includes(style) && T.dark ? <Orbs seed={index + 3} accent={accent} strength={0.7} /> : null}
     </AbsoluteFill>
   );
@@ -327,6 +418,13 @@ export const Overlays = ({ kicker, title, isShort }) => {
           }}
         />
       )}
+      {list.includes('paperGrain') && (
+        <>
+          {/* Fibre grain over everything, shifted on twos like film flicker, plus slightly dark corners. */}
+          <AbsoluteFill style={{ pointerEvents: 'none', backgroundImage: GRAIN, opacity: 0.55, backgroundPosition: `${random(`pg-${Math.floor(frame / 2)}`) * 320}px ${random(`ph-${Math.floor(frame / 2)}`) * 320}px`, mixBlendMode: 'multiply' }} />
+          <AbsoluteFill style={{ pointerEvents: 'none', background: 'radial-gradient(ellipse at center, transparent 62%, rgba(60,40,10,0.22) 100%)' }} />
+        </>
+      )}
       {list.includes('scanlines') && (
         <AbsoluteFill
           style={{
@@ -338,6 +436,7 @@ export const Overlays = ({ kicker, title, isShort }) => {
       )}
       {list.includes('ticker') && (
         <div style={{ position: 'absolute', top: 12, left: 0, right: 0, height: isShort ? 66 : 54, display: 'flex', background: '#ffffff', overflow: 'hidden' }}>
+          {kicker ? (
           <div
             style={{
               background: T.accents[0],
@@ -349,10 +448,12 @@ export const Overlays = ({ kicker, title, isShort }) => {
               display: 'flex',
               alignItems: 'center',
               zIndex: 2,
+              whiteSpace: 'nowrap',
             }}
           >
             {kicker}
           </div>
+          ) : null}
           <div style={{ position: 'relative', flex: 1, overflow: 'hidden' }}>
             <div
               style={{
