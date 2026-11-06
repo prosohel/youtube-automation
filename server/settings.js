@@ -25,6 +25,7 @@ const SETTINGS_SCHEMA = [
   { key: 'TTS_RATE', scope: 'brand', cfg: 'ttsRate', group: 'voice', type: 'string', default: '-4%', label: 'Edge voice speed' },
   { key: 'GOOGLE_TTS_API_KEY', cfg: 'googleTtsKey', group: 'voice', type: 'string', secret: true, default: '', label: 'Google TTS API key' },
   { key: 'GOOGLE_TTS_VOICE', scope: 'brand', cfg: 'googleTtsVoice', group: 'voice', type: 'string', default: 'bn-IN-Chirp3-HD-Kore', label: 'Google voice' },
+  { key: 'PRONUNCIATION_FIXES', cfg: 'pronunciationFixes', group: 'voice', type: 'json', default: [], label: 'Pronunciation fixes (word = how the voice should say it)' },
   // Visuals
   { key: 'PIXABAY_API_KEY', cfg: 'pixabayKey', group: 'visuals', type: 'string', secret: true, default: '', label: 'Pixabay API key' },
   { key: 'PEXELS_API_KEY', cfg: 'pexelsKey', group: 'visuals', type: 'string', secret: true, default: '', label: 'Pexels API key' },

@@ -50,6 +50,8 @@ const cfg = (module.exports = {
   elevenModel: process.env.ELEVENLABS_MODEL || 'eleven_v3',
   // Delivery tags sent before each scene (v3/v4 audio tags, not spoken). Set ELEVENLABS_STYLE_TAGS= (empty) to turn off.
   elevenStyleTags: process.env.ELEVENLABS_STYLE_TAGS ?? '[confident] [authoritative]',
+  // "written = spoken" lines from the dashboard (Voice card): how the voice should read a word.
+  pronunciationFixes: [],
   captionFont: process.env.CAPTION_FONT || 'DejaVu Sans',
   targetMinutes: Number(process.env.TARGET_MINUTES || 3),
 

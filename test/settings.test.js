@@ -194,3 +194,13 @@ test('F1: the import flag never appears before the imported values (the worker w
   assert.equal(await S.ensureImported(r, { CLAUDE_MODEL: 'again' }, dir), false);
   assert.equal(JSON.parse(await r.hget('settings', 'CLAUDE_MODEL')), 'from env');
 });
+
+test('pronunciation fixes are one shared list in the Voice card', () => {
+  const spec = S.SETTINGS_SCHEMA.find((s) => s.key === 'PRONUNCIATION_FIXES');
+  assert.ok(spec);
+  assert.equal(spec.group, 'voice');
+  assert.equal(spec.type, 'json');
+  assert.deepEqual(spec.default, []);
+  assert.equal(spec.cfg, 'pronunciationFixes');
+  assert.ok(!S.isBrandKey('PRONUNCIATION_FIXES'), 'shared by every brand');
+});
