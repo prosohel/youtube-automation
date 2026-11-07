@@ -3,53 +3,93 @@
     "label": "Neon Cyber",
     "mood": "futuristic AI, gadgets, hacking, new tech launches",
     "dark": true,
-    "bg": ["#04050d", "#0a0f2e"],
+    "bg": [
+      "#04050d",
+      "#0a0f2e"
+    ],
     "surface": "rgba(6,8,26,0.84)",
     "text": "#ffffff",
     "muted": "rgba(255,255,255,0.55)",
     "onAccent": "#04050d",
-    "accents": ["#00f0ff", "#ff2bd6", "#8b5cff", "#00ff9d", "#ffe600"],
+    "accents": [
+      "#00f0ff",
+      "#ff2bd6",
+      "#8b5cff",
+      "#00ff9d",
+      "#ffe600"
+    ],
     "track": "rgba(255,255,255,0.14)",
     "captionBg": "rgba(4,6,20,0.66)",
     "captionText": "#ffffff",
     "shadow": "0 10px 40px rgba(0,0,0,0.5)",
-    "headingFont": "AnekBangla", "headingWeight": "700",
-    "bodyFont": "HindSiliguri", "bodyWeight": "600",
-    "bgStyles": ["grid", "rings", "orbs"],
+    "headingFont": "AnekBangla",
+    "headingWeight": "700",
+    "bodyFont": "HindSiliguri",
+    "bodyWeight": "600",
+    "bgStyles": [
+      "grid",
+      "rings",
+      "orbs"
+    ],
     "card": "left",
     "radius": 18,
     "caption": "box",
     "headline": "swipe",
-    "transitions": ["pushCut", "iris", "wipe", "slideRight"],
+    "transitions": [
+      "pushCut",
+      "iris",
+      "wipe",
+      "slideRight"
+    ],
     "motion": "snappy",
     "particles": true,
     "leaks": true,
     "leakHue": 190,
     "glitch": true,
-    "overlays": ["scanlines"]
+    "overlays": [
+      "scanlines"
+    ]
   },
   "minimal": {
     "label": "Clean Minimal",
     "mood": "calm explainers, how-to, productivity, education, comparisons",
     "dark": false,
-    "bg": ["#f6f5f1", "#e9e8e2"],
+    "bg": [
+      "#f6f5f1",
+      "#e9e8e2"
+    ],
     "surface": "rgba(255,255,255,0.97)",
     "text": "#111318",
     "muted": "rgba(17,19,24,0.5)",
     "onAccent": "#ffffff",
-    "accents": ["#2f6bff", "#ff5a36", "#0f9d74", "#7c4dff", "#d99000"],
+    "accents": [
+      "#2f6bff",
+      "#ff5a36",
+      "#0f9d74",
+      "#7c4dff",
+      "#d99000"
+    ],
     "track": "rgba(0,0,0,0.09)",
     "captionBg": "rgba(255,255,255,0.94)",
     "captionText": "#111318",
     "shadow": "0 18px 44px rgba(20,22,40,0.14)",
-    "headingFont": "NotoSansBengali", "headingWeight": "800",
-    "bodyFont": "NotoSansBengali", "bodyWeight": "600",
-    "bgStyles": ["paper", "dots"],
+    "headingFont": "NotoSansBengali",
+    "headingWeight": "800",
+    "bodyFont": "NotoSansBengali",
+    "bodyWeight": "600",
+    "bgStyles": [
+      "paper",
+      "dots"
+    ],
     "card": "shadow",
     "radius": 24,
     "caption": "underline",
     "headline": "slide",
-    "transitions": ["fade", "slideRight", "slideBottom"],
+    "transitions": [
+      "fade",
+      "slideRight",
+      "slideBottom"
+    ],
     "motion": "smooth",
     "particles": false,
     "leaks": false,
@@ -61,53 +101,92 @@
     "label": "Breaking News",
     "mood": "news, announcements, scams and warnings, controversies, big company moves",
     "dark": true,
-    "bg": ["#0c0c0f", "#1b1b21"],
+    "bg": [
+      "#0c0c0f",
+      "#1b1b21"
+    ],
     "surface": "rgba(12,12,16,0.94)",
     "text": "#ffffff",
     "muted": "rgba(255,255,255,0.6)",
     "onAccent": "#ffffff",
-    "accents": ["#e5121b", "#ff6a00", "#1f6feb", "#e5121b"],
+    "accents": [
+      "#e5121b",
+      "#ff6a00",
+      "#1f6feb",
+      "#e5121b"
+    ],
     "track": "rgba(255,255,255,0.15)",
     "captionBg": "rgba(0,0,0,0)",
     "captionText": "#ffffff",
     "shadow": "0 8px 30px rgba(0,0,0,0.55)",
-    "headingFont": "NotoSansBengali", "headingWeight": "900",
-    "bodyFont": "NotoSansBengali", "bodyWeight": "800",
-    "bgStyles": ["stripes", "grid"],
+    "headingFont": "NotoSansBengali",
+    "headingWeight": "900",
+    "bodyFont": "NotoSansBengali",
+    "bodyWeight": "800",
+    "bgStyles": [
+      "stripes",
+      "grid"
+    ],
     "card": "solid",
     "radius": 4,
     "caption": "outline",
     "headline": "ticker",
-    "transitions": ["slideRight", "wipe", "pushCut"],
+    "transitions": [
+      "slideRight",
+      "wipe",
+      "pushCut"
+    ],
     "motion": "snappy",
     "particles": false,
     "leaks": false,
     "leakHue": 0,
     "glitch": false,
-    "overlays": ["ticker", "vignette"]
+    "overlays": [
+      "ticker",
+      "vignette"
+    ]
   },
   "sunset": {
     "label": "Sunset Gradient",
     "mood": "inspiring, lifestyle, money and earning, motivation, creativity",
     "dark": true,
-    "bg": ["#1b0b2e", "#4a1340"],
+    "bg": [
+      "#1b0b2e",
+      "#4a1340"
+    ],
     "surface": "rgba(255,255,255,0.13)",
     "text": "#ffffff",
     "muted": "rgba(255,255,255,0.6)",
     "onAccent": "#2a0b2e",
-    "accents": ["#ff8a3d", "#ff4f8b", "#ffd166", "#c084fc", "#ff6b6b"],
+    "accents": [
+      "#ff8a3d",
+      "#ff4f8b",
+      "#ffd166",
+      "#c084fc",
+      "#ff6b6b"
+    ],
     "track": "rgba(255,255,255,0.18)",
     "captionBg": "rgba(40,8,40,0.55)",
     "captionText": "#ffffff",
     "shadow": "0 14px 44px rgba(20,0,30,0.45)",
-    "headingFont": "BalooDa2", "headingWeight": "800",
-    "bodyFont": "BalooDa2", "bodyWeight": "600",
-    "bgStyles": ["sunbeams", "waves", "orbs"],
+    "headingFont": "BalooDa2",
+    "headingWeight": "800",
+    "bodyFont": "BalooDa2",
+    "bodyWeight": "600",
+    "bgStyles": [
+      "sunbeams",
+      "waves",
+      "orbs"
+    ],
     "card": "glass",
     "radius": 30,
     "caption": "pill",
     "headline": "swipe",
-    "transitions": ["iris", "clockWipe", "slideBottom"],
+    "transitions": [
+      "iris",
+      "clockWipe",
+      "slideBottom"
+    ],
     "motion": "bouncy",
     "particles": true,
     "leaks": true,
@@ -119,53 +198,90 @@
     "label": "Dark Gold",
     "mood": "premium, finance, business, serious analysis, history of a company",
     "dark": true,
-    "bg": ["#07070a", "#16130f"],
+    "bg": [
+      "#07070a",
+      "#16130f"
+    ],
     "surface": "rgba(14,12,9,0.88)",
     "text": "#f7f1e3",
     "muted": "rgba(247,241,227,0.55)",
     "onAccent": "#14110a",
-    "accents": ["#d4af37", "#f2d27a", "#e6c27a", "#c9a227"],
+    "accents": [
+      "#d4af37",
+      "#f2d27a",
+      "#e6c27a",
+      "#c9a227"
+    ],
     "track": "rgba(212,175,55,0.18)",
     "captionBg": "rgba(8,7,5,0.7)",
     "captionText": "#f7f1e3",
     "shadow": "0 14px 44px rgba(0,0,0,0.6)",
-    "headingFont": "NotoSerifBengali", "headingWeight": "700",
-    "bodyFont": "NotoSerifBengali", "bodyWeight": "600",
-    "bgStyles": ["sunbeams", "orbs"],
+    "headingFont": "NotoSerifBengali",
+    "headingWeight": "700",
+    "bodyFont": "NotoSerifBengali",
+    "bodyWeight": "600",
+    "bgStyles": [
+      "sunbeams",
+      "orbs"
+    ],
     "card": "outline",
     "radius": 6,
     "caption": "underline",
     "headline": "rise",
-    "transitions": ["fade", "iris"],
+    "transitions": [
+      "fade",
+      "iris"
+    ],
     "motion": "smooth",
     "particles": true,
     "leaks": true,
     "leakHue": 35,
     "glitch": false,
-    "overlays": ["vignette", "grain"]
+    "overlays": [
+      "vignette",
+      "grain"
+    ]
   },
   "pop": {
     "label": "Playful Pop",
     "mood": "fun facts, tips and tricks, apps, light and funny topics, students",
     "dark": false,
-    "bg": ["#ffd60a", "#ffc300"],
+    "bg": [
+      "#ffd60a",
+      "#ffc300"
+    ],
     "surface": "#ffffff",
     "text": "#111111",
     "muted": "rgba(17,17,17,0.55)",
     "onAccent": "#ffffff",
-    "accents": ["#1d4ed8", "#e11d74", "#008f63", "#7c3aed", "#e35d00"],
+    "accents": [
+      "#1d4ed8",
+      "#e11d74",
+      "#008f63",
+      "#7c3aed",
+      "#e35d00"
+    ],
     "track": "rgba(0,0,0,0.12)",
     "captionBg": "#111111",
     "captionText": "#ffffff",
     "shadow": "10px 10px 0 #111111",
-    "headingFont": "Galada", "headingWeight": "400",
-    "bodyFont": "BalooDa2", "bodyWeight": "700",
-    "bgStyles": ["dots", "stripes"],
+    "headingFont": "Galada",
+    "headingWeight": "400",
+    "bodyFont": "BalooDa2",
+    "bodyWeight": "700",
+    "bgStyles": [
+      "dots",
+      "stripes"
+    ],
     "card": "brutal",
     "radius": 20,
     "caption": "box",
     "headline": "stamp",
-    "transitions": ["pushCut", "slideBottom", "clockWipe"],
+    "transitions": [
+      "pushCut",
+      "slideBottom",
+      "clockWipe"
+    ],
     "motion": "bouncy",
     "particles": false,
     "leaks": false,
@@ -177,24 +293,41 @@
     "label": "Glass Tech",
     "mood": "modern AI tools, software, future trends, smooth product explainers",
     "dark": true,
-    "bg": ["#0b1026", "#1b1446"],
+    "bg": [
+      "#0b1026",
+      "#1b1446"
+    ],
     "surface": "rgba(255,255,255,0.10)",
     "text": "#ffffff",
     "muted": "rgba(255,255,255,0.6)",
     "onAccent": "#0b1026",
-    "accents": ["#7dd3fc", "#c4b5fd", "#f9a8d4", "#86efac", "#fde68a"],
+    "accents": [
+      "#7dd3fc",
+      "#c4b5fd",
+      "#f9a8d4",
+      "#86efac",
+      "#fde68a"
+    ],
     "track": "rgba(255,255,255,0.16)",
     "captionBg": "rgba(255,255,255,0.12)",
     "captionText": "#ffffff",
     "shadow": "0 16px 50px rgba(5,5,30,0.45)",
-    "headingFont": "Mina", "headingWeight": "700",
-    "bodyFont": "HindSiliguri", "bodyWeight": "600",
-    "bgStyles": ["glass"],
+    "headingFont": "Mina",
+    "headingWeight": "700",
+    "bodyFont": "HindSiliguri",
+    "bodyWeight": "600",
+    "bgStyles": [
+      "glass"
+    ],
     "card": "glass",
     "radius": 28,
     "caption": "pill",
     "headline": "rise",
-    "transitions": ["fade", "slideRight", "iris"],
+    "transitions": [
+      "fade",
+      "slideRight",
+      "iris"
+    ],
     "motion": "smooth",
     "particles": false,
     "leaks": true,
@@ -206,123 +339,192 @@
     "label": "Hacker Terminal",
     "mood": "cyber security, privacy, scams, hidden settings, phone tricks, coding",
     "dark": true,
-    "bg": ["#000000", "#01120a"],
+    "bg": [
+      "#000000",
+      "#01120a"
+    ],
     "surface": "rgba(0,14,6,0.9)",
     "text": "#d8ffe0",
     "muted": "rgba(216,255,224,0.5)",
     "onAccent": "#001a08",
-    "accents": ["#00ff66", "#39ff14", "#00e5a0", "#b6ff00"],
+    "accents": [
+      "#00ff66",
+      "#39ff14",
+      "#00e5a0",
+      "#b6ff00"
+    ],
     "track": "rgba(0,255,102,0.16)",
     "captionBg": "rgba(0,10,4,0.82)",
     "captionText": "#d8ffe0",
     "shadow": "0 0 30px rgba(0,255,102,0.18)",
-    "headingFont": "AnekBangla", "headingWeight": "600",
-    "bodyFont": "AnekBangla", "bodyWeight": "500",
-    "bgStyles": ["matrix"],
+    "headingFont": "AnekBangla",
+    "headingWeight": "600",
+    "bodyFont": "AnekBangla",
+    "bodyWeight": "500",
+    "bgStyles": [
+      "matrix"
+    ],
     "card": "terminal",
     "radius": 4,
     "caption": "terminal",
     "headline": "typewriter",
-    "transitions": ["wipe", "slideRight"],
+    "transitions": [
+      "wipe",
+      "slideRight"
+    ],
     "motion": "snappy",
     "particles": false,
     "leaks": false,
     "leakHue": 120,
     "glitch": true,
-    "overlays": ["scanlines"]
+    "overlays": [
+      "scanlines"
+    ]
   },
   "vox-paper": {
     "label": "Vox: Paper Collage",
     "mood": "explainers, how things work, history, economics, society; calm documentary storytelling",
     "family": "vox",
     "dark": false,
-    "bg": ["#e6d9bf", "#d8c7a4"],
+    "bg": [
+      "#e6d9bf",
+      "#d8c7a4"
+    ],
     "surface": "#f7f0df",
     "text": "#1d1a16",
     "muted": "rgba(29,26,22,0.55)",
     "onAccent": "#fffaf0",
-    "accents": ["#c8372d", "#2f6f8f", "#b8860b", "#4f7d4a"],
+    "accents": [
+      "#c8372d",
+      "#2f6f8f",
+      "#b8860b",
+      "#4f7d4a"
+    ],
     "track": "rgba(29,26,22,0.14)",
     "captionBg": "rgba(247,240,223,0.96)",
     "captionText": "#1d1a16",
     "highlight": "#ffd84a",
     "shadow": "4px 7px 0 rgba(60,40,10,0.16), 10px 18px 30px rgba(60,40,10,0.24)",
-    "headingFont": "NotoSerifBengali", "headingWeight": "800",
-    "bodyFont": "NotoSansBengali", "bodyWeight": "700",
-    "bgStyles": ["kraft"],
+    "headingFont": "NotoSerifBengali",
+    "headingWeight": "800",
+    "bodyFont": "NotoSansBengali",
+    "bodyWeight": "700",
+    "bgStyles": [
+      "kraft"
+    ],
     "card": "paper",
     "radius": 3,
     "caption": "strip",
     "headline": "strip",
-    "transitions": ["slideRight", "slideBottom", "fade"],
+    "transitions": [
+      "slideRight",
+      "slideBottom",
+      "fade"
+    ],
     "motion": "stepped",
     "particles": false,
     "leaks": false,
     "leakHue": 0,
     "glitch": false,
-    "overlays": ["paperGrain"]
+    "overlays": [
+      "paperGrain"
+    ]
   },
   "vox-newsprint": {
     "label": "Vox: Newsprint",
     "mood": "journalism, politics, media, investigations, money and power, serious current affairs",
     "family": "vox",
     "dark": false,
-    "bg": ["#ecebe4", "#d9d6cb"],
+    "bg": [
+      "#ecebe4",
+      "#d9d6cb"
+    ],
     "surface": "#fbfaf5",
     "text": "#111111",
     "muted": "rgba(17,17,17,0.55)",
     "onAccent": "#ffffff",
-    "accents": ["#d8261d", "#1b1b1b", "#a3201a"],
+    "accents": [
+      "#d8261d",
+      "#1b1b1b",
+      "#a3201a"
+    ],
     "track": "rgba(17,17,17,0.14)",
     "captionBg": "rgba(251,250,245,0.96)",
     "captionText": "#111111",
     "highlight": "#ffe14d",
     "shadow": "7px 8px 0 rgba(17,17,17,0.85)",
-    "headingFont": "NotoSerifBengali", "headingWeight": "900",
-    "bodyFont": "NotoSerifBengali", "bodyWeight": "700",
-    "bgStyles": ["newsprint"],
+    "headingFont": "NotoSerifBengali",
+    "headingWeight": "900",
+    "bodyFont": "NotoSerifBengali",
+    "bodyWeight": "700",
+    "bgStyles": [
+      "newsprint"
+    ],
     "card": "newsprint",
     "radius": 2,
     "caption": "marker",
     "headline": "stamp",
-    "transitions": ["slideRight", "fade"],
+    "transitions": [
+      "slideRight",
+      "fade"
+    ],
     "motion": "stepped",
     "particles": false,
     "leaks": false,
     "leakHue": 0,
     "glitch": false,
-    "overlays": ["paperGrain"]
+    "overlays": [
+      "paperGrain"
+    ]
   },
   "vox-marker": {
     "label": "Vox: Marker Notes",
     "mood": "learning, science, tech and ideas explained step by step; friendly whiteboard-style teaching",
     "family": "vox",
     "dark": false,
-    "bg": ["#fbf9ef", "#f1eee0"],
+    "bg": [
+      "#fbf9ef",
+      "#f1eee0"
+    ],
     "surface": "#fffdf4",
     "text": "#1c1c1c",
     "muted": "rgba(28,28,28,0.5)",
     "onAccent": "#ffffff",
-    "accents": ["#e2412f", "#2563eb", "#15803d", "#c2410c"],
+    "accents": [
+      "#e2412f",
+      "#2563eb",
+      "#15803d",
+      "#c2410c"
+    ],
     "track": "rgba(28,28,28,0.13)",
     "captionBg": "rgba(255,253,244,0.96)",
     "captionText": "#1c1c1c",
     "highlight": "#ffe14d",
     "shadow": "5px 6px 0 #1c1c1c",
-    "headingFont": "Galada", "headingWeight": "400",
-    "bodyFont": "BalooDa2", "bodyWeight": "700",
-    "bgStyles": ["graph"],
+    "headingFont": "Galada",
+    "headingWeight": "400",
+    "bodyFont": "BalooDa2",
+    "bodyWeight": "700",
+    "bgStyles": [
+      "graph"
+    ],
     "card": "note",
     "radius": 12,
     "caption": "marker",
     "headline": "marker",
-    "transitions": ["slideRight", "fade", "slideBottom"],
+    "transitions": [
+      "slideRight",
+      "fade",
+      "slideBottom"
+    ],
     "motion": "stepped",
     "particles": false,
     "leaks": false,
     "leakHue": 0,
     "glitch": false,
-    "overlays": ["paperGrain"]
+    "overlays": [
+      "paperGrain"
+    ]
   },
   "chalkboard": {
     "label": "Chalkboard",
@@ -330,24 +532,39 @@
     "family": "exam",
     "examLook": "chalk",
     "dark": true,
-    "bg": ["#1d3128", "#2a4437"],
+    "bg": [
+      "#1d3128",
+      "#2a4437"
+    ],
     "surface": "rgba(14,28,21,0.6)",
     "text": "#f1eee3",
     "muted": "rgba(241,238,227,0.62)",
     "onAccent": "#1d3128",
-    "accents": ["#f7d64f", "#f29ab8", "#a6ef9a", "#8fd3f4"],
+    "accents": [
+      "#f7d64f",
+      "#f29ab8",
+      "#a6ef9a",
+      "#8fd3f4"
+    ],
     "track": "rgba(241,238,227,0.16)",
     "captionBg": "rgba(10,20,15,0.6)",
     "captionText": "#fffdf3",
     "shadow": "0 10px 30px rgba(0,0,0,0.35)",
-    "headingFont": "Galada", "headingWeight": "400",
-    "bodyFont": "BalooDa2", "bodyWeight": "700",
-    "bgStyles": ["chalkboard"],
+    "headingFont": "Galada",
+    "headingWeight": "400",
+    "bodyFont": "BalooDa2",
+    "bodyWeight": "700",
+    "bgStyles": [
+      "chalkboard"
+    ],
     "card": "chalk",
     "radius": 18,
     "caption": "box",
     "headline": "rise",
-    "transitions": ["fade", "wipe"],
+    "transitions": [
+      "fade",
+      "wipe"
+    ],
     "motion": "smooth",
     "particles": false,
     "leaks": false,
@@ -361,25 +578,39 @@
     "family": "exam",
     "examLook": "omr",
     "dark": false,
-    "bg": ["#fdfdfa", "#f4f5f0"],
+    "bg": [
+      "#fdfdfa",
+      "#f4f5f0"
+    ],
     "surface": "#ffffff",
     "text": "#1c2554",
     "muted": "rgba(28,37,84,0.55)",
     "onAccent": "#ffffff",
-    "accents": ["#e2504a", "#2f5bd3", "#1e9e5a"],
+    "accents": [
+      "#e2504a",
+      "#2f5bd3",
+      "#1e9e5a"
+    ],
     "track": "rgba(28,37,84,0.12)",
     "captionBg": "#111111",
     "captionText": "#ffffff",
     "highlight": "#feee9b",
     "shadow": "0 10px 28px rgba(28,37,84,0.14)",
-    "headingFont": "NotoSerifBengali", "headingWeight": "700",
-    "bodyFont": "HindSiliguri", "bodyWeight": "600",
-    "bgStyles": ["ruled"],
+    "headingFont": "NotoSerifBengali",
+    "headingWeight": "700",
+    "bodyFont": "HindSiliguri",
+    "bodyWeight": "600",
+    "bgStyles": [
+      "ruled"
+    ],
     "card": "sheet",
     "radius": 8,
     "caption": "box",
     "headline": "slide",
-    "transitions": ["slideBottom", "fade"],
+    "transitions": [
+      "slideBottom",
+      "fade"
+    ],
     "motion": "snappy",
     "particles": false,
     "leaks": false,
@@ -393,30 +624,102 @@
     "family": "exam",
     "examLook": "notebook",
     "dark": false,
-    "bg": ["#fbfbf6", "#f3f3ec"],
+    "bg": [
+      "#fbfbf6",
+      "#f3f3ec"
+    ],
     "surface": "#fff3a6",
     "text": "#1e3a8a",
     "muted": "rgba(30,58,138,0.55)",
     "onAccent": "#ffffff",
-    "accents": ["#d62828", "#2563eb", "#15803d", "#c2410c"],
+    "accents": [
+      "#d62828",
+      "#2563eb",
+      "#15803d",
+      "#c2410c"
+    ],
     "track": "rgba(30,58,138,0.14)",
     "captionBg": "rgba(255,255,255,0.96)",
     "captionText": "#1c1c1c",
     "highlight": "#fde562",
     "shadow": "6px 12px 24px rgba(0,0,0,0.18)",
-    "headingFont": "Galada", "headingWeight": "400",
-    "bodyFont": "BalooDa2", "bodyWeight": "600",
-    "bgStyles": ["notebook"],
+    "headingFont": "Galada",
+    "headingWeight": "400",
+    "bodyFont": "BalooDa2",
+    "bodyWeight": "600",
+    "bgStyles": [
+      "notebook"
+    ],
     "card": "sticky",
     "radius": 6,
     "caption": "marker",
     "headline": "rise",
-    "transitions": ["slideRight", "fade"],
+    "transitions": [
+      "slideRight",
+      "fade"
+    ],
     "motion": "smooth",
     "particles": false,
     "leaks": false,
     "leakHue": 0,
     "glitch": false,
     "overlays": []
+  },
+  "vox-story": {
+    "label": "Vox: Story (cartoon parable)",
+    "mood": "short stories with a lesson, life advice, psychology, habits, money lessons, fables about people",
+    "family": "vox",
+    "dark": false,
+    "bg": [
+      "#efe4cf",
+      "#e4d6bb"
+    ],
+    "surface": "#faf4e8",
+    "text": "#2a221a",
+    "muted": "rgba(42,34,26,0.55)",
+    "onAccent": "#fffaf0",
+    "accents": [
+      "#e0672b",
+      "#2f5d50",
+      "#5a2436",
+      "#d9a441"
+    ],
+    "track": "rgba(42,34,26,0.14)",
+    "captionBg": "rgba(250,244,232,0.96)",
+    "captionText": "#2a221a",
+    "highlight": "#ffd84a",
+    "shadow": "3px 5px 0 rgba(60,40,10,0.14), 8px 14px 24px rgba(60,40,10,0.2)",
+    "headingFont": "NotoSerifBengali",
+    "headingWeight": "800",
+    "bodyFont": "NotoSansBengali",
+    "bodyWeight": "700",
+    "bgStyles": [
+      "plain"
+    ],
+    "card": "paper",
+    "radius": 4,
+    "caption": "none",
+    "headline": "none",
+    "badge": false,
+    "transitions": [
+      "fade",
+      "slideRight"
+    ],
+    "motion": "stepped",
+    "particles": false,
+    "leaks": false,
+    "leakHue": 0,
+    "glitch": false,
+    "overlays": [
+      "paperGrain",
+      "channelPill"
+    ],
+    "chapter": {
+      "number": "#2f5d50",
+      "title": "#efe4cf",
+      "book": "#4b1f2e",
+      "dark": "#1c1612"
+    },
+    "thumbIntro": false
   }
 }

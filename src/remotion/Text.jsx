@@ -187,6 +187,7 @@ export const Captions = ({ narration, frames, accent, isShort, onFootage = false
   const { fps } = useVideoConfig();
   const T = theme();
   const style = T.caption;
+  if (style === 'none') return null; // story theme: the scene's own line is the text
   const words = narration.split(/\s+/).filter(Boolean);
   if (!words.length) return null;
   const perChunk = isShort ? 3 : 6;

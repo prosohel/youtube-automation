@@ -24,6 +24,7 @@ import { OVERLAP, buildTimeline } from './timeline';
 import { accentFor, bodyFont, cardStyle, energy, headFont, isVox, pop, setTheme, theme } from './shared';
 import { MarkerUnderline, Tape, draw } from './Vox';
 import { SceneVisual, VISUAL_START } from './Visuals';
+import { STORY_RENDERED } from './Cast';
 import { EXAM_FULL_CARD } from './exam';
 import { COUNT_FRAMES, ITEM_STAGGER } from './library/timing';
 import { MotionBg, Overlays, Particles } from './Backgrounds';
@@ -45,6 +46,7 @@ const BlurWhileMoving = ({ moving, children }) =>
   );
 
 const SceneBadge = ({ index, total, accent, frames, isShort }) => {
+  if (theme().badge === false) return null; // story theme: nothing in the corners
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
   const T = theme();
@@ -147,7 +149,7 @@ const Scene = ({ scene, index, total, isShort, kicker }) => {
               />
             )}
             {/* A question, solution or reveal card is the content itself: no headline over it. */}
-            {scene.headline && scene.frames > 60 && !EXAM_FULL_CARD.includes(scene.visual?.type) ? (
+            {scene.headline && scene.frames > 60 && !EXAM_FULL_CARD.includes(scene.visual?.type) && !STORY_RENDERED.includes(scene.visual?.type) ? (
               <HeadlineCard text={scene.headline} accent={accent} frames={scene.frames} isShort={isShort} kicker={kicker} seed={index} />
             ) : null}
           </AbsoluteFill>
@@ -431,9 +433,9 @@ const SceneSfx = ({ scene, start, index }) => {
 export const Main = (props) => {
   const { title, kicker, brandLabel, sourceLabel, extraLabel, subscribeText, scenes, isShort, sfx, music, thumb } = props;
   // The video opens with its thumbnail (TikTok's cover frame) unless it was switched off for this brand.
-  const thumbIntro = Boolean(thumb && thumb.intro);
   setTheme(props.theme);
   const T = theme();
+  const thumbIntro = Boolean(thumb && thumb.intro) && T.thumbIntro !== false; // story theme: its own plain title card
   const { width, height } = useVideoConfig();
   const t = buildTimeline(props);
   const trans = T.transitions && T.transitions.length ? T.transitions : ['slideRight'];
@@ -459,7 +461,7 @@ export const Main = (props) => {
 
       {/* Theme overlays (news ticker, grain) start after a thumbnail intro, so they never cover it. */}
       <Sequence from={thumbIntro ? t.introFrames : 0} layout="none">
-        <Overlays kicker={kicker} title={title} isShort={isShort} />
+        <Overlays kicker={kicker} title={title} brandLabel={brandLabel} isShort={isShort} />
       </Sequence>
 
       {/* Light-leak flashes (dark themes only): opening, every other cut, and into the outro. */}

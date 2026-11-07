@@ -59,6 +59,8 @@ const cfg = (module.exports = {
   pronunciationFixes: [],
   captionFont: process.env.CAPTION_FONT || 'DejaVu Sans',
   targetMinutes: Number(process.env.TARGET_MINUTES || 3),
+  // 'idea' (default) = tips/explainer scripts; 'story' = a cartoon parable with a lesson (theme vox-story)
+  scriptMode: (process.env.SCRIPT_MODE || 'idea').toLowerCase(),
   // Question mode: videos made from real exam questions on the owner's sites (src/questions).
   // '' = off (Claude finds topics), 'mathsuggestion.com', 'recentjobsolution.com' or 'both'.
   questionSource: (process.env.QUESTION_SOURCE || '').trim(),

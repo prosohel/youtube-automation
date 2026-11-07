@@ -304,7 +304,7 @@ async function renderWithRemotion({ scenes, workDir, slug, title, theme, directi
     videoFile,
     thumbFile: fs.existsSync(thumbFile) ? thumbFile : null,
     credits,
-    coverMs: thumb && thumb.intro ? COVER_MS : null, // the video opens with the thumbnail: TikTok's cover frame
+    coverMs: thumb && thumb.intro && theme.thumbIntro !== false ? COVER_MS : null, // the video opens with the thumbnail: TikTok's cover frame
   };
 }
 

@@ -5,6 +5,7 @@
 
 const { loadHistory } = require('./history');
 const { EXAM_TYPES, checkExamVisual } = require('./examVisuals');
+const { STORY_TYPES, checkStoryVisual } = require('./storyVisuals');
 
 const BASIC_TYPES = ['icon', 'stat', 'list', 'compare'];
 const LIBRARY_TYPES = ['bigNumber', 'bars', 'line', 'donut', 'timeline'];
@@ -124,6 +125,7 @@ function validateVisual(visual, opts) {
   if (BASIC_TYPES.includes(v.type)) return visual;
   const icon = { type: 'icon', icon: typeof v.icon === 'string' && v.icon ? v.icon : 'Sparkles' };
   if (EXAM_TYPES.includes(v.type)) return (opts && opts.examGraphics && checkExamVisual(v)) || icon;
+  if (STORY_TYPES.includes(v.type)) return checkStoryVisual(v) || icon;
   if (!LIBRARY_TYPES.includes(v.type) || !(opts && opts.directGraphics)) return icon;
   return CHECK[v.type](v, isBangla(opts.language)) || icon;
 }

@@ -6,6 +6,7 @@ import { OVERLAP } from './timeline';
 import { VoxVisual } from './Vox';
 import { LibraryVisual, LIBRARY_RENDERED } from './library';
 import { EXAM_FULL_CARD, EXAM_RENDERED, ExamVisual } from './exam';
+import { STORY_RENDERED, StoryVisual } from './Cast';
 
 export const VISUAL_START = OVERLAP + 2; // visuals begin as the scene transition finishes
 const START = VISUAL_START;
@@ -279,6 +280,14 @@ export const SceneVisual = ({ visual, accent, isShort, voiceFrames, frames, narr
     return (
       <Stage isShort={isShort} tall={EXAM_FULL_CARD.includes(v.type)}>
         <ExamVisual visual={v} accent={accent} isShort={isShort} voiceFrames={voiceFrames} frames={frames} narration={narration} start={START} />
+      </Stage>
+    );
+  }
+  if (STORY_RENDERED.includes(v.type)) {
+    // Story scenes: a drawn character and its one line, or a full-screen chapter card.
+    return (
+      <Stage isShort={isShort} tall>
+        <StoryVisual visual={v} accent={accent} isShort={isShort} start={START} />
       </Stage>
     );
   }

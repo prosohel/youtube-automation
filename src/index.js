@@ -44,7 +44,7 @@ async function main() {
   ensureDir(workDir);
   fs.writeFileSync(path.join(cfg.OUT_DIR, `${slug}.script.json`), JSON.stringify(script, null, 2));
 
-  const { theme, notes } = resolveStyle(script.style);
+  const { theme, notes } = resolveStyle(script.style, { forceTheme: cfg.scriptMode === 'story' ? 'vox-story' : undefined });
   log(`Design: ${theme.label} (${theme.id}), energy ${theme.energy}${script.style?.reason ? ` - ${script.style.reason}` : ''}${notes.length ? ` [${notes.join('; ')}]` : ''}`);
   const direction = resolveDirection(script, cfg);
   const thumbnail = resolveThumbnail(script, cfg);
