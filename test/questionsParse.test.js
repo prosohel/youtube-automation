@@ -82,3 +82,39 @@ test('recentjobsolution: 47th BCS page 2 question 36 has a subject and no tip', 
   assert.equal(q.tip, null);
   assert.equal(q.id, 'recentjobsolution.com/exam/47th-bcs-preliminary-exam-2025-full-200-mcqs/page/2#36');
 });
+
+// Minimal KaTeX output: the TeX lives (HTML-escaped) in the annotation; the rest is render markup.
+const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const katex = (tex) => '<span class="math-inline"><span class="katex"><span class="katex-mathml"><math><semantics><mrow></mrow>'
+  + `<annotation encoding="application/x-tex">${esc(tex)}</annotation></semantics></math></span>`
+  + '<span class="katex-html" aria-hidden="true"><span class="base">rendered</span></span></span></span>';
+
+test('mathsuggestion: labels written with a space before the colon are still read', () => {
+  const html = '<h1>Page</h1><div class="article">'
+    + '<h3>1. প্রশ্ন?</h3>'
+    + '<p><strong>ক)</strong> এক <strong>খ)</strong> দুই <strong>গ)</strong> তিন <strong>ঘ)</strong> চার</p>'
+    + '<p><strong>সমাধান :</strong></p>'
+    + '<p>ধাপ এক। ধাপ দুই।</p>'
+    + '<p><strong>ব্যাখ্যা :</strong> একটি টিপ</p>'
+    + '<p><strong>উত্তর :</strong> খ) দুই</p></div>';
+  const [q] = parseMathSuggestion(html, MS_URL);
+  assert.deepEqual(q.working, ['ধাপ এক', 'ধাপ দুই']);
+  assert.equal(q.tip, 'একটি টিপ');
+  assert.equal(q.answer, 1);
+
+  const inline = html.replace('<p><strong>সমাধান :</strong></p>', '<p>সমাধান : শুরু।</p>');
+  assert.deepEqual(parseMathSuggestion(inline, MS_URL)[0].working, ['শুরু', 'ধাপ এক', 'ধাপ দুই']);
+});
+
+test('mathsuggestion: TeX with "<" survives verbatim inside $...$ (not re-parsed as HTML)', () => {
+  const html = '<h1>Page</h1><div class="article">'
+    + `<h3>1. যদি ${katex('x<y')} হয়?</h3>`
+    + `<p><strong>ক)</strong> ${katex('a<b>c')} <strong>খ)</strong> ${katex('p&q')} <strong>গ)</strong> ৩ <strong>ঘ)</strong> ৪</p>`
+    + '<p><strong>সমাধান:</strong></p>'
+    + `<p>তাহলে ${katex('x<y<z')} এবং ${katex('a<b>c')}।</p>`
+    + '<p><strong>উত্তর:</strong> ক) x</p></div>';
+  const [q] = parseMathSuggestion(html, MS_URL);
+  assert.equal(q.text, 'যদি $x<y$ হয়?');
+  assert.deepEqual(q.options.slice(0, 2), ['$a<b>c$', '$p&q$']);
+  assert.deepEqual(q.working, ['তাহলে $x<y<z$ এবং $a<b>c$']);
+});

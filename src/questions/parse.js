@@ -3,7 +3,7 @@
 //
 // Question = { id, site, url, page, n, text, options: string[4], answer: 0-3,
 //              working: string[], tip: string|null, subject: string|null }
-const { parse } = require('node-html-parser');
+const { parse, TextNode } = require('node-html-parser');
 
 const LETTERS = ['ক', 'খ', 'গ', 'ঘ'];
 const clean = (s) => String(s).replace(/\s+/g, ' ').trim();
@@ -34,7 +34,13 @@ function makeQuestion(url, page, fields) {
 function inlineMath(root) {
   for (const k of root.querySelectorAll('.katex')) {
     const tex = k.querySelector('annotation[encoding="application/x-tex"]');
-    k.replaceWith('$' + (tex ? tex.text.trim() : '') + '$');
+    // A TextNode, not a string: a string would be re-parsed as HTML and eat things like "x<b>y".
+    // Its raw text is entity-escaped so that reading .text gives the TeX back verbatim.
+    const raw = ('$' + (tex ? tex.text.trim() : '') + '$')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    k.replaceWith(new TextNode(raw, k.parentNode));
   }
 }
 
@@ -85,7 +91,7 @@ function splitSentences(text) {
 }
 
 function afterLabel(text, label) {
-  const m = new RegExp('^' + label + '\s*[:ঃ]\s*').exec(text);
+  const m = new RegExp('^' + label + '\\s*[:ঃ]\\s*').exec(text);
   return m ? text.slice(m[0].length).trim() : null;
 }
 
