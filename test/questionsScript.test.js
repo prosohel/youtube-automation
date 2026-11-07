@@ -580,3 +580,100 @@ test('writeQuestionScript: the retry and the fixed texts go to the log it is giv
   assert.match(lines[0], /^Question script: asking Claude again \(Question 1: the reveal must name the right letter ঘ/);
   assert.match(lines[1], /^Question script: fixed texts replace what still fails/);
 });
+
+/* ---------- fix round 2: the pause sentence, punctuation in options, the title ---------- */
+
+/** A one-question script for `info` whose ask and reveal are fine; `change` edits Claude's parts. */
+const oneQuestion = (info, reveal, change = () => {}) =>
+  scriptOf(
+    partsWith((p) => {
+      p.questions = [{ ask: `${info.questions[0].text} ${PAUSE}।`, working: [], reveal }];
+      change(p);
+    }),
+    info
+  );
+
+test('an answer that is the tail of the pause sentence ("চেষ্টা করুন।") passes a correct ask and never makes the fixed script throw', async () => {
+  for (const right of ['চেষ্টা করুন।', 'করুন।', 'থামিয়ে চেষ্টা করুন।']) {
+    const info = { ...INFO, questions: [wordQ(1, [right, 'চেষ্টা করেন।', 'চেষ্টা করো।', 'চেষ্টা করিস।'], 'কোনটি অনুজ্ঞাসূচক বাক্য?')] };
+    const ask = `কোনটি অনুজ্ঞাসূচক বাক্য? ক, ${right} খ, চেষ্টা করেন। গ, চেষ্টা করো। ঘ, চেষ্টা করিস। ${PAUSE}।`;
+    const correct = partsWith((p) => (p.questions = [{ ask, working: [], reveal: `সঠিক উত্তর ক, ${right}` }]));
+    assert.deepEqual(answerProblems(scriptOf(correct, info), info), [], right);
+    const leaky = leakyFor(info, { headline: 'অনুজ্ঞা চিনুন', narration: `উত্তর ${right}`, thumb: 'অনুজ্ঞা কোনটি?' });
+    const script = await writeQuestionScript(info, { ...quiet, askJson: fakeClaude(leaky, leaky).askJson });
+    assert.deepEqual(answerProblems(script, info), [], right);
+  }
+});
+
+test('a hook may not say a right option just because it starts a word of the pause sentence ("চেষ্টা")', () => {
+  const info = { ...INFO, questions: [wordQ(1, ['চেষ্টা', 'ইচ্ছা', 'আশা', 'ভয়'])] };
+  const problems = answerProblems(oneQuestion(info, 'সঠিক উত্তর ক, চেষ্টা।', (p) => (p.hook.narration = 'উত্তর চেষ্টা!')), info);
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /^The hook narration/);
+});
+
+test('option text with punctuation is caught when it is shown or said without the punctuation', () => {
+  const cases = [
+    ['তুমি যাও।', 'তুমি যাও'],
+    ['He goes to school.', 'He goes to school'],
+    ['কে তুমি?', 'কে তুমি'],
+    ['রবীন্দ্রনাথ, নজরুল', 'রবীন্দ্রনাথ নজরুল'],
+  ];
+  for (const [right, shown] of cases) {
+    const info = { ...INFO, questions: [wordQ(1, [right, 'অন্য এক', 'আরও এক', 'শেষ এক'])] };
+    const script = (change) => oneQuestion(info, 'সঠিক উত্তর ক।', change);
+    assert.deepEqual(answerProblems(script(() => {}), info), [], right);
+    const shownOn = {
+      headline: script((p) => (p.hook.headline = shown)),
+      thumbnail: script((p) => (p.thumbnail = { style: 'bigText', text: shown, highlight: shown.split(' ').pop(), color: 'red' })),
+      kicker: { ...script(() => {}), kicker: shown },
+      title: { ...script(() => {}), title: shown },
+      hook: script((p) => (p.hook.narration = `${shown}, মনে আছে?`)),
+    };
+    for (const [where, s] of Object.entries(shownOn)) assert.ok(answerProblems(s, info).length >= 1, `${right} on the ${where}`);
+  }
+});
+
+test('the visarga written as a colon still separates words ("উত্তরঃবিসর্গ" shows the answer বিসর্গ)', () => {
+  const info = { ...INFO, questions: [wordQ(1, ['বিসর্গ', 'অনুস্বার', 'হসন্ত', 'চন্দ্রবিন্দু'])] };
+  const s = oneQuestion(info, 'সঠিক উত্তর ক, বিসর্গ।', (p) => (p.thumbnail = { style: 'bigText', text: 'উত্তরঃবিসর্গ', highlight: 'উত্তরঃবিসর্গ', color: 'red' }));
+  assert.equal(answerProblems(s, info).length, 2, 'the thumbnail text and highlight');
+});
+
+test('a narration with no letter in it counts as empty: a working left with only "।" gets the fixed line', () => {
+  const parts = partsWith((p) => (p.questions[0].working = ['উত্তর ঘ।', '', '', '']));
+  const safe = forceSafe(scriptOf(parts), INFO);
+  assert.equal(safe.scenes[2].narration, 'এবার ধাপে ধাপে সমাধান দেখি।');
+  assert.deepEqual(answerProblems(safe, INFO), []);
+  const dots = partsWith((p) => (p.questions[0].working = ['।', '', '', '']));
+  assert.ok(answerProblems(scriptOf(dots), INFO).some((r) => /working narration is empty/.test(r)));
+});
+
+test('a negated reveal is caught whether য় is written as one sign or as য + nukta', () => {
+  for (const ya of ['য়', 'য়']) {
+    const s = scriptOf(partsWith((p) => (p.questions[0].reveal = `সঠিক উত্তর ঘ ন${ya}।`)));
+    assert.equal(answerProblems(s, INFO).length, 1, JSON.stringify(ya));
+  }
+});
+
+test('the title is public before anyone watches: a leaking title is asked again, then taken from the page title', async () => {
+  const leaky = partsWith((p) => (p.title = 'ক্রয়মূল্য দ্বিগুণ হলে ক্ষতি ৫০%'));
+  const problems = answerProblems(scriptOf(leaky), INFO);
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /^The title/);
+  const claude = fakeClaude(leaky, leaky);
+  const script = await writeQuestionScript(INFO, { ...quiet, askJson: claude.askJson });
+  assert.equal(claude.asked.length, 2);
+  assert.equal(script.title, Q1.page);
+});
+
+test('the fixed title falls back to the topic, then to a plain title, when the page title holds an answer', () => {
+  const q = { ...wordQ(1, ['আপনি', 'তুমি', 'সে', 'আমি']), page: 'আপনি ও তুমি: সর্বনামের প্রশ্ন' };
+  const info = { ...INFO, topic: 'সর্বনাম চেনার প্রশ্ন', questions: [q] };
+  const script = (i) => oneQuestion(i, 'সঠিক উত্তর ক, আপনি।', (p) => (p.title = 'আপনি'));
+  assert.equal(forceSafe(script(info), info).title, 'সর্বনাম চেনার প্রশ্ন');
+  const info2 = { ...info, topic: 'আপনি কি জানেন?' };
+  const safe = forceSafe(script(info2), info2);
+  assert.equal(safe.title, 'প্রশ্ন ও সমাধান');
+  assert.deepEqual(answerProblems(safe, info2), []);
+});
