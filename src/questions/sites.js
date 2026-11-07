@@ -1,5 +1,5 @@
 // Which pages of the owner's exam sites hold questions (from sitemap.xml), and
-// a polite fetch: one-day file cache, robots-disallowed paths never requested.
+// a polite fetch: one-day file cache for pages and sitemaps, robots-disallowed paths never requested.
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -62,10 +62,26 @@ function titleFor(pathname) {
   return pageNo ? `${words} (পৃষ্ঠা ${pageNo})` : words;
 }
 
-async function listPages(site, { fetchText: fetcher = fetchText } = {}) {
+const defaultCacheDir = () => path.join(cfg.OUT_DIR, 'cache', 'sites');
+
+/** The text at url, from the one-day file cache when it was fetched less than a day ago (file named by the url's sha1). */
+async function cachedText(url, ext, { fetchText: fetcher = fetchText, cacheDir = defaultCacheDir(), now = Date.now() } = {}) {
+  const file = path.join(cacheDir, `${crypto.createHash('sha1').update(url).digest('hex')}${ext}`);
+  try {
+    const st = fs.statSync(file);
+    if (+now - st.mtimeMs < DAY_MS) return fs.readFileSync(file, 'utf8');
+  } catch { /* not cached */ }
+  const text = await fetcher(url);
+  fs.mkdirSync(cacheDir, { recursive: true });
+  fs.writeFileSync(file, text);
+  return text;
+}
+
+/** The question pages a site's sitemap lists, as { url, title }. The sitemap is cached a day, like the pages. */
+async function listPages(site, opts = {}) {
   const def = SITES[site];
   if (!def) throw new Error(`unknown site: ${site}`);
-  const xml = await fetcher(`${def.base}/sitemap.xml`);
+  const xml = await cachedText(`${def.base}/sitemap.xml`, '.xml', opts);
   const pages = [];
   const seen = new Set();
   for (const m of xml.matchAll(/<loc>\s*([^<]+?)\s*<\/loc>/g)) {
@@ -78,21 +94,9 @@ async function listPages(site, { fetchText: fetcher = fetchText } = {}) {
   return pages;
 }
 
-async function fetchPage(url, {
-  fetchText: fetcher = fetchText,
-  cacheDir = path.join(cfg.OUT_DIR, 'cache', 'sites'),
-  now = Date.now(),
-} = {}) {
+async function fetchPage(url, opts = {}) {
   if (isDisallowed(new URL(url).pathname)) throw new Error(`robots.txt disallows ${url}`);
-  const file = path.join(cacheDir, `${crypto.createHash('sha1').update(url).digest('hex')}.html`);
-  try {
-    const st = fs.statSync(file);
-    if (+now - st.mtimeMs < DAY_MS) return fs.readFileSync(file, 'utf8');
-  } catch { /* not cached */ }
-  const html = await fetcher(url);
-  fs.mkdirSync(cacheDir, { recursive: true });
-  fs.writeFileSync(file, html);
-  return html;
+  return cachedText(url, '.html', opts);
 }
 
 module.exports = { SITES, listPages, fetchPage, fetchText };

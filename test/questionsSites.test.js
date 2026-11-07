@@ -14,14 +14,23 @@ const counting = (body) => {
   return { fetchText, calls };
 };
 
-const tmpDir = () => fs.mkdtempSync(path.join(os.tmpdir(), 'sites-test-'));
+// Every cache directory a test makes is removed at the end, so no test reads or writes the real cache.
+const made = [];
+const tmpDir = () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sites-test-'));
+  made.push(dir);
+  return dir;
+};
+test.after(() => {
+  for (const dir of made) fs.rmSync(dir, { recursive: true, force: true });
+});
 
 test('mathsuggestion: only post slugs are question pages', async () => {
   const { fetchText, calls } = counting(sitemap('https://mathsuggestion.com', [
     '/', '/blogs', '/category/bcs', '/about', '/contact', '/privacy', '/disclaimer',
     '/44th-bcs-preliminary-math-question-solution-with-bangla-explanation',
   ]));
-  const pages = await listPages('mathsuggestion.com', { fetchText });
+  const pages = await listPages('mathsuggestion.com', { fetchText, cacheDir: tmpDir() });
   assert.deepEqual(calls, ['https://mathsuggestion.com/sitemap.xml']);
   assert.deepEqual(pages, [{
     url: 'https://mathsuggestion.com/44th-bcs-preliminary-math-question-solution-with-bangla-explanation',
@@ -33,7 +42,7 @@ test('recentjobsolution: exam pages and their /page/N, never practice', async ()
   const { fetchText } = counting(sitemap('https://recentjobsolution.com', [
     '/exam/a', '/exam/a/page/2', '/exam/a/practice', '/organizations/x', '/exams', '/',
   ]));
-  const pages = await listPages('recentjobsolution.com', { fetchText });
+  const pages = await listPages('recentjobsolution.com', { fetchText, cacheDir: tmpDir() });
   assert.deepEqual(pages, [
     { url: 'https://recentjobsolution.com/exam/a', title: 'a' },
     { url: 'https://recentjobsolution.com/exam/a/page/2', title: 'a (পৃষ্ঠা 2)' },
@@ -43,12 +52,12 @@ test('recentjobsolution: exam pages and their /page/N, never practice', async ()
 test('recentjobsolution: percent-encoded Bangla slugs are decoded in titles', async () => {
   const slug = encodeURIComponent('বিসিএস-প্রশ্ন');
   const { fetchText } = counting(sitemap('https://recentjobsolution.com', [`/exam/${slug}`]));
-  const [page] = await listPages('recentjobsolution.com', { fetchText });
+  const [page] = await listPages('recentjobsolution.com', { fetchText, cacheDir: tmpDir() });
   assert.equal(page.title, 'বিসিএস প্রশ্ন');
 });
 
 test('listPages rejects an unknown site', async () => {
-  await assert.rejects(listPages('example.com', { fetchText: async () => '' }), /unknown site/i);
+  await assert.rejects(listPages('example.com', { fetchText: async () => '', cacheDir: tmpDir() }), /unknown site/i);
 });
 
 test('SITES expose base, parse and isQuestionPage', () => {
@@ -71,6 +80,22 @@ test('fetchPage caches for 24 hours', async () => {
   assert.equal(fs.readdirSync(cacheDir).filter((f) => /^[0-9a-f]{40}\.html$/.test(f)).length, 1);
   await fetchPage(url, { fetchText, cacheDir, now: Date.now() + 25 * 3600 * 1000 });
   assert.equal(calls.length, 2);
+  fs.rmSync(cacheDir, { recursive: true, force: true });
+});
+
+test('listPages caches the sitemap for 24 hours, like the pages', async () => {
+  const cacheDir = tmpDir();
+  const { fetchText, calls } = counting(sitemap('https://mathsuggestion.com', ['/a-post', '/b-post']));
+  const first = await listPages('mathsuggestion.com', { fetchText, cacheDir });
+  const again = await listPages('mathsuggestion.com', { fetchText, cacheDir });
+  assert.deepEqual(again, first);
+  assert.equal(first.length, 2);
+  assert.deepEqual(calls, ['https://mathsuggestion.com/sitemap.xml']);
+  await listPages('mathsuggestion.com', { fetchText, cacheDir, now: Date.now() + 25 * 3600 * 1000 });
+  assert.equal(calls.length, 2);
+  // Each site's sitemap is its own file.
+  await listPages('recentjobsolution.com', { fetchText: counting(sitemap('https://recentjobsolution.com', ['/exam/a'])).fetchText, cacheDir });
+  assert.equal(fs.readdirSync(cacheDir).length, 2);
   fs.rmSync(cacheDir, { recursive: true, force: true });
 });
 
