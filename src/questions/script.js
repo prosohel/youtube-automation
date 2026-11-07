@@ -190,6 +190,7 @@ function assembleScenes(topicInfo, parts) {
 // Bangla letters and signs (not its digits) and the zero-width joiners. A letter next to one of these is part of a
 // word: the ক of "কত", "একশো", "ক্ষতি" or "সঠিক" is not the option letter ক.
 const IN_WORD = '\\u0980-\\u09E5\\u09F0-\\u09FF\\u200C\\u200D';
+const BANGLA = '\\u0980-\\u09FF'; // the whole Bangla block, digits too
 const LETTER_RE = LETTERS.map((l) => new RegExp(`(?<![${IN_WORD}])${l}(?![${IN_WORD}])`, 'u'));
 // The right letter said not to be the answer: "ঘ নয়", "ঘ না", "ঘ নহে" (য় written as one sign or as য + nukta).
 const NEGATED_RE = LETTERS.map((l) => new RegExp(`(?<![${IN_WORD}])${l}[\\s,]*(?:ন(?:\\u09DF|\\u09AF\\u09BC)|না|নহে)(?![${IN_WORD}])`, 'u'));
@@ -253,40 +254,37 @@ const LONE_LETTER = new RegExp(`(?<![${IN_WORD}])[কখগঘ](?![${IN_WORD}])`
 const loneLetters = (s) => [...s.matchAll(LONE_LETTER)].map((m) => ({ letter: m[0], at: m.index }));
 // For finding letters on their own: the dots of an abbreviation go, so the গ of "গ.সা.গু." is part of "গসাগু"
 // whether the page or Claude writes the dots or not.
-const ABBREV_DOT = /(?<=[ঀ-৿])\.(?=[ঀ-৿])/g;
+const ABBREV_DOT = new RegExp(`(?<=[${BANGLA}])\\.(?=[${BANGLA}])`, 'g');
 const plain = (s) => norm(String(s || '').replace(ABBREV_DOT, ''));
+const wordsPattern = (s) => plain(s).split(' ').map(escapeRe).join('\\s*');
 
 /**
- * True when the normalized narration reads the four options in order: ক, খ, গ, ঘ each as a letter on its own, each
- * followed by something, and the right option's text straight after its letter ("ক, এ বর্গ বি সি। খ, … ঘ, কোনটিই
- * নয়"). Options with math or digits are spoken in words and never match as written, so the letters in order are
- * the only sign that a word answer such as "কোনটিই নয়" was read as one of the four options.
- * The question and the options may hold these letters themselves, and they are read first (the question) or among
- * the options, so the first that many of each letter in the narration are theirs and never count: only letters
- * spoken beyond them can read the options. A reading that shortens the question then fails, which is safe (the
+ * True when the normalized narration reads the four options in order, ক, খ, গ, ঘ each as a letter on its own: the
+ * right option's text straight after its letter, every other option that is plain words (no digit, Latin letter or
+ * TeX, so it is spoken as written) straight after its letter too, and an option with math or digits (spoken in words,
+ * never as written) at least followed by something ("ক, এ বর্গ বি সি। খ, … ঘ, কোনটিই নয়"). The letters are the
+ * only sign that a word answer such as "কোনটিই নয়" among math options was read as one of the four options.
+ * Never true when the question or an option holds one of these letters itself (people or quantities named ক, খ, গ):
+ * those letters are spoken anyway and could fill the order, so only the strict check decides, which is safe (the
  * script is asked again, then gets the fixed text). One pass over the narration: each letter is the first that
  * qualifies after the previous one.
  */
 function readsOptionsInOrder(narration, q) {
+  if (loneLetters([q.text, ...q.options].map(plain).join(' ')).length) return false;
   const said = plain(narration).replace(PAUSE_RE, ' ');
-  const own = {};
-  for (const { letter } of loneLetters([q.text, ...q.options].map(plain).join(' '))) own[letter] = (own[letter] || 0) + 1;
-  const seen = {};
-  const spoken = loneLetters(said).filter(({ letter }) => (seen[letter] = (seen[letter] || 0) + 1) > (own[letter] || 0));
-
-  const option = plain(q.options[q.answer]).split(' ').map(escapeRe).join('\\s*');
-  const rightAfter = new RegExp(`\\s+${option}(?![0-9])`, 'uy'); // the right option's text straight after its letter
-  const somethingAfter = /\s+\S/uy; // any other letter is followed by what it reads
+  const spoken = loneLetters(said);
+  const after = q.options.map((o, i) =>
+    i === q.answer || (speakable(o) && optionRe(o)) ? new RegExp(`\\s+${wordsPattern(o)}(?![0-9])`, 'uy') : /\s+\S/uy
+  );
   let from = 0;
   let j = 0;
   for (let i = 0; i < LETTERS.length; i++) {
-    const after = i === q.answer ? rightAfter : somethingAfter;
     let end = -1;
     for (; j < spoken.length && end < 0; j++) {
       const { letter, at } = spoken[j];
       if (letter !== LETTERS[i] || at < from) continue;
-      after.lastIndex = at + 1;
-      if (after.test(said)) end = after.lastIndex;
+      after[i].lastIndex = at + 1;
+      if (after[i].test(said)) end = after[i].lastIndex;
     }
     if (end < 0) return false;
     from = end;

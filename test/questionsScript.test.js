@@ -821,22 +821,54 @@ const askProblems = (q, ask) => {
   return answerProblems(scriptOf(partsWith((p) => (p.questions = [{ ask, working: [], reveal }])), info), info);
 };
 
-test('answer check: ক, খ, গ read with the question do not count as reading the options', () => {
+const RATIO_READ = `${RATIO_STEM} ক, আট অনুপাত বারো অনুপাত পনেরো। খ, দুই অনুপাত তিন অনুপাত পাঁচ। গ, চার অনুপাত ছয় অনুপাত পাঁচ। ঘ, কোনটিই নয়। ${PAUSE}।`;
+const WORK_READ = `${WORK_STEM} ক, চার দিনে। খ, পাঁচ দিনে। গ, ছয় দিনে। ঘ, কোনটিই নয়। ${PAUSE}।`;
+
+test('answer check: when the question holds ক, খ or গ itself, reading the letters never excuses the right option', () => {
   const leaks = [
     [RATIO, `${RATIO_STEM} ঘ, কোনটিই নয়। ${PAUSE}।`],
     [RATIO, `${RATIO_STEM} সঠিক ঘ, কোনটিই নয়। ${PAUSE}।`],
+    [RATIO, `ক, খ, গ এর অনুপাত বের করতে হবে। ${RATIO_STEM} ঘ, কোনটিই নয়। ${PAUSE}।`], // a preface naming them
+    [RATIO, `${RATIO_STEM} আবার বলি, ${RATIO_STEM} ঘ, কোনটিই নয়। ${PAUSE}।`], // the question twice
     [WORK, `${WORK_STEM} ঘ, কোনটিই নয়। ${PAUSE}।`],
     [WORK, `${WORK_STEM} সঠিক ঘ, কোনটিই নয়। ${PAUSE}।`],
+    [WORK, `ক, খ ও গ তিনজন মিলে একটি কাজ করে। ${WORK_STEM} ঘ, কোনটিই নয়। ${PAUSE}।`],
+    [WORK, `ক আর খ আর গ তিনজনে একটি কাজ যথাক্রমে দশ, পনেরো আর বিশ দিনে করতে পারে। তিনজনে একসাথে কাজটি কত দিনে করবে? ঘ, কোনটিই নয়। ${PAUSE}।`],
     [AGE, `${AGE_STEM} গ, উভয়ের সমান। ঘ, বলা যাবে না। ${PAUSE}।`],
+    [AGE, `ক ও খ এর বর্তমান বয়স সমান। পাঁচ বছর পর ক ও খ এর মধ্যে কার বয়স বেশি হবে? গ, উভয়ের সমান। ঘ, বলা যাবে না। ${PAUSE}।`],
+    // Even a full reading: the strict check decides for such a question (safe: asked again, then the fixed ask).
+    [RATIO, RATIO_READ],
+    [WORK, WORK_READ],
   ];
   for (const [q, ask] of leaks) {
     const problems = askProblems(q, ask);
     assert.equal(problems.length, 1, ask);
     assert.match(problems[0], /question narration says the right option/);
   }
-  // Reading the question with its letters, then ক to ঘ with the options, is fine.
-  const ratioRead = `${RATIO_STEM} ক, আট অনুপাত বারো অনুপাত পনেরো। খ, দুই অনুপাত তিন অনুপাত পাঁচ। গ, চার অনুপাত ছয় অনুপাত পাঁচ। ঘ, কোনটিই নয়। ${PAUSE}।`;
-  assert.deepEqual(askProblems(RATIO, ratioRead), []);
-  const workRead = `${WORK_STEM} ক, চার দিনে। খ, পাঁচ দিনে। গ, ছয় দিনে। ঘ, কোনটিই নয়। ${PAUSE}।`;
-  assert.deepEqual(askProblems(WORK, workRead), []);
+});
+
+test('a full reading of a question that names ক, খ, গ gets the fixed ask, not a throw', async () => {
+  for (const [q, ask] of [[RATIO, RATIO_READ], [WORK, WORK_READ]]) {
+    const info = { ...INFO, questions: [q] };
+    const reply = partsWith((p) => (p.questions = [{ ask, working: [], reveal: 'সঠিক উত্তর ঘ, কোনটিই নয়।' }]));
+    const claude = fakeClaude(reply, reply);
+    const script = await writeQuestionScript(info, { ...quiet, askJson: claude.askJson });
+    assert.equal(claude.asked.length, 2);
+    assert.deepEqual(answerProblems(script, info), []);
+    assert.equal(script.scenes[1].narration, `প্রশ্নটি দেখুন। ${PAUSE}।`);
+    assert.equal(script.scenes[2].narration, 'সঠিক উত্তর ঘ, কোনটিই নয়।');
+  }
+});
+
+test('answer check: word options must each be read as written after their letter; one skipped or reworded gives the answer away', () => {
+  const twins = stemQ('দুই ভাইয়ের বর্তমান বয়স সমান। ৫ বছর পর কার বয়স বেশি হবে?', ['বড় জনের', 'ছোট জনের', 'উভয়ের সমান', 'বলা যাবে না'], 2);
+  const stem = 'দুই ভাইয়ের বর্তমান বয়স সমান। পাঁচ বছর পর কার বয়স বেশি হবে?';
+  assert.deepEqual(askProblems(twins, `${stem} ক, বড় জনের। খ, ছোট জনের। গ, উভয়ের সমান। ঘ, বলা যাবে না। ${PAUSE}।`), []);
+  for (const ask of [
+    `${stem} ক, বড় জনের। গ, উভয়ের সমান। ঘ, বলা যাবে না। ${PAUSE}।`, // খ skipped
+    `${stem} ক, বড় জনের। খ, ছোটটির। গ, উভয়ের সমান। ঘ, বলা যাবে না। ${PAUSE}।`, // খ reworded
+    `${stem} ক, বড় জনের। খ, ছোট জনের। গ, উভয়ের সমান। ${PAUSE}।`, // ঘ skipped
+  ]) {
+    assert.equal(askProblems(twins, ask).length, 1, ask);
+  }
 });
