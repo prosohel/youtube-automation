@@ -4,6 +4,7 @@ import { isVox, pop, theme } from '../shared';
 import { wordStarts } from '../timeline';
 import { draw } from '../Vox';
 import { ExamCard, Label, tooWide } from './Card';
+import { examLook, markerBand } from './looks';
 import { MathText } from './Math';
 import { FIT_START, MAX_LINES, SIZE_STEPS, lineStarts, newestLine, nextFit, scrollFor, solutionViewport } from './timing';
 
@@ -53,7 +54,10 @@ export const Solution = ({ visual, accent, isShort, room, voiceFrames, narration
     const to = scrollFor(lay.boxes, newest, lay.viewport);
     scroll = from + (to - from) * Math.min(1, pop(f, fps, starts[newest], 14));
   }
-  const mark = T.highlight || `${accent}33`; // paper themes have a highlighter colour; the others use the accent
+  const look = examLook();
+  // Paper themes have a highlighter colour; the others use the accent. The chalkboard only writes the newest line in
+  // the accent (below); the notebook marks the lower part of it, as a marker would.
+  const mark = look === 'chalk' ? 'transparent' : look === 'notebook' ? markerBand(40, 92) : T.highlight || `${accent}33`;
 
   return (
     <ExamCard cardRef={card} accent={accent} width={S.width} padding={`${z(S.padY)}px ${z(S.padX)}px`} start={start}>

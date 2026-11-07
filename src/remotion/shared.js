@@ -153,6 +153,32 @@ export const cardStyle = (accent, opts = {}) => {
         border: '4px solid #1c1c1c',
         boxShadow: `5px 6px 0 ${accent}`,
       };
+    /* exam family */
+    case 'chalk':
+      // A box drawn in coloured chalk on the board: a darker wiped patch, a chalk line with a soft glow.
+      return {
+        background: T.surface,
+        borderRadius: r,
+        border: `4px solid ${accent}d9`,
+        boxShadow: `0 0 12px ${accent}40, inset 0 0 14px ${accent}26`,
+      };
+    case 'sheet':
+      // A printed box on the answer sheet: navy outline, a coloured header rule, a soft paper shadow.
+      return {
+        background: T.surface,
+        borderRadius: r,
+        border: '2px solid rgba(28,37,84,0.5)',
+        borderTop: `10px solid ${accent}`,
+        boxShadow: T.shadow,
+      };
+    case 'sticky':
+      // A sticky note on the page: a coloured strip along the top where it sticks, a soft shadow under it.
+      return {
+        background: T.surface,
+        borderRadius: r,
+        borderTop: `10px solid ${accent}`,
+        boxShadow: T.shadow,
+      };
     case 'left':
     default:
       return {

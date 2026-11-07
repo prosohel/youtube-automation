@@ -125,6 +125,12 @@ highlighter). The paper textures (`GRAIN`, `tornClip`, `halftone`) are in [share
 To add another Vox look, copy one of the three entries and change its colours, fonts, `card`, `headline`, `caption` and
 `bgStyles`. `test/themes.test.js` checks that every name you use exists in the renderer.
 
+**Exam looks.** Themes with `"family": "exam"` (`chalkboard`, `exam-paper`, `notebook`) also set `"examLook"`
+(`chalk`, `omr`, `notebook`), read by the exam cards in [src/remotion/exam/](../src/remotion/exam/) (colours in
+`looks.js`): the question, solution and reveal are written on the board or page itself, the options become chalk
+circles, OMR bubbles or pen and marker, and the tip gets its own box (dashed chalk, red-ruled box, sticky note). Any
+other theme draws the default exam card. `resolveStyle(requested, { family: 'exam' })` keeps a video to that family.
+
 ### Add a setting
 
 1. Add one entry to `SETTINGS_SCHEMA` in [server/settings.js](../server/settings.js). `group` decides which

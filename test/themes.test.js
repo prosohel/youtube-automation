@@ -16,6 +16,7 @@ const cards = [...shared.matchAll(/case '(\w+)':/g)].map((m) => m[1]);
 const headlines = ['swipe', ...[...text.matchAll(/style === '(\w+)'/g)].map((m) => m[1])]; // swipe = default branch
 const bgStyles = [...backgrounds.matchAll(/style === '(\w+)' &&/g)].map((m) => m[1]);
 const motions = [...shared.matchAll(/^\s+(\w+): \{ damping/gm)].map((m) => m[1]);
+const examLooks = [...read('exam/looks.js').matchAll(/^  (\w+): \{/gm)].map((m) => m[1]);
 
 const luminance = (hex) => {
   const n = parseInt(hex.slice(1), 16);
@@ -40,9 +41,10 @@ for (const [id, t] of Object.entries(THEMES)) {
     assert.ok(motions.includes(t.motion), `motion ${t.motion}`);
     for (const b of t.bgStyles) assert.ok(bgStyles.includes(b), `background ${b}`);
     assert.ok(t.accents.length >= 2 && t.transitions.length >= 1);
+    if (t.examLook) assert.ok(examLooks.includes(t.examLook), `exam look ${t.examLook}`);
   });
 
-  if (t.family === 'vox') {
+  if (t.family === 'vox' || t.family === 'exam') {
     test(`theme ${id}: text is readable on the background and on its accents`, () => {
       assert.ok(contrast(t.text, t.bg[0]) >= 7, 'body text on background');
       for (const a of t.accents) assert.ok(contrast(a, t.onAccent) >= 3, `onAccent on ${a}`);

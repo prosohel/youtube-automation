@@ -60,8 +60,9 @@ function themeMenu() {
 /**
  * Turn the script's requested style into the full theme object the composition renders with.
  * requested: { theme, energy, accent } from Claude (all optional, all validated here).
+ * family: keep to the themes of that family (e.g. 'exam' for question videos); a pinned theme still wins.
  */
-function resolveStyle(requested = {}, { forceTheme, seed } = {}) {
+function resolveStyle(requested = {}, { forceTheme, seed, family } = {}) {
   const recent = recentThemes();
   const forced = forceTheme || cfg.theme;
   let id = forced && THEMES[forced] ? forced : null;
@@ -69,10 +70,15 @@ function resolveStyle(requested = {}, { forceTheme, seed } = {}) {
 
   if (!id) {
     const asked = String(requested.theme || '').toLowerCase();
-    if (THEMES[asked] && !recent.includes(asked)) id = asked;
+    const inFamily = family ? THEME_IDS.filter((t) => THEMES[t].family === family) : [];
+    const allowed = inFamily.length ? inFamily : THEME_IDS;
+    if (THEMES[asked] && allowed.includes(asked) && !recent.includes(asked)) id = asked;
     else {
-      if (THEMES[asked]) notes.push(`"${asked}" was used recently`);
-      const pool = THEME_IDS.filter((t) => !recent.includes(t));
+      if (THEMES[asked] && !allowed.includes(asked)) notes.push(`"${asked}" is not a ${family} theme`);
+      else if (THEMES[asked]) notes.push(`"${asked}" was used recently`);
+      const fresh = allowed.filter((t) => !recent.includes(t));
+      // A family keeps to its own looks even when all of them were used recently.
+      const pool = fresh.length ? fresh : inFamily;
       id = pool[Math.floor(Math.random() * pool.length)] || THEME_IDS[0];
     }
   }

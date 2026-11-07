@@ -27,7 +27,8 @@ const cfg = (module.exports = {
   voice: process.env.VOICE || 'en-US-AndrewNeural',
   // Animated Remotion video (set USE_REMOTION=false for the plain ffmpeg pipeline)
   useRemotion: (process.env.USE_REMOTION || 'true').toLowerCase() !== 'false',
-  // Force one design theme (neon, minimal, news, sunset, gold, pop, glass, hacker, vox-paper, vox-newsprint, vox-marker); empty = Claude picks per video
+  // Force one design theme (neon, minimal, news, sunset, gold, pop, glass, hacker, vox-paper, vox-newsprint, vox-marker,
+  // chalkboard, exam-paper, notebook); empty = Claude picks per video
   theme: (process.env.THEME || '').toLowerCase(),
   // Sound effects on transitions/cards (whoosh, click, ding). SFX=false to turn off.
   sfx: (process.env.SFX || 'true').toLowerCase() !== 'false',

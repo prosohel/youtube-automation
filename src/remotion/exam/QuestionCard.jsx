@@ -3,13 +3,16 @@ import { interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
 import { Check } from 'lucide-react';
 import { bodyFont, headFont, isVox, pop, theme, twos } from '../shared';
 import { ITEM_STAGGER } from '../library/timing';
+import { MarkerCircle } from '../Vox';
 import { ExamCard, Label, useFit } from './Card';
+import { LOOKS, examLook, markerBand } from './looks';
 import { MathText } from './Math';
 import { ringLeft, secondsLeft, toBangla } from './timing';
 
 /*
  * The question card: question text, four options ক খ গ ঘ, the source label and the "pause and try" countdown.
  * `reveal` draws the same card for the answer: the right option turns green with a tick, the others fade.
+ * The exam looks draw the options their own way (LookOption): chalk circles, OMR bubbles, pen and marker.
  */
 
 const LETTERS = ['ক', 'খ', 'গ', 'ঘ'];
@@ -42,7 +45,7 @@ const Ring = ({ size, accent, voiceFrames, frames }) => {
   return (
     <div style={{ position: 'relative', width: size, height: size, flex: 'none', transform: `scale(${bump})` }}>
       <svg width={size} height={size} style={{ position: 'absolute', inset: 0, overflow: 'visible' }}>
-        <circle cx={c} cy={c} r={r} fill={T.dark ? 'rgba(0,0,0,0.35)' : T.surface} stroke={T.track} strokeWidth={stroke} />
+        <circle cx={c} cy={c} r={r} fill={T.dark ? 'rgba(0,0,0,0.35)' : examLook() ? T.bg[0] : T.surface} stroke={T.track} strokeWidth={stroke} />
         <circle
           cx={c}
           cy={c}
@@ -112,6 +115,80 @@ const Option = ({ option, i, z, S, textSize, accent, enter, lit, faded, tick }) 
   );
 };
 
+/** The notebook's tick: one red pen stroke, drawn on as `p` goes 0 -> 1. */
+const PenTick = ({ size, color, p }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" style={{ position: 'relative', flex: 'none', overflow: 'visible' }}>
+    <path
+      d="M3 13 C5.5 14.5 7.5 17 9 20.5 C11.5 13 15.5 7.5 22 3"
+      fill="none"
+      stroke={color}
+      strokeWidth={3}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      pathLength={1}
+      strokeDasharray={1}
+      strokeDashoffset={1 - p}
+      opacity={p > 0 ? 1 : 0}
+    />
+  </svg>
+);
+
+/**
+ * An option in an exam look. chalk: the letter in a hand-drawn chalk circle, the right one green. omr: an OMR bubble
+ * that the reveal fills in ink. notebook: blue pen, the right one circled red, marked with the highlighter and ticked.
+ */
+const LookOption = ({ look, option, i, z, S, textSize, enter, lit, faded, tick }) => {
+  const T = theme();
+  const L = LOOKS[look];
+  const on = lit > 0.5;
+  const b = z(S.bubble);
+  const line = Math.max(2, z(4));
+  const right = look === 'notebook' ? L.red : L.right;
+  const bubble = {
+    chalk: {},
+    omr: { border: `${line}px solid ${L.ink}`, background: '#ffffff' },
+    notebook: { border: `${line}px solid ${on ? right : T.text}`, boxShadow: on ? `0 0 0 ${z(6)}px rgba(214,40,40,0.25)` : 'none' },
+  }[look];
+  const letter = look === 'omr' ? (on ? '#ffffff' : L.ink) : on ? right : T.text;
+  return (
+    <div
+      style={{
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        gap: z(18),
+        padding: `${z(S.optPadY)}px ${z(S.optPadX)}px`,
+        borderRadius: z(16),
+        opacity: enter * (1 - 0.68 * faded),
+        transform: `translateX(${-(1 - enter) * 60}px)`,
+      }}
+    >
+      {look === 'omr' ? <div style={{ position: 'absolute', inset: 0, borderRadius: 'inherit', background: L.rightFill, opacity: lit }} /> : null}
+      {look === 'notebook' ? (
+        <div style={{ position: 'absolute', inset: 0, background: markerBand(12, 92), mixBlendMode: 'multiply', transform: `scaleX(${lit})`, transformOrigin: 'left center' }} />
+      ) : null}
+      <div style={{ position: 'relative', flex: 'none', width: b, height: b, boxSizing: 'border-box', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', ...bubble }}>
+        {look === 'chalk' ? (
+          <>
+            <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: `${right}2e`, opacity: lit }} />
+            <MarkerCircle width={b} height={b} color={on ? right : L.line} p={enter} seed={i + 3} stroke={Math.max(2, z(3.5))} />
+          </>
+        ) : null}
+        {look === 'omr' ? <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: L.ink, transform: `scale(${lit})` }} /> : null}
+        <span style={{ position: 'relative', fontFamily: bodyFont(), fontSize: z(S.letter), lineHeight: 1, color: letter }}>{LETTERS[i]}</span>
+      </div>
+      <div data-fit={`o${i}`} style={{ position: 'relative', flex: 1, minWidth: 0, fontSize: textSize, lineHeight: 1.3, color: look === 'chalk' && on ? right : T.text }}>
+        <MathText parts={option.parts} />
+      </div>
+      {tick === null ? null : look === 'notebook' ? (
+        <PenTick size={z(S.tick)} color={right} p={tick} />
+      ) : (
+        <Check size={z(S.tick)} color={right} strokeWidth={3.5} style={{ position: 'relative', flex: 'none', transform: `scale(${tick})` }} />
+      )}
+    </div>
+  );
+};
+
 export const QuestionCard = ({ visual, reveal, accent, isShort, room, voiceFrames, frames, start }) => {
   const f0 = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -125,12 +202,18 @@ export const QuestionCard = ({ visual, reveal, accent, isShort, room, voiceFrame
   const r = reveal ? shown : 0;
   const tick = Math.min(1, pop(f0, fps, start + REVEAL_AT + 4, 10));
   const label = reveal ? 'উত্তর' : visual.source;
+  const look = examLook();
+  const OptionIn = look ? LookOption : Option;
+  // The exam paper prints the timer in a box and sets the question in its serif; the notebook writes it in black.
+  const timerBox =
+    look === 'omr' ? { padding: `${z(8)}px ${z(10)}px ${z(8)}px ${z(18)}px`, border: `${Math.max(2, z(3))}px solid ${LOOKS.omr.ink}`, borderRadius: z(14), background: LOOKS.omr.paper } : {};
+  const qColor = look === 'omr' || look === 'notebook' ? LOOKS[look].question : T.text;
   return (
     <ExamCard cardRef={card} accent={accent} width={S.width} padding={`${z(S.padY)}px ${z(S.padX)}px`} squeeze={squeeze} start={start}>
       <div style={{ display: 'flex', alignItems: 'center', gap: z(20), marginBottom: z(S.gapHead), minHeight: reveal ? 0 : z(S.ring) }}>
         {label ? <Label text={label} accent={accent} size={size('label', z(S.label))} /> : null}
         {reveal ? null : (
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: z(16), flex: 'none' }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: z(16), flex: 'none', ...timerBox }}>
             <div style={{ fontFamily: bodyFont(), fontSize: z(S.label), color: T.muted, whiteSpace: 'nowrap' }}>সেকেন্ড বাকি</div>
             <Ring size={z(S.ring)} accent={accent} voiceFrames={voiceFrames} frames={frames} />
           </div>
@@ -138,16 +221,17 @@ export const QuestionCard = ({ visual, reveal, accent, isShort, room, voiceFrame
       </div>
       <div
         data-fit="q"
-        style={{ fontSize: size('q', z(reveal ? S.qReveal : S.q)), lineHeight: 1.4, textWrap: 'pretty', color: T.text, opacity: reveal ? 0.85 : 1, marginBottom: z(S.gapQ) }}
+        style={{ fontSize: size('q', z(reveal ? S.qReveal : S.q)), lineHeight: 1.4, textWrap: 'pretty', color: qColor, opacity: reveal ? 0.85 : 1, marginBottom: z(S.gapQ) }}
       >
-        <MathText parts={visual.parts} />
+        <MathText parts={visual.parts} style={look === 'omr' ? { fontFamily: headFont() } : undefined} />
       </div>
       {/* minmax(0, …): a column never grows past its share, so a too-wide formula shows up as overflow and is fitted */}
       <div style={{ display: 'grid', gridTemplateColumns: isShort ? 'minmax(0, 1fr)' : 'repeat(2, minmax(0, 1fr))', gap: z(S.gapOpt) }}>
         {visual.options.map((o, i) => {
           const right = reveal && i === visual.answer;
           return (
-            <Option
+            <OptionIn
+              look={look}
               key={i}
               option={o}
               i={i}
