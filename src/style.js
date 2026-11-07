@@ -63,6 +63,8 @@ function themeMenu(family) {
  * Turn the script's requested style into the full theme object the composition renders with.
  * requested: { theme, energy, accent } from Claude (all optional, all validated here).
  * family: keep to the themes of that family (e.g. 'exam' for question videos); a pinned theme still wins.
+ * Without a family, a theme Claude did not choose (none asked for, unknown, or used recently) is never an exam look:
+ * those are for question videos. Claude may still pick one from the menu by mood, and THEME may pin one.
  */
 function resolveStyle(requested = {}, { forceTheme, seed, family } = {}) {
   const recent = recentThemes();
@@ -78,7 +80,8 @@ function resolveStyle(requested = {}, { forceTheme, seed, family } = {}) {
     else {
       if (THEMES[asked] && !allowed.includes(asked)) notes.push(`"${asked}" is not in the ${family} family`);
       else if (THEMES[asked]) notes.push(`"${asked}" was used recently`);
-      const fresh = allowed.filter((t) => !recent.includes(t));
+      const randomPool = inFamily.length ? allowed : allowed.filter((t) => THEMES[t].family !== 'exam');
+      const fresh = randomPool.filter((t) => !recent.includes(t));
       // A family keeps to its own looks even when all of them were used recently.
       const pool = fresh.length ? fresh : inFamily;
       id = pool[Math.floor(Math.random() * pool.length)] || THEME_IDS[0];

@@ -65,6 +65,41 @@ test('without a family a requested theme is kept as before', () => {
   });
 });
 
+/** Runs fn once for every value Math.random can steer a pick of n items to (k/n for k = 0..n-1). */
+const everyRandom = (n, fn) => {
+  const real = Math.random;
+  try {
+    for (let k = 0; k < n; k++) {
+      Math.random = () => (k + 0.5) / n;
+      fn(k);
+    }
+  } finally {
+    Math.random = real;
+  }
+};
+
+test('without a family the random fallback never lands on an exam look', () => {
+  const n = Object.keys(THEMES).length;
+  withHistory([], () => {
+    // No theme asked for, an unknown theme asked for: every random pick is outside the exam family.
+    everyRandom(n, () => {
+      assert.notEqual(resolveStyle({}, { seed: 1 }).theme.family, 'exam');
+      assert.notEqual(resolveStyle({ theme: 'no-such-theme' }, { seed: 1 }).theme.family, 'exam');
+    });
+  });
+  // A recent theme asked for again falls back outside the exam family too.
+  withHistory(['neon'], () => {
+    everyRandom(n, () => assert.notEqual(resolveStyle({ theme: 'neon' }, { seed: 1 }).theme.family, 'exam'));
+  });
+});
+
+test('without a family an exam look is still used when Claude asks for it or THEME pins it', () => {
+  withHistory([], () => {
+    assert.equal(resolveStyle({ theme: 'chalkboard' }, { seed: 1 }).theme.id, 'chalkboard');
+    assert.equal(resolveStyle({}, { seed: 1, forceTheme: 'notebook' }).theme.id, 'notebook');
+  });
+});
+
 test('a pinned theme wins over the family', () => {
   withHistory([], () => {
     assert.equal(resolveStyle({ theme: 'notebook' }, { forceTheme: 'neon', family: 'exam' }).theme.id, 'neon');

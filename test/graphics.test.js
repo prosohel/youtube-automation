@@ -104,6 +104,23 @@ test('summarizeGraphics counts graphic types except icons', () => {
   assert.equal(G.summarizeGraphics(undefined), null);
 });
 
+test('summarizeGraphics leaves out the exam scenes: idea videos are never told to use question or reveal less', () => {
+  const scenes = ['icon', 'question', 'solution', 'reveal', 'tip', 'question', 'reveal', 'bars', 'stat', 'icon'].map((type) => ({ visual: { type } }));
+  assert.deepEqual(G.summarizeGraphics(scenes), { bars: 1, stat: 1 });
+  assert.deepEqual(G.summarizeGraphics(scenes.slice(0, 7)), {});
+});
+
+test('recentGraphics ignores exam scenes counted by older history entries', () => {
+  const history = require('../src/history');
+  history.setHistoryBackend({ load: () => [{ topic: 'q', graphics: { question: 4, reveal: 4, tip: 2, bars: 1 } }, { topic: 'i', graphics: { donut: 1 } }] });
+  try {
+    assert.deepEqual(G.recentGraphics(), ['bars', 'donut']);
+    assert.doesNotMatch(G.graphicsPrompt(ON, G.recentGraphics()), /question|reveal/);
+  } finally {
+    history.setHistoryBackend(null);
+  }
+});
+
 test('recentGraphics returns the two most-used graphics of the last 3 videos', () => {
   const history = require('../src/history');
   history.setHistoryBackend({
