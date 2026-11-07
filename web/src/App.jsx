@@ -52,6 +52,18 @@ function Sidebar() {
           <Icon d={ICONS.plug} /> Integrations
         </NavLink>
       </div>
+      {health && health.auth ? (
+        <button
+          type="button"
+          className="btn btn-sm"
+          onClick={async () => {
+            await fetch('/logout', { method: 'POST' });
+            window.location.assign('/login');
+          }}
+        >
+          Sign out
+        </button>
+      ) : null}
       <div className="worker-card">
         <strong className="inline" style={{ gap: 8 }}>
           <Icon d={ICONS.box} size={16} /> Docker worker

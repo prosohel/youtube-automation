@@ -25,6 +25,9 @@ services:
     environment:
       <<: *env
       PORT: 7000
+      # One shared password for the dashboard (8+ characters). Required when PUBLIC_URL is not localhost.
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:-}
+      TRUST_PROXY: ${TRUST_PROXY:-}
       HOST: 0.0.0.0 # inside the container only; the port mapping above keeps the dashboard on this PC
       IMPORT_DIR: /app/import
     volumes:

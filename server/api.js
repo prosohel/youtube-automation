@@ -11,6 +11,7 @@ const { computeOverview, workerState, slim } = require('./overview');
 const { pendingRecord } = require('./publishFlow');
 const youtubeAuth = require('./youtubeAuth');
 const tiktokAuth = require('./tiktokAuth');
+const { createAuth, MIN_LENGTH } = require('./auth');
 
 const WEB_DIST = path.join(cfg.ROOT, 'web', 'dist');
 const FOOTAGE_DIR = path.join(cfg.ROOT, 'footage');
@@ -36,8 +37,16 @@ async function asBadRequest(fn) {
 
 const withNext = (r) => ({ ...r, next: validateRule(r).ok ? nextRuns(r, 3).map((d) => d.toISOString()) : [] });
 
-function createApp({ redis, queues }) {
+function createApp({ redis, queues, password = '', secureCookies = false }) {
   const app = express();
+  // Behind a reverse proxy (Caddy, nginx, Cloudflare) the visitor's address is in X-Forwarded-For: TRUST_PROXY=1 reads it.
+  if (process.env.TRUST_PROXY) app.set('trust proxy', Number(process.env.TRUST_PROXY) || 1);
+  // With DASHBOARD_PASSWORD set, nothing but the login page is reachable without signing in (the OAuth returns included).
+  const auth = createAuth({ password, secureCookies });
+  if (auth) {
+    auth.routes(app);
+    app.use(auth.gate);
+  }
   app.use(express.json({ limit: '2mb' }));
   const allQueues = () => [queues.videos, queues.publish, queues.ticks];
 
@@ -64,7 +73,7 @@ function createApp({ redis, queues }) {
 
   app.get('/api/health', async (req, res) => {
     const pong = await redis.ping().catch(() => null);
-    res.json({ ok: true, redis: pong === 'PONG', worker: await workerState(redis) });
+    res.json({ ok: true, auth: Boolean(auth), redis: pong === 'PONG', worker: await workerState(redis) });
   });
 
   app.get('/api/overview', async (req, res) => res.json(await computeOverview(redis, queues, { brandId: req.query.brand || undefined })));
@@ -373,10 +382,14 @@ if (require.main === module) {
       const { created } = await brands.ensureBrands(redis); // after the import, so the first brand takes the imported settings
       if (created) console.log('Created the first brand from the existing setup');
       const port = Number(process.env.PORT || 7000);
-      // The API has no login, so by default only this PC can reach it. In Docker the container must listen on
+      // Without DASHBOARD_PASSWORD there is no login, so by default only this PC can reach it. In Docker the container must listen on
       // every interface (HOST=0.0.0.0 in docker-compose.yml); the port mapping there keeps it on 127.0.0.1.
       const host = process.env.HOST || '127.0.0.1';
-      createApp({ redis, queues }).listen(port, host, () => console.log(`Dashboard on ${PUBLIC_URL} (${host}:${port})`));
+      // The API has no accounts, only one shared password. On a public address it is required.
+      const password = (process.env.DASHBOARD_PASSWORD || '').trim();
+      const local = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(PUBLIC_URL);
+      if (!password && !local) throw new Error(`PUBLIC_URL is ${PUBLIC_URL}, so DASHBOARD_PASSWORD (at least ${MIN_LENGTH} characters) must be set`);
+      createApp({ redis, queues, password, secureCookies: /^https:/i.test(PUBLIC_URL) }).listen(port, host, () => console.log(`Dashboard on ${PUBLIC_URL} (${host}:${port})`));
     })
     .catch((e) => {
       console.error('Could not start:', e.message);
