@@ -4,7 +4,7 @@ name: automation-studio
 
 x-env: &env
   REDIS_URL: redis://redis:6379
-  PUBLIC_URL: http://localhost:7000
+  PUBLIC_URL: ${PUBLIC_URL:-http://localhost:7000}
   TZ: Asia/Dhaka
 
 services:
