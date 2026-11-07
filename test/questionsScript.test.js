@@ -744,6 +744,9 @@ const DRY_RUN_ASKS = [
     'গ, দুই এ স্কয়ার বি স্কয়ার সি স্কয়ার। ঘ, কোনটিই নয়। ভিডিও থামিয়ে চেষ্টা করুন।',
   'প্রথম প্রশ্ন। ছয় এ বর্গ বি সি, এবং চার এ ঘন বি বর্গ সি বর্গ, এর সংখ্যা সহগের গসাগু কত? ক, এ বর্গ বি সি। খ, দুই এ বর্গ বি সি। ' +
     'গ, দুই এ বর্গ বি বর্গ সি বর্গ। ঘ, কোনটিই নয়। ভিডিও থামিয়ে চেষ্টা করুন।',
+  // The page writes "গ.সা.গু." with dots; this ask from the second dry run does too, the two above do not.
+  'ছয় এ স্কয়ার বি সি এবং চার এ কিউব বি স্কয়ার সি স্কয়ার, এর সংখ্যা সহগের গ.সা.গু. কোনটি? ক, এ স্কয়ার বি সি। খ, দুই এ স্কয়ার বি সি। ' +
+    'গ, দুই এ স্কয়ার বি স্কয়ার সি স্কয়ার। ঘ, কোনটিই নয়। ভিডিও থামিয়ে চেষ্টা করুন।',
 ];
 const NONE_STEM = 'ছয় এ বর্গ বি সি এবং চার এ ঘন বি বর্গ সি বর্গ, এর সংখ্যা সহগের গসাগু কত?';
 const NONE_READ =
@@ -780,6 +783,8 @@ test('answer check: the right option with its letter counts as reading the optio
     `${NONE_STEM} ঠিক ধরেছেন, ঘ, কোনটিই নয়। ${PAUSE}।`,
     `${NONE_STEM} ঘ, কোনটিই নয়। ক, এ বর্গ বি সি। খ, দুই এ বর্গ বি সি। গ, দুই এ বর্গ বি বর্গ সি বর্গ। ${PAUSE}।`, // out of order
     `${NONE_STEM} ক, খ, গ নয়, ঘ, কোনটিই নয়। ${PAUSE}।`, // letters with nothing read after them
+    // গ skipped: the গ of "গ.সা.গু." is not an option letter.
+    `ছয় এ বর্গ বি সি এবং চার এ ঘন বি বর্গ সি বর্গ, এর গ.সা.গু. কত? ক, এ বর্গ বি সি। খ, দুই এ বর্গ বি সি। ঘ, কোনটিই নয়। ${PAUSE}।`,
   ];
   for (const ask of math) {
     const problems = answerProblems(noneAsk(ask), NONE_INFO);
@@ -797,4 +802,41 @@ test('answer check: the right option with its letter counts as reading the optio
   ]) {
     assert.equal(answerProblems(scriptOf(ask(text), info), info).length, 1, text);
   }
+});
+
+// Questions whose stems use ক, খ, গ as people or quantities: those letters are read with the question, so they must
+// not stand in for the option letters.
+const stemQ = (text, options, answer) => ({ ...wordQ(1, options, text), answer });
+const RATIO = stemQ('ক:খ = ২:৩ এবং খ:গ = ৪:৫ হলে ক:খ:গ = কত?', ['৮:১২:১৫', '২:৩:৫', '৪:৬:৫', 'কোনটিই নয়'], 3);
+const RATIO_STEM = 'ক অনুপাত খ সমান দুই অনুপাত তিন এবং খ অনুপাত গ সমান চার অনুপাত পাঁচ হলে ক অনুপাত খ অনুপাত গ কত?';
+const WORK = stemQ('ক একটি কাজ ১০ দিনে, খ ১৫ দিনে এবং গ ২০ দিনে করতে পারে। তিনজনে একসাথে কাজটি কত দিনে করবে?', ['৪ দিনে', '৫ দিনে', '৬ দিনে', 'কোনটিই নয়'], 3);
+const WORK_STEM = 'ক একটি কাজ দশ দিনে, খ পনেরো দিনে এবং গ বিশ দিনে করতে পারে। তিনজনে একসাথে কাজটি কত দিনে করবে?';
+const AGE = stemQ('ক ও খ এর বর্তমান বয়স সমান। ৫ বছর পর কার বয়স বেশি হবে?', ['বড় জনের', 'ছোট জনের', 'উভয়ের সমান', 'বলা যাবে না'], 2);
+const AGE_STEM = 'ক ও খ এর বর্তমান বয়স সমান। পাঁচ বছর পর কার বয়স বেশি হবে?';
+
+/** answerProblems of a one-question script whose ask is `ask` and whose reveal is right. */
+const askProblems = (q, ask) => {
+  const info = { ...INFO, questions: [q] };
+  const reveal = `সঠিক উত্তর ${['ক', 'খ', 'গ', 'ঘ'][q.answer]}, ${q.options[q.answer]}।`;
+  return answerProblems(scriptOf(partsWith((p) => (p.questions = [{ ask, working: [], reveal }])), info), info);
+};
+
+test('answer check: ক, খ, গ read with the question do not count as reading the options', () => {
+  const leaks = [
+    [RATIO, `${RATIO_STEM} ঘ, কোনটিই নয়। ${PAUSE}।`],
+    [RATIO, `${RATIO_STEM} সঠিক ঘ, কোনটিই নয়। ${PAUSE}।`],
+    [WORK, `${WORK_STEM} ঘ, কোনটিই নয়। ${PAUSE}।`],
+    [WORK, `${WORK_STEM} সঠিক ঘ, কোনটিই নয়। ${PAUSE}।`],
+    [AGE, `${AGE_STEM} গ, উভয়ের সমান। ঘ, বলা যাবে না। ${PAUSE}।`],
+  ];
+  for (const [q, ask] of leaks) {
+    const problems = askProblems(q, ask);
+    assert.equal(problems.length, 1, ask);
+    assert.match(problems[0], /question narration says the right option/);
+  }
+  // Reading the question with its letters, then ক to ঘ with the options, is fine.
+  const ratioRead = `${RATIO_STEM} ক, আট অনুপাত বারো অনুপাত পনেরো। খ, দুই অনুপাত তিন অনুপাত পাঁচ। গ, চার অনুপাত ছয় অনুপাত পাঁচ। ঘ, কোনটিই নয়। ${PAUSE}।`;
+  assert.deepEqual(askProblems(RATIO, ratioRead), []);
+  const workRead = `${WORK_STEM} ক, চার দিনে। খ, পাঁচ দিনে। গ, ছয় দিনে। ঘ, কোনটিই নয়। ${PAUSE}।`;
+  assert.deepEqual(askProblems(WORK, workRead), []);
 });

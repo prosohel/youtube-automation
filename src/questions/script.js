@@ -248,17 +248,50 @@ function showsAnswer(value, q) {
   return numbers(value).some((d) => inRight.includes(d) && !inQuestion.includes(d));
 }
 
+// ক, খ, গ or ঘ as a letter on its own: an option letter, or a person or quantity in the question ("ক:খ = ২:৩").
+const LONE_LETTER = new RegExp(`(?<![${IN_WORD}])[কখগঘ](?![${IN_WORD}])`, 'gu');
+const loneLetters = (s) => [...s.matchAll(LONE_LETTER)].map((m) => ({ letter: m[0], at: m.index }));
+// For finding letters on their own: the dots of an abbreviation go, so the গ of "গ.সা.গু." is part of "গসাগু"
+// whether the page or Claude writes the dots or not.
+const ABBREV_DOT = /(?<=[ঀ-৿])\.(?=[ঀ-৿])/g;
+const plain = (s) => norm(String(s || '').replace(ABBREV_DOT, ''));
+
 /**
  * True when the normalized narration reads the four options in order: ক, খ, গ, ঘ each as a letter on its own, each
  * followed by something, and the right option's text straight after its letter ("ক, এ বর্গ বি সি। খ, … ঘ, কোনটিই
  * নয়"). Options with math or digits are spoken in words and never match as written, so the letters in order are
  * the only sign that a word answer such as "কোনটিই নয়" was read as one of the four options.
+ * The question and the options may hold these letters themselves, and they are read first (the question) or among
+ * the options, so the first that many of each letter in the narration are theirs and never count: only letters
+ * spoken beyond them can read the options. A reading that shortens the question then fails, which is safe (the
+ * script is asked again, then gets the fixed text). One pass over the narration: each letter is the first that
+ * qualifies after the previous one.
  */
-function readsOptionsInOrder(said, q) {
-  const option = norm(q.options[q.answer]).split(' ').map(escapeRe).join('\\s*');
-  const letter = (l) => `(?<![${IN_WORD}])${l}(?![${IN_WORD}])`;
-  const parts = LETTERS.map((l, i) => (i === q.answer ? `${letter(l)}\\s+${option}(?![0-9])` : `${letter(l)}\\s+\\S`));
-  return new RegExp(parts.join('[\\s\\S]*?'), 'u').test(said);
+function readsOptionsInOrder(narration, q) {
+  const said = plain(narration).replace(PAUSE_RE, ' ');
+  const own = {};
+  for (const { letter } of loneLetters([q.text, ...q.options].map(plain).join(' '))) own[letter] = (own[letter] || 0) + 1;
+  const seen = {};
+  const spoken = loneLetters(said).filter(({ letter }) => (seen[letter] = (seen[letter] || 0) + 1) > (own[letter] || 0));
+
+  const option = plain(q.options[q.answer]).split(' ').map(escapeRe).join('\\s*');
+  const rightAfter = new RegExp(`\\s+${option}(?![0-9])`, 'uy'); // the right option's text straight after its letter
+  const somethingAfter = /\s+\S/uy; // any other letter is followed by what it reads
+  let from = 0;
+  let j = 0;
+  for (let i = 0; i < LETTERS.length; i++) {
+    const after = i === q.answer ? rightAfter : somethingAfter;
+    let end = -1;
+    for (; j < spoken.length && end < 0; j++) {
+      const { letter, at } = spoken[j];
+      if (letter !== LETTERS[i] || at < from) continue;
+      after.lastIndex = at + 1;
+      if (after.test(said)) end = after.lastIndex;
+    }
+    if (end < 0) return false;
+    from = end;
+  }
+  return true;
 }
 
 /**
@@ -274,7 +307,7 @@ function saysAnswer(narration, q, { readsOptions = false } = {}) {
   let allowed = hits(re, q.text);
   const read = q.options.map((o, i) => i === q.answer || hits(optionRe(o), said) > 0);
   // One reading of the options: the right option's text inside each option that was read as written.
-  if (readsOptions && (read.every(Boolean) || readsOptionsInOrder(said, q))) {
+  if (readsOptions && (read.every(Boolean) || readsOptionsInOrder(narration, q))) {
     allowed += q.options.reduce((n, o, i) => n + (read[i] ? hits(re, o) : 0), 0);
   }
   return hits(re, said) > allowed;
