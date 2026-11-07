@@ -60,6 +60,30 @@ function readOptions(p) {
   return options.map((o) => clean(o.text));
 }
 
+// A working line is one sentence: split after every "।" that is outside $...$,
+// drop the danda itself, skip empty pieces.
+function splitSentences(text) {
+  const pieces = [];
+  let buf = '';
+  let inMath = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '\\' && inMath) {
+      buf += ch + (text[++i] || '');
+      continue;
+    }
+    if (ch === '$') inMath = !inMath;
+    if (ch === '।' && !inMath) {
+      pieces.push(buf);
+      buf = '';
+    } else {
+      buf += ch;
+    }
+  }
+  pieces.push(buf);
+  return pieces.map((p) => p.trim()).filter(Boolean);
+}
+
 function afterLabel(text, label) {
   const m = new RegExp('^' + label + '\s*[:ঃ]\s*').exec(text);
   return m ? text.slice(m[0].length).trim() : null;
@@ -104,7 +128,7 @@ function parseMathSuggestion(html, url) {
       const answer = /^উত্তর\s*[:ঃ]\s*([কখগঘ])\s*\)/.exec(text);
       if (solution !== null) {
         cur.stage = 'working';
-        if (solution) cur.working.push(solution);
+        cur.working.push(...splitSentences(solution));
       } else if (explanation !== null) {
         cur.stage = 'tip';
         if (explanation) cur.tip.push(explanation);
@@ -112,7 +136,7 @@ function parseMathSuggestion(html, url) {
         cur.answer = LETTERS.indexOf(answer[1]);
         cur.stage = 'done';
       } else if (cur.stage === 'working') {
-        cur.working.push(text);
+        cur.working.push(...splitSentences(text));
       } else if (cur.stage === 'tip') {
         cur.tip.push(text);
       }

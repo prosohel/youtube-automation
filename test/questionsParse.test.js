@@ -16,10 +16,9 @@ test('mathsuggestion: question 1 has text, options, answer, working, tip', () =>
   assert.equal(q.text, 'ক্রয়মূল্য বিক্রয়মূল্যের দ্বিগুণ হলে শতকরা লাভ বা ক্ষতির পরিমাণ কত?');
   assert.deepEqual(q.options, ['লাভ 25%', 'ক্ষতি 25%', 'লাভ 10%', 'ক্ষতি 50%']);
   assert.equal(q.answer, 3);
-  // The "সমাধান:" label paragraph is not a working line, so the first formulas are in the
-  // first working paragraph (index 0); the brief's index 1 counted the label.
-  assert.equal(q.working.length, 3);
-  assert.ok(q.working[0].includes('$= \\dfrac{100}{2} = 50$'), q.working[0]);
+  // Working lines are sentences: each paragraph is split after "।" (outside $...$).
+  assert.equal(q.working[0], 'ধরি ক্রয়মূল্য $= 100$ টাকা');
+  assert.ok(q.working[1].includes('$= \\dfrac{100}{2} = 50$'), q.working[1]);
   assert.ok(q.tip.startsWith('শতকরা ক্ষতি সবসময়'), q.tip);
   assert.equal(q.site, 'mathsuggestion.com');
   assert.equal(q.url, MS_URL);
@@ -35,6 +34,9 @@ test('mathsuggestion: no working line carries katex markup, TeX stays inside $..
       assert.ok(!/katex/i.test(line), line);
     }
     assert.ok(q.working.length > 0, `question ${q.n} has no working`);
+    for (const line of q.working) {
+      assert.ok(line && line === line.trim() && !line.endsWith('।'), line);
+    }
   }
   const q2 = qs.find((x) => x.n === 2);
   assert.equal(q2.text, '$i^{-49}$ এর মান কত?');
