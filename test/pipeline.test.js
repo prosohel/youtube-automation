@@ -381,3 +381,56 @@ test('question mode: a resumed video keeps the questions it picked', async () =>
     assert.deepEqual(done.topicInfo, topicInfo);
   });
 });
+
+test('question mode: a video with questions is scripted by writeQuestionScript, keeps its exam cards and gets an exam theme', async () => {
+  const cfg = require('../src/config');
+  const { setHistoryBackend } = require('../src/history');
+  const { resolveStyle } = require('../src/style');
+  const pinned = cfg.theme;
+  cfg.theme = ''; // whatever .env pins
+  setHistoryBackend({ load: () => [], save() {} });
+  try {
+    const r = await freshRedis();
+    const outDir = tmpOut();
+    const calls = [];
+    const renders = [];
+    const deps = fakeDeps(calls, { outDir, onRender: (args) => renders.push(args) });
+    deps.resolveStyle = (style, opts) => resolveStyle(style, opts);
+    const topicInfo = { topic: 't', questions: [{ id: 'mathsuggestion.com/44th-bcs#1' }], sourceUrl: 'https://mathsuggestion.com/44th-bcs', siteName: 'mathsuggestion.com' };
+    const v = await store.createVideo(r, {});
+    await store.updateVideo(r, v.id, { done: { topic: true }, topic: 't', topicInfo });
+    const done = await runVideoJob(v.id, { redis: r, deps, outDir });
+    assert.deepEqual(calls.filter((c) => c === 'script' || c.startsWith('questionScript')), ['questionScript:1']);
+    assert.deepEqual(done.script.scenes.map((s) => s.visual.type), ['icon', 'question', 'reveal', 'icon']);
+    assert.ok(Array.isArray(done.script.scenes[1].visual.parts), 'checked as an exam card, not turned into an icon');
+    assert.equal(renders[0].scenes[1].visual.type, 'question');
+    assert.equal(done.theme.family, 'exam');
+  } finally {
+    setHistoryBackend(null);
+    cfg.theme = pinned;
+  }
+});
+
+test('idea mode: a video without questions is scripted as before, with no exam cards and no theme family', async () => {
+  const r = await freshRedis();
+  const outDir = tmpOut();
+  const calls = [];
+  const deps = fakeDeps(calls, { outDir });
+  const styleArgs = [];
+  deps.resolveStyle = (...a) => {
+    styleArgs.push(a);
+    return { theme: { id: 'neon', seed: 7 } };
+  };
+  const write = deps.writeScript;
+  deps.writeScript = async (t) => {
+    const s = await write(t);
+    s.scenes[0] = { ...s.scenes[0], visual: { type: 'question', text: 'কত?', options: ['১', '২', '৩', '৪'], answer: 0, countdown: 3 } };
+    return s;
+  };
+  const v = await store.createVideo(r, {});
+  const done = await runVideoJob(v.id, { redis: r, deps, outDir });
+  assert.equal(calls.filter((c) => c.startsWith('questionScript')).length, 0);
+  assert.equal(calls.filter((c) => c === 'script').length, 1);
+  assert.deepEqual(done.script.scenes[0].visual, { type: 'icon', icon: 'Sparkles' }, 'exam cards only in question mode');
+  assert.deepEqual(styleArgs, [[{}]]);
+});

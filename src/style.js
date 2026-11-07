@@ -52,9 +52,11 @@ function recentThemes(n = RECENT) {
   return loadHistory().map((e) => e.theme).filter(Boolean).slice(-n);
 }
 
-/** Text block for the script prompt: every theme with its mood, plus the ones to avoid. */
-function themeMenu() {
-  return THEME_IDS.map((id) => `  - ${id}: ${THEMES[id].label} (${THEMES[id].mood})`).join('\n');
+/** Text block for the script prompt: every theme with its mood, or only the themes of `family` (e.g. 'exam'). */
+function themeMenu(family) {
+  return THEME_IDS.filter((id) => !family || THEMES[id].family === family)
+    .map((id) => `  - ${id}: ${THEMES[id].label} (${THEMES[id].mood})`)
+    .join('\n');
 }
 
 /**

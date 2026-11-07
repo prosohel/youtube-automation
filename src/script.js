@@ -186,4 +186,4 @@ Metadata rules:
   return script;
 }
 
-module.exports = { writeScript, lengthPlan, minutesLabel };
+module.exports = { writeScript, lengthPlan, minutesLabel, SCRIPT_SCHEMA };

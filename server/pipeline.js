@@ -13,7 +13,10 @@ function realDeps() {
     // opts.log receives the reason when no question is usable (the pipeline puts it in the video's log).
     findQuestions: (category, opts) => require('../src/questions').findQuestions(category, opts),
     writeScript: (topic) => require('../src/script').writeScript(topic),
-    resolveStyle: (style) => require('../src/style').resolveStyle(style),
+    // Question mode: the script of a video made from exam questions (topicInfo.questions).
+    writeQuestionScript: (topicInfo) => require('../src/questions/script').writeQuestionScript(topicInfo),
+    // opts: { family } keeps question videos to the exam looks.
+    resolveStyle: (style, opts) => require('../src/style').resolveStyle(style, opts),
     pickProvider: () => require('../src/voice').pickProvider(),
     edgeProvider: () => require('../src/voice').edgeProvider(),
     synthScene: (...a) => require('../src/voice').synthScene(...a),
@@ -66,9 +69,13 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
 
   if (!v.done.script) {
     await startStage('script', 'Writing script...');
-    // Graphics are checked once here, so the stored script (and any resumed render) holds clean data.
-    const script = validateVisuals(await deps.writeScript(v.topicInfo), cfg);
-    const { theme } = deps.resolveStyle(script.style || {});
+    // Question mode: the scenes are built from the source questions and checked so no answer leaks; only these
+    // videos get the exam cards and an exam look. Graphics are checked once here, so the stored script (and any
+    // resumed render) holds clean data.
+    const questionVideo = Boolean(v.topicInfo.questions?.length);
+    const raw = questionVideo ? await deps.writeQuestionScript(v.topicInfo) : await deps.writeScript(v.topicInfo);
+    const script = validateVisuals(raw, { ...cfg, examGraphics: questionVideo });
+    const { theme } = questionVideo ? deps.resolveStyle(script.style || {}, { family: 'exam' }) : deps.resolveStyle(script.style || {});
     v = await markDone('script', {
       script,
       title: script.title,
