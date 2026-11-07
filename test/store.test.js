@@ -26,7 +26,7 @@ test('appendLog keeps the newest 200 lines', async () => {
   const back = await store.getVideo(r, v.id);
   assert.equal(back.log.length, 200);
   assert.match(back.log[0], /line 50$/);
-  assert.match(back.log[199], /^\d\d:\d\d:\d\d line 249$/);
+  assert.match(back.log[199], /^\d{1,2}:\d\d:\d\d (am|pm) line 249$/);
 });
 
 test('parallel updates to different platforms are both kept', async () => {
