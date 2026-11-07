@@ -74,7 +74,7 @@ function resolveStyle(requested = {}, { forceTheme, seed, family } = {}) {
     const allowed = inFamily.length ? inFamily : THEME_IDS;
     if (THEMES[asked] && allowed.includes(asked) && !recent.includes(asked)) id = asked;
     else {
-      if (THEMES[asked] && !allowed.includes(asked)) notes.push(`"${asked}" is not a ${family} theme`);
+      if (THEMES[asked] && !allowed.includes(asked)) notes.push(`"${asked}" is not in the ${family} family`);
       else if (THEMES[asked]) notes.push(`"${asked}" was used recently`);
       const fresh = allowed.filter((t) => !recent.includes(t));
       // A family keeps to its own looks even when all of them were used recently.
