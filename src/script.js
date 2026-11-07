@@ -7,6 +7,7 @@ const { directionPrompt, recentDirection } = require('./direction');
 const { BASIC_TYPES, LIBRARY_TYPES, graphicsPrompt, recentGraphics } = require('./graphics');
 const { EMOJI_NAMES } = require('./emoji');
 const { STYLES: THUMB_STYLES, thumbnailPrompt, recentThumbStyles } = require('./thumbnail');
+const speech = require('./speech');
 
 // Icons the animated visuals can draw (lucide-react names; unknown names fall back to Sparkles).
 const ICON_NAMES =
@@ -98,12 +99,6 @@ const SCRIPT_SCHEMA = {
 
 /* ---------- video length ---------- */
 
-// Spoken words a minute. Bangla was measured on this channel's ElevenLabs videos (~142); kept a little
-// lower so a video lands at, or just under, its target.
-const WPM = { bangla: 140, other: 150 };
-const INTRO_OUTRO_SEC = 4; // 1.8 s intro + 2.2 s outro (src/render.js)
-const SCENE_TAIL_SEC = 0.25; // src/render.js adds this after every scene's voice
-
 const minutesLabel = (m) => `${m} minute${Number(m) === 1 ? '' : 's'}`;
 
 /**
@@ -116,9 +111,8 @@ function lengthPlan({ format, targetMinutes, language }) {
   const [slow, fast] = format === 'shorts' ? [8, 6] : [15, 10];
   const lo = Math.max(3, Math.round(seconds / slow));
   const hi = Math.max(lo + 1, Math.round(seconds / fast));
-  const speak = seconds - INTRO_OUTRO_SEC - SCENE_TAIL_SEC * ((lo + hi) / 2);
-  const wpm = /bangla|bengali|bn\b/i.test(language || '') ? WPM.bangla : WPM.other;
-  return { words: Math.max(30, Math.round((speak / 60) * wpm)), scenes: `${lo}-${hi}` };
+  const speak = seconds - speech.INTRO_OUTRO_SEC - speech.SCENE_TAIL_SEC * ((lo + hi) / 2);
+  return { words: Math.max(30, Math.round((speak / 60) * speech.wpmFor(language))), scenes: `${lo}-${hi}` };
 }
 
 /**
@@ -126,7 +120,7 @@ function lengthPlan({ format, targetMinutes, language }) {
  * Returns { title, description, tags[], scenes: [{ narration, headline, visual, broll, keywords[] }] }
  */
 async function writeScript(topic) {
-  const isBangla = /bangla|bengali|bn\b/i.test(cfg.language);
+  const isBangla = speech.isBangla(cfg.language);
   const { words, scenes: sceneCount } = lengthPlan(cfg);
 
   const recent = recentThemes();
@@ -192,4 +186,4 @@ Metadata rules:
   return script;
 }
 
-module.exports = { writeScript, lengthPlan, minutesLabel, WPM, INTRO_OUTRO_SEC, SCENE_TAIL_SEC };
+module.exports = { writeScript, lengthPlan, minutesLabel };

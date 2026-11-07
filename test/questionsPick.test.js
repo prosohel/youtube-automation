@@ -6,7 +6,7 @@ const cfg = require('../src/config');
 const { parseMathSuggestion, parseRecentJobSolution } = require('../src/questions/parse');
 const { fitsVideo, estimateSeconds, usedQuestionIds, budgetSeconds, questionsWanted } = require('../src/questions/pick');
 const { findQuestions } = require('../src/questions');
-const { WPM } = require('../src/script');
+const { WPM } = require('../src/speech');
 
 const fixture = (name) => fs.readFileSync(path.join(__dirname, 'fixtures', 'sites', name), 'utf8');
 const MS_HTML = fixture('mathsuggestion-44th-bcs.html');
@@ -37,13 +37,32 @@ test('fitsVideo: text, option, working and tip limits', () => {
   assert.equal(fitsVideo({ ...Q1, working: [] }, ALL), true, 'no working = quiz format');
 });
 
+test('fitsVideo: an empty question, option or working line does not fit; an empty tip is no tip', () => {
+  assert.equal(fitsVideo({ ...Q1, text: '' }, ALL), false);
+  assert.equal(fitsVideo({ ...Q1, text: '   ' }, ALL), false);
+  assert.equal(fitsVideo({ ...Q1, options: ['', 'খ', 'গ', 'ঘ'] }, ALL), false);
+  assert.equal(fitsVideo({ ...Q1, options: ['ক', ' ', 'গ', 'ঘ'] }, ALL), false);
+  assert.equal(fitsVideo({ ...Q1, working: ['এক ধাপ', ''] }, ALL), false);
+  assert.equal(fitsVideo({ ...Q1, tip: '' }, ALL), true);
+});
+
 test('fitsVideo: a question that needs a figure is skipped', () => {
-  assert.equal(fitsVideo({ ...Q1, text: 'নিচের চিত্রে ABCD একটি বর্গ। এর ক্ষেত্রফল কত?' }, ALL), false);
-  assert.equal(fitsVideo({ ...Q1, text: 'চিত্র অনুযায়ী x এর মান কত?' }, ALL), false);
-  assert.equal(fitsVideo({ ...Q1, text: 'In the figure, what is the area of the square?' }, ALL), false);
+  const needsFigure = [
+    'নিচের চিত্রে ABCD একটি বর্গ। এর ক্ষেত্রফল কত?',
+    'চিত্র অনুযায়ী x এর মান কত?',
+    'চিত্রটির ক্ষেত্রফল কত?',
+    'চিত্রানুযায়ী x এর মান কত?',
+    'নিচের চিত্রগুলো দেখে উত্তর দাও: কোনটি বর্গ?',
+    'In the figure, what is the area of the square?',
+    'In the diagram below, what is x?',
+    'See Fig. 2: what is the angle?',
+  ];
+  for (const text of needsFigure) assert.equal(fitsVideo({ ...Q1, text }, ALL), false, text);
   assert.equal(fitsVideo({ ...Q1, working: ['চিত্রে দেখানো ত্রিভুজের ভূমি 4 সেমি'] }, ALL), false);
-  // "চলচ্চিত্র" (film) holds the letters of "চিত্র" but needs no figure.
+  assert.equal(fitsVideo({ ...Q1, options: ['চিত্র ক', 'খ', 'গ', 'ঘ'] }, ALL), false);
+  // "চলচ্চিত্র" (film) holds the letters of "চিত্র" but needs no figure; nor does "figurehead".
   assert.equal(fitsVideo({ ...Q36, text: 'বাংলাদেশের প্রথম সবাক চলচ্চিত্র কোনটি?' }, ALL), true);
+  assert.equal(fitsVideo({ ...Q36, text: 'Who was the figurehead of the movement?' }, ALL), true);
 });
 
 test('fitsVideo: subject math keeps only গণিত questions that have a number', () => {
@@ -98,12 +117,13 @@ const PAGES = [
 ];
 
 /** Fakes for every outside call. Both pages serve the same fixture HTML. */
-function fakes({ pages = PAGES, pick, history = [], order = [], listPages } = {}) {
+function fakes({ pages = PAGES, pick, history = [], order = [], listPages, fetchFails = [] } = {}) {
   const seen = { fetched: [], asked: [], logs: [] };
   const deps = {
     listPages: listPages || (async (site) => (site === 'mathsuggestion.com' ? pages : [])),
     fetchPage: async (url) => {
       seen.fetched.push(url);
+      if (fetchFails.includes(url)) throw new Error(`GET ${url} failed: HTTP 500`);
       return MS_HTML;
     },
     askJson: async (req) => {
@@ -159,6 +179,36 @@ test('findQuestions: Claude may reorder the chosen questions; numbers it was not
   const { deps } = fakes({ pick: MS_URL, order: [3, 7, 99, 1] });
   const info = await findQuestions(undefined, deps);
   assert.deepEqual(info.questions.map((q) => q.n), [3, 1]);
+}));
+
+test('findQuestions: a chosen question Claude leaves out of the order is kept, after the ordered ones', withCfg({ questionsPerVideo: 3 }, async () => {
+  // Chosen in page order: 1, 3 and 7. Claude's topic names three questions, so all three stay.
+  const { deps } = fakes({ pick: MS_URL, order: [7] });
+  const info = await findQuestions(undefined, deps);
+  assert.deepEqual(info.questions.map((q) => q.n), [7, 1, 3]);
+  const none = await findQuestions(undefined, fakes({ pick: MS_URL, order: [] }).deps);
+  assert.deepEqual(none.questions.map((q) => q.n), [1, 3, 7], 'no order = page order');
+}));
+
+test('findQuestions: a page that cannot be read is passed over for the next one', withCfg({}, async () => {
+  const { deps, seen } = fakes({ pick: MS_URL, fetchFails: [MS_URL] });
+  const info = await findQuestions(undefined, deps);
+  assert.equal(info.sourceUrl, MS_URL_B);
+  assert.deepEqual(seen.fetched, [MS_URL, MS_URL_B]);
+  assert.deepEqual(seen.logs, []);
+}));
+
+test('findQuestions: no page can be read -> null, with the last error as the reason', withCfg({}, async () => {
+  const { deps, seen } = fakes({ pick: MS_URL, fetchFails: [MS_URL, MS_URL_B] });
+  assert.equal(await findQuestions(undefined, deps), null);
+  assert.deepEqual(seen.logs, [`GET ${MS_URL_B} failed: HTTP 500`]);
+}));
+
+test('findQuestions: pages read with nothing usable and pages not read are both named in the reason', withCfg({}, async () => {
+  const history = [{ questions: idsOn(MS_URL) }];
+  const { deps, seen } = fakes({ pick: MS_URL, history, fetchFails: [MS_URL_B] });
+  assert.equal(await findQuestions(undefined, deps), null);
+  assert.deepEqual(seen.logs, [`no unused question that fits a video on the 1 page read; 1 could not be read (GET ${MS_URL_B} failed: HTTP 500)`]);
 }));
 
 test('findQuestions: a URL Claude made up means the first candidate page', withCfg({}, async () => {
@@ -232,4 +282,41 @@ test('findQuestions with both sites: Claude sees pages of each, and the page is 
   assert.equal(info.sourceUrl, RJS_URL);
   assert.deepEqual(info.questions.map((q) => q.n), [1, 2]);
   for (const q of info.questions) assert.deepEqual(q.working, [], 'quiz format');
+}));
+
+test('findQuestions with both sites: a site whose sitemap fails is left out and the other site is used', withCfg({ questionSource: 'both' }, async () => {
+  const RJS_URL = 'https://recentjobsolution.com/exam/security-printing-assistant-manager';
+  const RJS_HTML = fixture('rjs-security-printing.html');
+  // Whichever site comes first in the random order, mathsuggestion.com fails and recentjobsolution.com works.
+  for (let run = 0; run < 6; run++) {
+    const logs = [];
+    const info = await findQuestions(undefined, {
+      listPages: async (site) => {
+        if (site === 'mathsuggestion.com') throw new Error('GET https://mathsuggestion.com/sitemap.xml failed: HTTP 503');
+        return [{ url: RJS_URL, title: 'security printing assistant manager' }];
+      },
+      fetchPage: async () => RJS_HTML,
+      askJson: async (req) => (req.name === 'pick_question_page' ? { url: RJS_URL } : { order: [], topic: 't', angle: 'a', hook: 'h', searchQuery: 'q', whyItWorks: 'w' }),
+      loadHistory: () => [],
+      log: (reason) => logs.push(reason),
+    });
+    assert.equal(info.siteName, 'recentjobsolution.com');
+    assert.deepEqual(logs, []);
+  }
+}));
+
+test('findQuestions with both sites: every sitemap failing -> null with the reason', withCfg({ questionSource: 'both' }, async () => {
+  const logs = [];
+  const info = await findQuestions(undefined, {
+    listPages: async (site) => {
+      throw new Error(`GET https://${site}/sitemap.xml failed: HTTP 503`);
+    },
+    fetchPage: async () => assert.fail('nothing to fetch'),
+    askJson: async () => assert.fail('nothing to ask'),
+    loadHistory: () => [],
+    log: (reason) => logs.push(reason),
+  });
+  assert.equal(info, null);
+  assert.equal(logs.length, 1);
+  assert.match(logs[0], /sitemap\.xml failed: HTTP 503/);
 }));

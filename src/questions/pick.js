@@ -1,6 +1,6 @@
 // Which exam questions fit a video, how long each takes, and which a brand has used. Pure: no network, no Redis.
 const { LIMIT } = require('../examVisuals');
-const { INTRO_OUTRO_SEC, SCENE_TAIL_SEC } = require('../script');
+const { INTRO_OUTRO_SEC, SCENE_TAIL_SEC } = require('../speech');
 
 const MAX_WORKING_LINES = 8;
 const SHORTS_MAX_SEC = 180; // YouTube counts vertical videos up to 3 minutes as Shorts
@@ -8,24 +8,26 @@ const HOOK_AND_CLOSING_SEC = 12; // the hook scene before the questions and the 
 const WORDS_PER_WORKING_LINE = 6;
 const REVEAL_AND_TIP_WORDS = 12;
 
-// A question that needs its figure cannot be shown: "চিত্রে", "চিত্রটি", "চিত্র অনুযায়ী", "figure".
-// Whole words only, so "চলচ্চিত্র" (film) or "চিত্রশিল্পী" (painter) is no figure.
-const FIGURE = /(?<![ঀ-৿])চিত্র(?:ে|টি|টিতে|ের)?(?![ঀ-৿])|\bfigures?\b/i;
+// A question that needs its figure cannot be shown: any word starting with "চিত্র" (চিত্রে, চিত্রটির,
+// চিত্রানুযায়ী, চিত্রগুলো...), "figure", "Fig. 2", "diagram". A word that only ends in it, like "চলচ্চিত্র"
+// (film), is no figure.
+const FIGURE = /(?<![\u0980-\u09FF])চিত্র|\b(?:figures?|diagrams?)\b|\bfigs?\./i;
 const DIGIT = /[0-9০-৯]/;
 
-const within = (s, max) => typeof s === 'string' && s.length <= max;
+const within = (s, max) => typeof s === 'string' && s.trim() !== '' && s.length <= max;
 const words = (s) => String(s || '').split(/\s+/).filter(Boolean).length;
 
 /**
- * True when a question can be shown as it is: question, options, working lines and tip within the on-screen
- * limits (no working = quiz format), no figure needed, and for subject 'math' a গণিত question with a number.
+ * True when a question can be shown as it is: question, options and working lines not empty, and they and the
+ * tip within the on-screen limits (no working = quiz format), no figure needed, and for subject 'math' a গণিত
+ * question with a number.
  */
 function fitsVideo(q, { subject } = {}) {
   const working = q.working || [];
   const options = Array.isArray(q.options) ? q.options : [];
   if (!within(q.text, LIMIT.text)) return false;
   if (options.length !== 4 || !options.every((o) => within(o, LIMIT.option))) return false;
-  if (q.tip != null && !within(q.tip, LIMIT.tip)) return false;
+  if (q.tip && !within(q.tip, LIMIT.tip)) return false; // null or '' = no tip
   if (working.length > MAX_WORKING_LINES || !working.every((l) => within(l, LIMIT.line))) return false;
   if ([q.text, ...options, ...working, q.tip || ''].some((s) => FIGURE.test(s))) return false;
   if (subject === 'math' && !(q.subject === 'গণিত' && DIGIT.test([q.text, ...options].join(' ')))) return false;
@@ -72,7 +74,10 @@ function fillBudget(questions, { max, budget, wpm }) {
   return out;
 }
 
-/** The chosen questions in Claude's order: only numbers it was given count, each once. None left = page order. */
+/**
+ * The chosen questions in Claude's order: only numbers it was given count, each once. Every chosen question is
+ * kept (the topic Claude wrote names their count): any it left out follow in page order.
+ */
 function applyOrder(chosen, order) {
   const byN = new Map(chosen.map((q) => [q.n, q]));
   const out = [];
@@ -80,7 +85,7 @@ function applyOrder(chosen, order) {
     const q = byN.get(Number(n));
     if (q && !out.includes(q)) out.push(q);
   }
-  return out.length ? out : chosen;
+  return [...out, ...chosen.filter((q) => !out.includes(q))];
 }
 
 /** Pages with fewer used questions first (fresh pages lead); the listed order is kept among equals. */

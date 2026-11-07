@@ -5,7 +5,7 @@ const cfg = require('../config');
 const { log } = require('../util');
 const { askJson } = require('../llm');
 const { loadHistory } = require('../history');
-const { WPM } = require('../script');
+const { wpmFor } = require('../speech');
 const sites = require('./sites');
 const pick = require('./pick');
 
@@ -79,20 +79,30 @@ function topicPrompt(title, questions) {
 
 ${list}
 
-- order: the question numbers above, in the order to show them, the most gripping first. Use only these numbers.
-- topic: the video's topic in ${cfg.language}, naming the exam and how many questions, e.g. "৪৪তম বিসিএস প্রিলিমিনারি গণিত: ২টি প্রশ্নের সমাধান".
+- order: every question number above, once each, in the order to show them, the most gripping first.
+- topic: the video's topic in ${cfg.language}, naming the exam and that it solves ${questions.length} question${questions.length === 1 ? '' : 's'}, e.g. "৪৪তম বিসিএস প্রিলিমিনারি গণিত: ২টি প্রশ্নের সমাধান".
 - angle: the take that makes it worth watching.
 - hook: the first spoken sentence, under 15 words. It never gives away an answer.
 - searchQuery: what a viewer would type into YouTube to find these questions.
 - whyItWorks: one sentence.`;
 }
 
+const message = (e) => (e && e.message ? e.message : String(e));
+
 async function pickQuestions(category, d) {
   const used = pick.usedQuestionIds(d.loadHistory());
+  // A site whose sitemap cannot be read is left out; only when no site lists a page is there nothing to pick.
   const lists = [];
-  for (const site of sourceSites(cfg.questionSource)) lists.push((await d.listPages(site)).map((p) => ({ ...p, site })));
+  let siteError = null;
+  for (const site of sourceSites(cfg.questionSource)) {
+    try {
+      lists.push((await d.listPages(site)).map((p) => ({ ...p, site })));
+    } catch (e) {
+      siteError = message(e);
+    }
+  }
   const pages = pick.rankPages(interleave(lists), used);
-  if (!pages.length) throw new Error(`${cfg.questionSource} lists no question page`);
+  if (!pages.length) throw new Error(siteError || `${cfg.questionSource} lists no question page`);
 
   const { url } = await d.askJson({
     prompt: pagePrompt(pages.slice(0, MAX_TITLES), category),
@@ -103,12 +113,21 @@ async function pickQuestions(category, d) {
   });
   const first = pages.find((p) => p.url === url) || pages[0];
   // Whether a page still has an unused question that fits is known only once it is read: the chosen page
-  // first, then the next ones in rank order.
+  // first, then the next ones in rank order. A page that cannot be read or parsed is passed over too.
   const tries = [first, ...pages.filter((p) => p !== first)].slice(0, MAX_PAGES_TRIED);
-  const wpm = /bangla|bengali|bn\b/i.test(cfg.language || '') ? WPM.bangla : WPM.other;
+  const wpm = wpmFor(cfg.language);
+  let read = 0;
+  let pageError = null;
 
   for (const page of tries) {
-    const all = sites.SITES[page.site].parse(await d.fetchPage(page.url), page.url);
+    let all;
+    try {
+      all = sites.SITES[page.site].parse(await d.fetchPage(page.url), page.url);
+      read++;
+    } catch (e) {
+      pageError = message(e);
+      continue;
+    }
     const usable = all.filter((q) => !used.has(q.id) && pick.fitsVideo(q, { subject: cfg.questionSubject }));
     if (!usable.length) continue;
     const chosen = pick.fillBudget(usable, { max: pick.questionsWanted(cfg.questionsPerVideo), budget: pick.budgetSeconds(cfg), wpm });
@@ -131,7 +150,12 @@ async function pickQuestions(category, d) {
       siteName: page.site,
     };
   }
-  throw new Error(`no unused question that fits a video on the ${tries.length} page${tries.length === 1 ? '' : 's'} tried`);
+  if (!read) throw new Error(pageError);
+  const failed = tries.length - read;
+  throw new Error(
+    `no unused question that fits a video on the ${read} page${read === 1 ? '' : 's'} read` +
+      (failed ? `; ${failed} could not be read (${pageError})` : '')
+  );
 }
 
 /**
@@ -144,7 +168,7 @@ async function findQuestions(category, deps = {}) {
   try {
     return await pickQuestions(category, d);
   } catch (e) {
-    d.log(e && e.message ? e.message : String(e));
+    d.log(message(e));
     return null;
   }
 }

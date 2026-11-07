@@ -98,6 +98,29 @@ test('a question video counts as used once its questions are picked, before its 
   }
 });
 
+test('questions used by a video older than the latest 500 still count as used', { timeout: 60000 }, async () => {
+  const { usedQuestionIds } = require('../src/questions/pick');
+  const r = await freshRedis();
+  const brand = await seedBrand(r, { name: 'A' });
+  const oldest = await store.createVideo(r, { brandId: brand.id });
+  const ids = ['mathsuggestion.com/44th-bcs#1', 'mathsuggestion.com/44th-bcs#3'];
+  await store.updateVideo(r, oldest.id, { done: { topic: true, script: true }, topic: 'first', topicInfo: { topic: 'first', questions: ids.map((id) => ({ id })) } });
+  for (let i = 0; i < 500; i++) {
+    const v = await store.createVideo(r, { brandId: brand.id });
+    await store.updateVideo(r, v.id, { done: { topic: true, script: true }, topic: `idea ${i}` });
+  }
+  await loadHistory(r, null, brand.id);
+  try {
+    const h = require('../src/history').loadHistory();
+    assert.deepEqual([...usedQuestionIds(h)], ids);
+    const topics = h.map((e) => e.topic).filter(Boolean);
+    assert.equal(topics.length, 500, 'topics, themes and picks still come from the latest 500 videos');
+    assert.ok(!topics.includes('first'));
+  } finally {
+    require('../src/history').setHistoryBackend(null);
+  }
+});
+
 test('recent videos\' picks come from Redis, so Claude avoids repeating them', async () => {
   const { recentDirection } = require('../src/direction');
   const r = await freshRedis();

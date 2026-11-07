@@ -51,7 +51,7 @@ async function fetchTrendHints() {
  * Returns the single best topic: { topic, angle, hook, searchQuery, whyItWorks }
  */
 async function findTopic(category) {
-  const done = loadHistory().map((h) => h.topic);
+  const done = loadHistory().map((h) => h.topic).filter(Boolean); // an entry may hold only used questions
   const trends = await fetchTrendHints();
   // TARGET_MINUTES sizes every video, Shorts included.
   const length = `${cfg.targetMinutes} minute${Number(cfg.targetMinutes) === 1 ? '' : 's'}`;
