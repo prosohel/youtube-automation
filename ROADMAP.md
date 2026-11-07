@@ -31,6 +31,11 @@ Ideas the project would benefit from. None of them is promised or assigned. If y
 - **Thumbnail A/B variants** and a button to redo one thumbnail (designed thumbnails are built: four styles, Claude picks per video).
 - **Subtitles in other languages** uploaded with the video.
 - **Notifications** (email, Telegram, Discord) when a video is published or a job fails.
+- **Answer check for made-up exam questions.** Exam videos are built in four steps
+  ([spec](docs/superpowers/specs/2026-11-07-math-exam-videos-design.md)); steps 1–3 are done: exam question
+  graphics, three exam looks, and question mode (real questions from the owner's sites, checked so no answer
+  shows early). Step 4 is open: let idea-mode videos use the question graphics, with one extra Claude call that
+  solves each question and a rewrite when its answer differs.
 
 ## Project health
 
