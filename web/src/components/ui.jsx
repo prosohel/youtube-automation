@@ -138,7 +138,7 @@ export function VideoStatus({ video }) {
 export const contentLang = (language) => (/bangla|bengali|\bbn\b/i.test(language || '') ? 'bn' : undefined);
 
 export const fmtTime = (iso) =>
-  iso ? new Date(iso).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+  iso ? new Date(iso).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true }) : '';
 
 /** Bottom-right message that disappears after a few seconds. */
 export function useToast() {

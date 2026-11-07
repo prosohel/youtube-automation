@@ -7,25 +7,42 @@ import { BrandChip, Chip, contentLang, fmtTime, Icon, ICONS, PlatformBadge, plat
 const TIME_ZONES = ['Asia/Dhaka', 'Asia/Kolkata', 'UTC', 'Europe/London', 'America/New_York'];
 const DAYS = [['1', 'Mon'], ['2', 'Tue'], ['3', 'Wed'], ['4', 'Thu'], ['5', 'Fri'], ['6', 'Sat'], ['0', 'Sun']];
 
-/** "09:00, 18:00" + days -> cron. All times must share the minutes (one cron line). */
+/** "9:00 am" / "6:30 pm" / "18:00" -> [hour 0-23, minute], or null. */
+function parseClock(t) {
+  const m = /^(\d{1,2}):(\d{2})\s*([ap]\.?m\.?)?$/i.exec(String(t).trim());
+  if (!m) return null;
+  let h = +m[1];
+  const min = +m[2];
+  if (min > 59) return null;
+  if (m[3]) {
+    if (h < 1 || h > 12) return null;
+    h = (h % 12) + (/^p/i.test(m[3]) ? 12 : 0);
+  } else if (h > 23) return null;
+  return [h, min];
+}
+
+/** 18, 5 -> "6:05 pm" */
+const clock12 = (h, min) => `${h % 12 || 12}:${String(min).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`;
+
+/** "9:00 am, 6:00 pm" + days -> cron. All times must share the minutes (one cron line). */
 function buildCron(times, days) {
-  const parts = times.split(',').map((t) => t.trim()).filter(Boolean).map((t) => /^(\d{1,2}):(\d{2})$/.exec(t));
-  if (!parts.length || parts.some((p) => !p || +p[1] > 23 || +p[2] > 59)) return { error: 'Write times like 09:00, 18:00' };
-  const mins = new Set(parts.map((p) => +p[2]));
-  if (mins.size > 1) return { error: 'All times in one rule need the same minutes (e.g. 09:30, 18:30). Add a second rule for other times.' };
+  const parts = times.split(',').map((t) => t.trim()).filter(Boolean).map(parseClock);
+  if (!parts.length || parts.some((p) => !p)) return { error: 'Write times like 9:00 am, 6:00 pm' };
+  const mins = new Set(parts.map((p) => p[1]));
+  if (mins.size > 1) return { error: 'All times in one rule need the same minutes (e.g. 9:30 am, 6:30 pm). Add a second rule for other times.' };
   const dow = days.length === 0 || days.length === 7 ? '*' : [...days].sort().join(',');
-  return { cron: `${[...mins][0]} ${parts.map((p) => +p[1]).join(',')} * * ${dow}` };
+  return { cron: `${[...mins][0]} ${parts.map((p) => p[0]).join(',')} * * ${dow}` };
 }
 
 /** cron -> editor fields, when it is a plain "minute hours * * days" line. */
 function parseCron(cron) {
   const m = /^(\d{1,2}) ([\d,]+) \* \* ([\d,*]+)$/.exec(String(cron || '').trim());
   if (!m) return null;
-  const times = m[2].split(',').map((h) => `${h.padStart(2, '0')}:${m[1].padStart(2, '0')}`).join(', ');
+  const times = m[2].split(',').map((h) => clock12(+h, +m[1])).join(', ');
   return { times, days: m[3] === '*' ? [] : m[3].split(',') };
 }
 
-const blank = { brandId: '', kind: 'publish', platform: 'youtube', mode: 'daily', times: '18:00', days: [], cron: '0 18 * * *', tz: 'Asia/Dhaka', count: 1, category: '', pick: 'oldest', privacy: '', caption: '', enabled: true };
+const blank = { brandId: '', kind: 'publish', platform: 'youtube', mode: 'daily', times: '6:00 pm', days: [], cron: '0 18 * * *', tz: 'Asia/Dhaka', count: 1, category: '', pick: 'oldest', privacy: '', caption: '', enabled: true };
 
 function describe(rule) {
   const parsed = parseCron(rule.cron);
@@ -153,8 +170,8 @@ function Editor({ initial, brands, brandName, onSaved, onCancel, setToast }) {
       ) : (
         <label className="field" style={{ maxWidth: 360 }}>
           Times
-          <input value={f.times} onChange={(e) => set('times', e.target.value)} placeholder="09:00, 18:00" />
-          <span className="hint">24-hour clock, separated by commas.</span>
+          <input value={f.times} onChange={(e) => set('times', e.target.value)} placeholder="9:00 am, 6:00 pm" />
+          <span className="hint">Separated by commas. 18:00 also works.</span>
         </label>
       )}
       {f.kind === 'publish' && (
@@ -313,7 +330,7 @@ export default function Schedule() {
                 {slots.map((s, j) => (
                   <div className="slot" key={j}>
                     <PlatformBadge id={s.kind === 'make' ? 'make' : s.platform} small />
-                    {new Date(s.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(s.at).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true })}
                     {s.kind === 'make' && <Chip tone="info">make {s.count}</Chip>}
                     {chip(s.brandId)}
                   </div>

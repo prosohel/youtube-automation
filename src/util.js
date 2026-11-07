@@ -49,9 +49,12 @@ const pad = (n) => String(n).padStart(2, '0');
 /** HH:MM:SS in the machine's own time zone (TZ=Asia/Dhaka in Docker), not UTC. */
 const localTime = (d = new Date()) => `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 
+/** h:MM:SS am/pm in the machine's own time zone: the time shown in a video's log in the dashboard. */
+const localClock12 = (d = new Date()) => `${d.getHours() % 12 || 12}:${pad(d.getMinutes())}:${pad(d.getSeconds())} ${d.getHours() < 12 ? 'am' : 'pm'}`;
+
 /** YYYY-MM-DD in the machine's own time zone. */
 const localDate = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
 const log = (...a) => console.log(`[${localTime()}]`, ...a);
 
-module.exports = { ensureDir, run, parseJson, slugify, log, localTime, localDate };
+module.exports = { ensureDir, run, parseJson, slugify, log, localTime, localClock12, localDate };
