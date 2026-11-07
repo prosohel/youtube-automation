@@ -4,6 +4,7 @@
 // a check becomes a plain icon, the way an invalid visual falls back today.
 
 const { loadHistory } = require('./history');
+const { EXAM_TYPES, checkExamVisual } = require('./examVisuals');
 
 const BASIC_TYPES = ['icon', 'stat', 'list', 'compare'];
 const LIBRARY_TYPES = ['bigNumber', 'bars', 'line', 'donut', 'timeline'];
@@ -122,6 +123,7 @@ function validateVisual(visual, opts) {
   const v = visual && typeof visual === 'object' ? visual : {};
   if (BASIC_TYPES.includes(v.type)) return visual;
   const icon = { type: 'icon', icon: typeof v.icon === 'string' && v.icon ? v.icon : 'Sparkles' };
+  if (EXAM_TYPES.includes(v.type)) return (opts && opts.examGraphics && checkExamVisual(v)) || icon;
   if (!LIBRARY_TYPES.includes(v.type) || !(opts && opts.directGraphics)) return icon;
   return CHECK[v.type](v, isBangla(opts.language)) || icon;
 }
