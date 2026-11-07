@@ -144,7 +144,7 @@ test('BRAND_KEYS is exactly what each brand keeps for itself', () => {
   const expected = [
     // channel
     'NICHE', 'LANGUAGE', 'VIDEO_FORMAT', 'TARGET_MINUTES', 'TOPIC_CATEGORIES', 'PRIVACY_STATUS', 'YT_CATEGORY_ID', 'SYNTHETIC_MEDIA',
-    'QUESTION_SOURCE', 'QUESTION_SUBJECT', 'QUESTIONS_PER_VIDEO',
+    'QUESTION_SOURCE', 'QUESTION_SUBJECT', 'QUESTIONS_PER_VIDEO', 'EXTRA_LINK',
     // look
     'THEME', 'VISUALS', 'THUMB_STYLE', 'THUMB_INTRO',
     // voice

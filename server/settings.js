@@ -83,6 +83,7 @@ const SETTINGS_SCHEMA = [
     optionLabels: { all: 'All subjects', math: 'Math only' },
     optionHints: { math: 'Only math questions that have a number in them. mathsuggestion.com is all math.' },
   },
+  { key: 'EXTRA_LINK', scope: 'brand', cfg: 'extraLink', group: 'channel', type: 'string', default: '', label: 'Also promote your website', hint: 'A site such as ziggasa.com: added to every description and shown at the end of each video. Empty: nothing added.' },
   { key: 'QUESTIONS_PER_VIDEO', scope: 'brand', cfg: 'questionsPerVideo', requires: 'QUESTION_SOURCE', group: 'channel', type: 'number', default: 2, label: 'Questions per video (1–5)', hint: 'At most: the video length wins, so long questions leave room for fewer.' },
   // Platforms
   { key: 'YOUTUBE_CLIENT_SECRET', cfg: 'youtubeClientSecret', group: 'youtube', type: 'json', secret: true, default: null, label: 'Google OAuth client (client_secret.json)' },

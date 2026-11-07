@@ -13,6 +13,7 @@ const defaultProps = {
   kicker: 'AI',
   subscribeText: 'Subscribe',
   sourceLabel: null,
+  extraLabel: null,
   width: 1080,
   height: 1920,
   fps: 30,
