@@ -106,13 +106,123 @@ test('mathsuggestion: labels written with a space before the colon are still rea
   assert.deepEqual(parseMathSuggestion(inline, MS_URL)[0].working, ['শুরু', 'ধাপ এক', 'ধাপ দুই']);
 });
 
+/* ---------- the right answer is the page's, or the question is dropped ---------- */
+
+test('mathsuggestion: every answer of the real 44th BCS page is the option its "উত্তর:" line names', () => {
+  // From the page's own "উত্তর:" lines (question 4's was removed from the fixture by hand).
+  const RIGHT = {
+    1: ['ঘ', 'ক্ষতি 50%'],
+    2: ['ঘ', '$-i$'],
+    3: ['ঘ', 'কোনটিই নয়'],
+    5: ['গ', '4'],
+    6: ['ক', '2'],
+    7: ['ক', '0.1'],
+    8: ['খ', '$2, 9$'],
+    9: ['ঘ', '$\\dfrac{1}{2}[1 - (-1)^n]$'],
+    10: ['গ', '$\\dfrac{5}{6}$'],
+    11: ['গ', '$-3 < x < \\dfrac{5}{3}$'],
+    12: ['খ', '$\\dfrac{1}{2}$'],
+    13: ['ক', '$132°$'],
+    14: ['ক', '30'],
+    15: ['খ', '$\\sqrt{3}$'],
+  };
+  const qs = parseMathSuggestion(fixture('mathsuggestion-44th-bcs.html'), MS_URL);
+  assert.deepEqual(qs.map((q) => q.n), Object.keys(RIGHT).map(Number));
+  for (const q of qs) {
+    const [letter, option] = RIGHT[q.n];
+    assert.equal('কখগঘ'[q.answer], letter, `question ${q.n}`);
+    assert.equal(q.options[q.answer], option, `question ${q.n}`);
+  }
+});
+
+const page = (body) => `<html><body><h1>Page</h1><div class="article">${body}</div></body></html>`;
+const opts = (a, b, c, d) => `<p><strong>ক)</strong> ${a} <strong>খ)</strong> ${b} <strong>গ)</strong> ${c} <strong>ঘ)</strong> ${d}</p>`;
+const FIRST = '<h3>1. প্রথম প্রশ্ন কত?</h3>' + opts(1, 2, 3, 4) + '<p>সমাধান: এক যোগ এক দুই।</p><p>উত্তর: খ) 2</p>';
+const LAST = '<h3>3. তৃতীয় প্রশ্ন কত?</h3>' + opts(9, 10, 11, 12) + '<p>সমাধান: পাঁচ যোগ পাঁচ দশ।</p><p>উত্তর: খ) 10</p>';
+const brief = (qs) => qs.map((q) => ({ n: q.n, answer: q.answer, working: q.working }));
+
+test('mathsuggestion: a question whose heading is not an h3 never lends its working or answer to the one before', () => {
+  const second = (heading) => heading + opts(5, 6, 7, 8) + '<p>সমাধান: তিন যোগ চার সাত।</p><p>উত্তর: গ) 7</p>';
+  for (const heading of ['<h4>2. দ্বিতীয় প্রশ্ন কত?</h4>', '<p><strong>2. দ্বিতীয় প্রশ্ন কত?</strong></p>']) {
+    const qs = parseMathSuggestion(page(FIRST + second(heading) + LAST), MS_URL);
+    // Question 1 cannot be told apart from what follows it: dropped. Question 3 has its own h3: kept.
+    assert.deepEqual(brief(qs), [{ n: 3, answer: 1, working: ['পাঁচ যোগ পাঁচ দশ'] }], heading);
+  }
+  // The same without working: the second question's options and "উত্তর:" line still give it away.
+  const bare = '<h4>2. দ্বিতীয় প্রশ্ন কত?</h4>' + opts(5, 6, 7, 8) + '<p>উত্তর: গ) 7</p>';
+  assert.deepEqual(brief(parseMathSuggestion(page(FIRST + bare + LAST), MS_URL)).map((q) => q.n), [3]);
+});
+
+test('mathsuggestion: a question without its own "উত্তর:" line never takes the next question\'s answer', () => {
+  const noAnswer = '<h3>1. প্রথম প্রশ্ন কত?</h3>' + opts(1, 2, 3, 4) + '<p>সমাধান: এক যোগ এক দুই।</p>';
+  const second = '<p><strong>2. দ্বিতীয় প্রশ্ন কত?</strong></p>' + opts(5, 6, 7, 8) + '<p>সমাধান: তিন যোগ চার সাত।</p><p>উত্তর: গ) 7</p>';
+  assert.deepEqual(brief(parseMathSuggestion(page(noAnswer + second + LAST), MS_URL)).map((q) => q.n), [3]);
+});
+
+test('mathsuggestion: only the first "উত্তর:" counts; a second one, or a label after it, drops the question', () => {
+  for (const after of ['<p>উত্তর: গ) 3</p>', '<p>সমাধান: আবার।</p>', '<p>ব্যাখ্যা: অন্য প্রশ্নের টিপ।</p>']) {
+    assert.deepEqual(brief(parseMathSuggestion(page(FIRST + after + LAST), MS_URL)).map((q) => q.n), [3], after);
+  }
+  // Other paragraphs after the answer (an ad, a link) are not labels: the question stays.
+  assert.deepEqual(brief(parseMathSuggestion(page(FIRST + '<p>আরও পড়ুন</p>' + LAST), MS_URL)).map((q) => q.n), [1, 3]);
+});
+
+test('mathsuggestion: an "উত্তর:" line whose option text is not the option of its letter drops the question', () => {
+  const q = (answerLine) =>
+    page('<h3>1. প্রশ্ন?</h3>' + opts('লাভ 25%', 'ক্ষতি 25%', 'লাভ 10%', 'ক্ষতি 50%') + `<p>সমাধান: কিছু।</p><p>${answerLine}</p>`);
+  // গ is "লাভ 10%": the line's letter and text disagree, so which one is right is unknown.
+  assert.deepEqual(parseMathSuggestion(q('উত্তর: গ) ক্ষতি 50%'), MS_URL), []);
+  assert.deepEqual(parseMathSuggestion(q('উত্তর: ঘ) লাভ 10%'), MS_URL), []);
+  // The text as the page writes it, the letter alone, or the text in TeX (as the real page writes question 1) agree.
+  for (const line of ['উত্তর: ঘ) ক্ষতি 50%', 'উত্তর: ঘ)', 'উত্তর: ঘ) ক্ষতি $50\\%$', 'উত্তর: ঘ) ক্ষতি  50%।']) {
+    const [got] = parseMathSuggestion(q(line), MS_URL);
+    assert.equal(got && got.answer, 3, line);
+  }
+});
+
+test('mathsuggestion: a question whose text, options, working or tip holds sup, sub or img is dropped (it would be flattened)', () => {
+  const one = (h3, options, working = 'কিছু।', tip = 'মনে রাখুন।') =>
+    page(`<h3>1. ${h3}</h3>${options}<p>সমাধান: ${working}</p><p>ব্যাখ্যা: ${tip}</p><p>উত্তর: খ) 8</p>`);
+  const fine = opts(6, 8, 9, 5);
+  assert.equal(parseMathSuggestion(one('2 এর ঘন কত?', fine), MS_URL).length, 1);
+  for (const html of [
+    one('2<sup>3</sup> এর মান কত?', fine),
+    one('H<sub>2</sub>O এর অণুতে কয়টি পরমাণু?', fine),
+    one('চিত্রের মান কত? <img src="x.png">', fine),
+    one('2 এর ঘন কত?', opts('2<sup>2</sup>', 8, 9, 5)),
+    one('2 এর ঘন কত?', fine, '2<sup>3</sup> = 8।'),
+    one('2 এর ঘন কত?', fine, 'কিছু।', '<img src="t.png">'),
+  ]) {
+    assert.deepEqual(parseMathSuggestion(html, MS_URL), [], html);
+  }
+});
+
+const rjsSection = (n, h3, options, explanation = '') =>
+  `<section id="q-${n}"><div><h3 id="q-${n}-title"><span>প্রশ্ন ${n}: </span>${h3}</h3></div><ol>` +
+  options.map((o, i) => `<li><span aria-hidden="true">${'কখগঘ'[i]}</span><span><span>${'কখগঘ'[i]}) </span>${o}</span>${i === 1 ? '<span>সঠিক উত্তর</span>' : ''}</li>`).join('') +
+  `</ol>${explanation ? `<div id="q-${n}-explanation">ব্যাখ্যা: ${explanation}</div>` : ''}</section>`;
+
+test('recentjobsolution: a question whose text, options or explanation holds sup, sub or img is dropped', () => {
+  const html = (sections) => `<html><body><h1>Page</h1>${sections.join('')}</body></html>`;
+  const ok = rjsSection(1, '2 এর ঘন কত?', ['6', '8', '9', '5'], '2 × 2 × 2 = 8');
+  assert.deepEqual(parseRecentJobSolution(html([ok]), RJS_PRINTING_URL).map((q) => [q.n, q.answer]), [[1, 1]]);
+  const bad = [
+    rjsSection(2, '2<sup>3</sup> এর মান কত?', ['6', '8', '9', '5']),
+    rjsSection(3, 'H<sub>2</sub>O তে কয়টি পরমাণু?', ['2', '3', '4', '5']),
+    rjsSection(4, 'নিচের চিত্রটি দেখুন <img src="x.png">', ['ক', 'খ', 'গ', 'ঘ']),
+    rjsSection(5, '2 এর বর্গ কত?', ['2<sup>2</sup>', '4', '6', '8']),
+    rjsSection(6, '2 এর ঘন কত?', ['6', '8', '9', '5'], '2<sup>3</sup> = 8'),
+  ];
+  assert.deepEqual(parseRecentJobSolution(html([ok, ...bad]), RJS_PRINTING_URL).map((q) => q.n), [1]);
+});
+
 test('mathsuggestion: TeX with "<" survives verbatim inside $...$ (not re-parsed as HTML)', () => {
   const html = '<h1>Page</h1><div class="article">'
     + `<h3>1. যদি ${katex('x<y')} হয়?</h3>`
     + `<p><strong>ক)</strong> ${katex('a<b>c')} <strong>খ)</strong> ${katex('p&q')} <strong>গ)</strong> ৩ <strong>ঘ)</strong> ৪</p>`
     + '<p><strong>সমাধান:</strong></p>'
     + `<p>তাহলে ${katex('x<y<z')} এবং ${katex('a<b>c')}।</p>`
-    + '<p><strong>উত্তর:</strong> ক) x</p></div>';
+    + `<p><strong>উত্তর:</strong> ক) ${katex('a<b>c')}</p></div>`;
   const [q] = parseMathSuggestion(html, MS_URL);
   assert.equal(q.text, 'যদি $x<y$ হয়?');
   assert.deepEqual(q.options.slice(0, 2), ['$a<b>c$', '$p&q$']);

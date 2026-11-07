@@ -95,6 +95,23 @@ function afterLabel(text, label) {
   return m ? text.slice(m[0].length).trim() : null;
 }
 
+// Superscripts, subscripts and pictures written as HTML (not KaTeX) lose their meaning as text: "2<sup>3</sup>"
+// reads "23". A question holding one is not used.
+const FLATTENED = 'sup, sub, img';
+const flattens = (el) => el.querySelectorAll(FLATTENED).length > 0;
+
+// Option text compared with the text an "উত্তর:" line repeats: the same in TeX or not ("ক্ষতি $50\%$" is
+// "ক্ষতি 50%"), whatever the spacing, without a closing danda or full stop.
+const sameOption = (a, b) => {
+  const flat = (s) => String(s)
+    .normalize('NFC')
+    .replace(/\\[,;:! ]/g, '')
+    .replace(/\\([^A-Za-z])/g, '$1')
+    .replace(/[$\s]/g, '')
+    .replace(/[।.]+$/, '');
+  return flat(a) === flat(b);
+};
+
 function parseMathSuggestion(html, url) {
   const root = parse(html);
   inlineMath(root);
@@ -104,14 +121,18 @@ function parseMathSuggestion(html, url) {
   const out = [];
   let cur = null;
   const finish = () => {
-    if (cur && isComplete(cur)) {
+    if (cur && !cur.invalid && isComplete(cur)) {
       out.push(makeQuestion(url, page, { ...cur, tip: cur.tip.join(' '), subject: 'গণিত' }));
     }
     cur = null;
   };
 
   // A question runs on across .article blocks (ads sit between them), so the
-  // blocks are read as one stream.
+  // blocks are read as one stream. Only an h3 starts a question. Each question has one options paragraph and at
+  // most one "সমাধান:", one "ব্যাখ্যা:" and one "উত্তর:", in that order. More than that (a second options paragraph,
+  // a label seen twice, a label after the answer) means the next question's heading was not an h3 and its
+  // paragraphs ran on into this one: which working and answer belong to which question is then unknown, so the
+  // question is dropped rather than shown with another question's working or answer.
   for (const article of root.querySelectorAll('.article')) {
     for (const el of article.childNodes) {
       if (el.nodeType !== 1) continue;
@@ -119,19 +140,29 @@ function parseMathSuggestion(html, url) {
       if (el.rawTagName === 'h3') {
         finish();
         const m = /^(\d+)\.\s*(.+)$/.exec(text);
-        if (m) cur = { n: Number(m[1]), text: m[2], options: null, answer: null, working: [], tip: [], stage: 'options' };
+        if (m) cur = { n: Number(m[1]), text: m[2], options: null, answer: null, working: [], tip: [], stage: 'options', seen: new Set(), invalid: flattens(el) };
         continue;
       }
       if (!cur || el.rawTagName !== 'p' || !text) continue;
+      if (flattens(el)) cur.invalid = true;
 
       if (cur.stage === 'options') {
         cur.options = readOptions(el);
         cur.stage = 'solution';
         continue;
       }
+      if (readOptions(el)) {
+        cur.invalid = true; // another question's options
+        continue;
+      }
       const solution = afterLabel(text, 'সমাধান');
       const explanation = afterLabel(text, 'ব্যাখ্যা');
-      const answer = /^উত্তর\s*[:ঃ]\s*([কখগঘ])\s*\)/.exec(text);
+      const answer = /^উত্তর\s*[:ঃ]\s*([কখগঘ])\s*\)\s*(.*)$/.exec(text);
+      const label = solution !== null ? 'solution' : explanation !== null ? 'tip' : answer ? 'answer' : null;
+      if (label) {
+        if (cur.seen.has(label) || cur.answer !== null) cur.invalid = true;
+        cur.seen.add(label);
+      }
       if (solution !== null) {
         cur.stage = 'working';
         cur.working.push(...splitSentences(solution));
@@ -139,7 +170,12 @@ function parseMathSuggestion(html, url) {
         cur.stage = 'tip';
         if (explanation) cur.tip.push(explanation);
       } else if (answer) {
-        cur.answer = LETTERS.indexOf(answer[1]);
+        if (cur.answer === null) {
+          cur.answer = LETTERS.indexOf(answer[1]);
+          // The option text the line repeats must be the option of its letter; when they disagree (a typo in one
+          // of them) which one is right is unknown.
+          if (answer[2] && !(cur.options && sameOption(answer[2], cur.options[cur.answer]))) cur.invalid = true;
+        }
         cur.stage = 'done';
       } else if (cur.stage === 'working') {
         cur.working.push(...splitSentences(text));
@@ -178,13 +214,14 @@ function parseRecentJobSolution(html, url) {
     const text = clean(h3.text).replace(/^প্রশ্ন\s*[০-৯\d]+\s*:\s*/, '');
 
     const items = section.querySelectorAll('ol > li');
+    const explanation = section.querySelector(`#q-${n}-explanation`);
+    if ([h3, ...items, explanation].some((el) => el && flattens(el))) continue;
     const marked = items.map((li, i) => (li.text.includes('সঠিক উত্তর') ? i : -1)).filter((i) => i >= 0);
     const options = items.map((li) => {
       for (const junk of li.querySelectorAll('.ans-key, .ans-mark, .sr-only, svg')) junk.remove();
       return clean(li.text).replace(/^[কখগঘ]\)\s*/, '');
     });
 
-    const explanation = section.querySelector(`#q-${n}-explanation`);
     const tip = explanation ? clean(explanation.text).replace(/^ব্যাখ্যা\s*:\s*/, '') : '';
 
     const q = { n, text, options, answer: marked.length === 1 ? marked[0] : null, tip, subject };
