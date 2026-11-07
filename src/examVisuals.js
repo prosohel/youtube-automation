@@ -18,6 +18,16 @@ function renders(tex) {
   }
 }
 
+/**
+ * True when toParts draws every $...$ of the text as math: no `$` left open and no TeX that KaTeX cannot parse
+ * (either would put raw TeX on screen as plain text).
+ */
+function mathRenders(text) {
+  const pieces = (typeof text === 'string' ? text : '').split('$');
+  if (pieces.length % 2 === 0) return false;
+  return pieces.every((v, i) => i % 2 === 0 || !v.trim() || renders(v));
+}
+
 /** Text split into plain and math parts on $...$; no `$` survives in any part. */
 function toParts(text) {
   const s = typeof text === 'string' ? text : '';
@@ -112,4 +122,4 @@ function sourceLabel(siteName) {
   return label.length <= SOURCE_LABEL_MAX ? label : null;
 }
 
-module.exports = { EXAM_TYPES, sourceLabel, LIMIT, toParts, checkExamVisual };
+module.exports = { EXAM_TYPES, sourceLabel, LIMIT, toParts, mathRenders, checkExamVisual };

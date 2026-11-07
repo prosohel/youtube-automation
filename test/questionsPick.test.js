@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const cfg = require('../src/config');
 const { parseMathSuggestion, parseRecentJobSolution } = require('../src/questions/parse');
-const { fitsVideo, estimateSeconds, usedQuestionIds, budgetSeconds, questionsWanted } = require('../src/questions/pick');
+const { fitsVideo, estimateSeconds, usedQuestionIds, budgetSeconds, questionsWanted, fillBudget } = require('../src/questions/pick');
 const { findQuestions } = require('../src/questions');
 const { WPM } = require('../src/speech');
 
@@ -65,6 +65,20 @@ test('fitsVideo: a question that needs a figure is skipped', () => {
   assert.equal(fitsVideo({ ...Q36, text: 'Who was the figurehead of the movement?' }, ALL), true);
 });
 
+test('fitsVideo: math KaTeX cannot draw would show as raw TeX, so its question is skipped', () => {
+  const broken = '$\\dfrac{50}{100$'; // unbalanced brace
+  assert.equal(fitsVideo({ ...Q1, text: `${broken} কত?` }, ALL), false);
+  assert.equal(fitsVideo({ ...Q1, options: [broken, 'খ', 'গ', 'ঘ'] }, ALL), false);
+  assert.equal(fitsVideo({ ...Q1, working: [...Q1.working.slice(0, 3), `শতকরা ক্ষতি ${broken}`] }, ALL), false);
+  assert.equal(fitsVideo({ ...Q1, tip: `মনে রাখুন ${broken}` }, ALL), false);
+  assert.equal(fitsVideo({ ...Q1, text: '$\\notacommand{2}$ কত?' }, ALL), false);
+  // A "$" left open turns the whole line into plain text with the TeX in it.
+  assert.equal(fitsVideo({ ...Q1, text: 'মান $\\dfrac{1}{2} কত?' }, ALL), false);
+  // Every question of the real page that fitted before still fits: their TeX all renders.
+  const fitting = parseMathSuggestion(MS_HTML, MS_URL).filter((q) => fitsVideo(q, ALL)).map((q) => q.n);
+  assert.deepEqual(fitting, [1, 3, 7, 8, 11, 12, 14, 15]);
+});
+
 test('fitsVideo: subject math keeps only গণিত questions that have a number', () => {
   assert.equal(Q36.subject, 'গণিত');
   assert.equal(fitsVideo(Q36, ALL), true);
@@ -77,19 +91,49 @@ test('fitsVideo: subject math keeps only গণিত questions that have a numb
 
 /* ---------- time ---------- */
 
-test('estimateSeconds of question 1 (4 working lines) is between 30 and 60', () => {
+test('estimateSeconds of question 1 (4 working lines) is near what its narration really took (~44 s in the dry run)', () => {
   assert.equal(Q1.working.length, 4);
   const s = estimateSeconds(Q1, { wpm: WPM.bangla });
-  assert.ok(s >= 30 && s <= 60, String(s));
+  // The first estimate said 31 s; the dry run's narration of this question spoke 88 words (~44 s with its pauses).
+  assert.ok(s >= 40 && s <= 55, String(s));
 });
 
 test('estimateSeconds: words at the speaking rate, the countdown and a short pause per scene', () => {
-  // 2 question words + 4 options (1 word, read with its letter) + 12 for reveal and tip = 22 words: 22 s at 60 wpm.
+  // 2 question words + 4 options (1 word, read with its letter) + 12 for the reveal and its lead-in = 22 words: 22 s at 60 wpm.
   const quiz = { text: 'এক দুই', options: ['ক', 'খ', 'গ', 'ঘ'], working: [], tip: null };
   assert.equal(estimateSeconds(quiz, { wpm: 60 }), 22 + 3 + 0.25 * 2); // countdown 3 s; question + reveal scenes
-  // Working adds 6 words a line, a 5 s countdown and the solution scene; a tip adds its scene.
-  const full = { ...quiz, working: ['এক', 'দুই'], tip: 'টিপ' };
-  assert.equal(estimateSeconds(full, { wpm: 60 }), 34 + 5 + 0.25 * 4);
+  // Working adds 13 words a line (real lines speak 4 to 15), a 5 s countdown and the solution scene; a tip adds its
+  // words and its scene.
+  const full = { ...quiz, working: ['এক', 'দুই'], tip: 'মনে রাখুন এটা' };
+  assert.equal(estimateSeconds(full, { wpm: 60 }), 22 + 26 + 3 + 5 + 0.25 * 4);
+});
+
+test('estimateSeconds: math is said a number, letter, command or sign at a time ("$6a^2bc$" is five words)', () => {
+  const plain = { text: 'এক দুই', options: ['ক', 'খ', 'গ', 'ঘ'], working: [], tip: null };
+  const at60 = (q) => estimateSeconds(q, { wpm: 60 });
+  // "ছয় এ স্কয়ার বি সি": 6, a, 2, b, c; then "কত?". The plain text it replaces was two words.
+  assert.equal(at60({ ...plain, text: '$6a^2bc$ কত?' }) - at60(plain), 5 + 1 - 2);
+  // "পাঁচ ভাগ ছয়": \dfrac, 5, 6, in place of a one-word option.
+  assert.equal(at60({ ...plain, options: ['$\\dfrac{5}{6}$', 'খ', 'গ', 'ঘ'] }) - at60(plain), 3 - 1);
+  // A tip: ক্ষতি, 50, %, and the tip scene's pause.
+  assert.equal(at60({ ...plain, tip: 'ক্ষতি $50\\%$' }) - at60(plain), 3 + 0.25);
+});
+
+test('fillBudget: a 3-minute Short of up to 5 questions from the real 44th BCS page stays a Short', () => {
+  const usable = parseMathSuggestion(MS_HTML, MS_URL).filter((q) => fitsVideo(q, { subject: 'math' }));
+  const budget = budgetSeconds({ format: 'shorts', targetMinutes: 3 });
+  const chosen = fillBudget(usable, { max: 5, budget, wpm: WPM.bangla });
+  const seconds = (q) => estimateSeconds(q, { wpm: WPM.bangla });
+  const total = chosen.reduce((n, q) => n + seconds(q), 0);
+  assert.ok(total <= budget, `${total} > ${budget}`);
+  // A full-format question takes about 35 to 70 s to say (the dry run measured 44 and 48 s for questions 1 and 3):
+  // three fit in 164 s, five never do. The first estimate chose all five (136 s estimated, about 245 s spoken).
+  assert.ok(chosen.length >= 2 && chosen.length <= 3, chosen.map((q) => q.n).join(','));
+  // Questions 1 and 3 are estimated near what the dry run measured.
+  for (const [n, measured] of [[1, 44], [3, 48]]) {
+    const q = usable.find((x) => x.n === n);
+    assert.ok(Math.abs(seconds(q) - measured) <= 6, `question ${n}: ${seconds(q)} s, measured ${measured} s`);
+  }
 });
 
 test('budgetSeconds: target length minus intro/outro and the hook and closing scenes; a Short stops at 3 minutes', () => {
