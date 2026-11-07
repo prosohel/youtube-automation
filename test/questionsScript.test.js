@@ -935,6 +935,20 @@ test('answer check: an answer letter named in everyday words is caught before th
   assert.deepEqual(askProblems(DIGITS_Q, `${DIGITS_READ} ঠিক কত হবে ভাবুন। ${PAUSE}।`), []);
 });
 
+test('answer check: a letter said to be right, the letter first ("খ বিকল্পটাই ঠিক", "গ-ই সঠিক"), is caught before the countdown', () => {
+  for (const said of ['গ বিকল্পটাই ঠিক।', 'গ-ই সঠিক।', 'গ নম্বরটা ঠিক।', 'গ সঠিক।', 'গ তো ঠিক।']) {
+    const problems = askProblems(DIGITS_Q, `${DIGITS_READ} ${said} ${PAUSE}।`);
+    assert.equal(problems.length, 1, said);
+    assert.match(problems[0], /names an answer letter/, said);
+  }
+  const info = { ...INFO, questions: [FLOWER] };
+  const hook = oneQuestion(info, 'সঠিক উত্তর খ, শাপলা।', (p) => (p.hook.narration = 'খ ঠিক কিনা, দেখুন।'));
+  assert.match(answerProblems(hook, info)[0], /^The hook narration names an answer letter/);
+  // Options that are the words themselves, read after their letters with a comma, are a reading.
+  const tf = { ...wordQ(1, ['ঠিক', 'ভুল', 'আংশিক ঠিক', 'বলা যাবে না'], 'বাক্যটি কেমন?'), answer: 1 };
+  assert.deepEqual(askProblems(tf, `বাক্যটি কেমন? ক, ঠিক; খ, ভুল; গ, আংশিক ঠিক; ঘ, বলা যাবে না। ${PAUSE}।`), []);
+});
+
 test('answer check: options ruled out by letter before the countdown give the answer away ("ক বা খ বা গ নয়")', () => {
   for (const ask of [
     `${NONE_STEM} ক বা খ বা গ নয়, ঘ, কোনটিই নয়। ${PAUSE}।`,

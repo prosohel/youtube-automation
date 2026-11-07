@@ -199,11 +199,13 @@ const NEGATED_RE = LETTERS.map((l) => new RegExp(`(?<![${IN_WORD}])${l}[\\s,]*${
 // Any option letter ruled out: "ক বা খ বা গ নয়" leaves only ঘ.
 const RULED_OUT_RE = new RegExp(`(?<![${IN_WORD}])([কখগঘ])[\\s,]*(${NOT_WORD})(?![${IN_WORD}])`, 'gu');
 // An option letter given as the answer: "উত্তর ঘ", "উত্তর হলো (ঘ)", "উত্তরঃ ঘ", "উত্তরটি হবে ঘ", "সঠিক উত্তরটা কিন্তু ঘ",
-// "উত্তর তো ঘ", "সঠিক ঘ", "ঠিক বিকল্প ঘ", "সঠিক অপশনটি হলো (ঘ)".
+// "উত্তর তো ঘ", "সঠিক ঘ", "ঠিক বিকল্প ঘ", "সঠিক অপশনটি হলো (ঘ)"; or the letter first: "ঘ সঠিক", "ঘ-ই ঠিক",
+// "ঘ বিকল্পটাই ঠিক", "ঘ নম্বরটা ঠিক" (not "ঘ, ঠিক", which reads an option "ঠিক" after its letter).
 const FILLERS = '(?:\\s*(?:কিন্তু|হলো|হল|হচ্ছে|হবে|তো))*';
 const NAMES_ANSWER =
   `(?:উত্তর(?:টি|টা)?|(?<![${IN_WORD}])স?ঠিক(?:\\s*(?:বিকল্প|অপশন)(?:টি|টা)?)?)` +
-  `${FILLERS}\\s*[:ঃ]?\\s*\\(?\\s*[কখগঘ]\\s*\\)?(?![${IN_WORD}])`;
+  `${FILLERS}\\s*[:ঃ]?\\s*\\(?\\s*[কখগঘ]\\s*\\)?(?![${IN_WORD}])` +
+  `|(?<![${IN_WORD}])[কখগঘ](?:-?ই)?(?:\\s*(?:নম্বর|বিকল্প|অপশন)(?:টি|টা)?ই?)?${FILLERS}\\s+স?ঠিক(?![${IN_WORD}])`;
 const namesAnswer = (s) => (typeof s === 'string' ? s.match(new RegExp(NAMES_ANSWER, 'u')) : null);
 const TEX = /[$\\]/;
 // A narration with no Bangla or Latin letter in it ("", "।", "...") says nothing: the voice cannot read it.
