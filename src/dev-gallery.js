@@ -1,7 +1,7 @@
 // Contact sheet of every scene graphic, so the look can be reviewed without making a video.
 // Usage: npm run render:gallery -- [--themes=neon,vox-paper,news] [--formats=shorts,landscape] [--only=bars,donut]
-//        [--brand=@TechBangla] [--frame=intro|outro]
-// --brand sets the brandLabel prop (the small channel name on the intro and outro). --frame=intro or outro takes the
+//        [--brand=@TechBangla] [--source=mathsuggestion.com] [--frame=intro|outro]
+// --brand sets the brandLabel prop (the small channel name on the intro and outro); --source=<site> the outro's sourceLabel. --frame=intro or outro takes the
 // still from the intro (frame 30) or the outro (20 frames before the end) instead of mid-scene. Exam samples are
 // validated as question-mode scenes (examGraphics) and shown mid-countdown, after the reveal, or fully written.
 // --only matches a sample name or a graphic type. Output: output/gallery/<format>-<theme>-<name>.jpg
@@ -12,6 +12,7 @@ const cfg = require('./config');
 const { ensureDir, run, log } = require('./util');
 const { resolveStyle } = require('./style');
 const { validateVisual } = require('./graphics');
+const { sourceLabel } = require('./examVisuals');
 const SAMPLES = require('./gallerySamples');
 
 const arg = (k, def) => {
@@ -49,6 +50,7 @@ const sceneTiming = (visual) => {
   const formats = arg('formats', ['shorts', 'landscape']);
   const only = arg('only', null);
   const brand = (process.argv.find((a) => a.startsWith('--brand=')) || '').slice('--brand='.length) || null; // not split on commas
+  const [site] = arg('source', [null]);
   const [frameName] = arg('frame', [null]);
   if (frameName && !FRAME_NAMES.includes(frameName)) throw new Error(`Unknown --frame "${frameName}" (intro or outro)`);
   const samples = SAMPLES.filter((s) => !only || only.includes(s.name) || only.includes(s.visual.type));
@@ -80,6 +82,7 @@ const sceneTiming = (visual) => {
           title: 'Gallery',
           kicker: null,
           brandLabel: brand,
+          sourceLabel: sourceLabel(site),
           subscribeText: 'Subscribe',
           ...size,
           fps: FPS,

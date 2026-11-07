@@ -197,7 +197,7 @@ const subscribeLabel = () => (/bangla|bengali|bn\b/i.test(cfg.language) ? 'рж╕рж
  * Render the animated Remotion composition.
  * scenes: output of makeVoice. Returns { videoFile, thumbFile, credits[], coverMs }.
  */
-async function renderWithRemotion({ scenes, workDir, slug, title, theme, direction, thumbnail }) {
+async function renderWithRemotion({ scenes, workDir, slug, title, theme, direction, thumbnail, sourceLabel = null }) {
   // Required lazily so the ffmpeg-only fallback works even if Remotion is not installed.
   const { bundle } = require('@remotion/bundler');
   const { renderMedia, renderStill, selectComposition, ensureBrowser } = require('@remotion/renderer');
@@ -232,6 +232,7 @@ async function renderWithRemotion({ scenes, workDir, slug, title, theme, directi
     kicker: (direction && direction.kicker) || null, // never the NICHE sentence: that is only for picking topics
     subscribeText: subscribeLabel(),
     brandLabel: brandLabel(cfg),
+    sourceLabel: sourceLabel || null, // question videos: the site the questions came from, on the outro
     width: cfg.width,
     height: cfg.height,
     fps,

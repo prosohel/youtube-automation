@@ -93,3 +93,18 @@ test('the intro and outro draw brandLabel only when it is set', () => {
   assert.match(main, /<Intro [^>]*brandLabel=\{brandLabel\}/, 'Main hands brandLabel to Intro');
   assert.match(main, /<Outro [^>]*brandLabel=\{brandLabel\}/, 'Main hands brandLabel to Outro');
 });
+
+test('the outro draws sourceLabel under the button only when it is set, fitted like brandLabel', () => {
+  const main = read('Main.jsx');
+  const start = main.indexOf('const Outro = (');
+  const src = main.slice(start, main.indexOf('\nconst ', start + 1));
+  const guard = src.search(/\{\s*sourceLabel\s*\?/);
+  assert.ok(guard >= 0, 'Outro draws sourceLabel behind a truthiness guard');
+  assert.ok(guard > src.indexOf('{subscribeText}'), 'it sits under the subscribe button');
+  const block = src.slice(guard, src.indexOf('</div>', guard));
+  assert.match(block, /sourceLabel\.length > 16/, 'a long label shrinks');
+  assert.match(block, /bodyFont\(\)/, 'body font');
+  assert.match(block, /whiteSpace: 'nowrap'/);
+  assert.match(block, /textOverflow: 'ellipsis'/);
+  assert.match(main, /<Outro [^>]*sourceLabel=\{sourceLabel\}/, 'Main hands sourceLabel to Outro');
+});

@@ -5,6 +5,7 @@ const store = require('./store');
 const { resolveDirection } = require('../src/direction');
 const { validateVisuals } = require('../src/graphics');
 const { resolveThumbnail } = require('../src/thumbnail');
+const { sourceLabel } = require('../src/examVisuals');
 
 /** The real stage functions. Tests pass their own. Required lazily: Remotion etc. load only when used. */
 function realDeps() {
@@ -152,7 +153,7 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
     fs.rmSync(path.join(outDir, `${v.slug}.mp4`), { force: true });
     // Videos scripted before thumbnails existed get one from their script now.
     const thumbnail = v.thumbnail || resolveThumbnail(v.script, cfg);
-    const res = await deps.renderAny({ scenes: v.scenes, workDir, slug: v.slug, title: v.title, theme: v.theme, direction: v.direction, thumbnail });
+    const res = await deps.renderAny({ scenes: v.scenes, workDir, slug: v.slug, title: v.title, theme: v.theme, direction: v.direction, thumbnail, sourceLabel: sourceLabel(v.topicInfo && v.topicInfo.siteName) });
     const credits = res.credits || [];
     v = await markDone('render', {
       files: { video: res.videoFile, thumb: res.thumbFile || null },

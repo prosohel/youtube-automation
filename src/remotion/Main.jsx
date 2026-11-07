@@ -275,7 +275,7 @@ const Intro = ({ title, kicker, brandLabel, isShort }) => {
   );
 };
 
-const Outro = ({ subscribeText, brandLabel, isShort }) => {
+const Outro = ({ subscribeText, brandLabel, sourceLabel, isShort }) => {
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
   const T = theme();
@@ -325,10 +325,27 @@ const Outro = ({ subscribeText, brandLabel, isShort }) => {
             </span>
           </div>
         </div>
-        {brandLabel ? (
+        {sourceLabel ? (
           <div
             style={{
               marginTop: 36,
+              fontFamily: bodyFont(),
+              fontSize: (isShort ? 44 : 34) * (sourceLabel.length > 16 ? 0.8 : 1),
+              whiteSpace: 'nowrap',
+              maxWidth: '88%',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              color: T.muted,
+              opacity: Math.min(1, text),
+            }}
+          >
+            {sourceLabel}
+          </div>
+        ) : null}
+        {brandLabel ? (
+          <div
+            style={{
+              marginTop: sourceLabel ? 18 : 36,
               fontFamily: bodyFont(),
               fontSize: (isShort ? 44 : 34) * (brandLabel.length > 16 ? 0.8 : 1),
               whiteSpace: 'nowrap',
@@ -428,7 +445,7 @@ const SceneSfx = ({ scene, start, index }) => {
 };
 
 export const Main = (props) => {
-  const { title, kicker, brandLabel, subscribeText, scenes, isShort, sfx, music, thumb } = props;
+  const { title, kicker, brandLabel, sourceLabel, subscribeText, scenes, isShort, sfx, music, thumb } = props;
   // The video opens with its thumbnail (TikTok's cover frame) unless it was switched off for this brand.
   const thumbIntro = Boolean(thumb && thumb.intro);
   setTheme(props.theme);
@@ -452,7 +469,7 @@ export const Main = (props) => {
         ))}
         <TransitionSeries.Transition presentation={makePresentation(trans[scenes.length % trans.length], width, height)} timing={timing} />
         <TransitionSeries.Sequence durationInFrames={t.outroFrames}>
-          <Outro subscribeText={subscribeText} brandLabel={brandLabel} isShort={isShort} />
+          <Outro subscribeText={subscribeText} brandLabel={brandLabel} sourceLabel={sourceLabel} isShort={isShort} />
         </TransitionSeries.Sequence>
       </TransitionSeries>
 

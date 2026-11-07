@@ -411,6 +411,7 @@ test('question mode: a video with questions is scripted by writeQuestionScript, 
     assert.deepEqual(done.script.scenes.map((s) => s.visual.type), ['icon', 'question', 'reveal', 'icon']);
     assert.ok(Array.isArray(done.script.scenes[1].visual.parts), 'checked as an exam card, not turned into an icon');
     assert.equal(renders[0].scenes[1].visual.type, 'question');
+    assert.equal(renders[0].sourceLabel, 'সম্পূর্ণ সমাধান: mathsuggestion.com', 'the outro names the source site');
     assert.equal(done.theme.family, 'exam');
   } finally {
     setHistoryBackend(null);
@@ -422,7 +423,8 @@ test('idea mode: a video without questions is scripted as before, with no exam c
   const r = await freshRedis();
   const outDir = tmpOut();
   const calls = [];
-  const deps = fakeDeps(calls, { outDir });
+  const renders = [];
+  const deps = fakeDeps(calls, { outDir, onRender: (args) => renders.push(args) });
   const styleArgs = [];
   deps.resolveStyle = (...a) => {
     styleArgs.push(a);
@@ -440,4 +442,5 @@ test('idea mode: a video without questions is scripted as before, with no exam c
   assert.equal(calls.filter((c) => c === 'script').length, 1);
   assert.deepEqual(done.script.scenes[0].visual, { type: 'icon', icon: 'Sparkles' }, 'exam cards only in question mode');
   assert.deepEqual(styleArgs, [[{}]]);
+  assert.equal(renders[0].sourceLabel, null, 'no source site, no outro label');
 });

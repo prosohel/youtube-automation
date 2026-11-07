@@ -98,4 +98,18 @@ function checkExamVisual(v) {
   return CHECK[v.type](v);
 }
 
-module.exports = { EXAM_TYPES, LIMIT, toParts, checkExamVisual };
+const SOURCE_PREFIX = 'সম্পূর্ণ সমাধান: ';
+const SOURCE_LABEL_MAX = 40;
+
+/**
+ * The outro line that names the site a question video's questions came from, or null without a site
+ * (or one so long the line would not fit in 40 characters: no label rather than a cut one).
+ */
+function sourceLabel(siteName) {
+  const site = typeof siteName === 'string' ? siteName.trim() : '';
+  if (!site) return null;
+  const label = SOURCE_PREFIX + site;
+  return label.length <= SOURCE_LABEL_MAX ? label : null;
+}
+
+module.exports = { EXAM_TYPES, sourceLabel, LIMIT, toParts, checkExamVisual };

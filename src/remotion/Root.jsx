@@ -12,6 +12,7 @@ const defaultProps = {
   title: 'Preview title',
   kicker: 'AI',
   subscribeText: 'Subscribe',
+  sourceLabel: null,
   width: 1080,
   height: 1920,
   fps: 30,
