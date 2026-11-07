@@ -2,34 +2,40 @@ import React, { useLayoutEffect, useState } from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { bodyFont, isVox, pop, theme } from '../shared';
 import { Panel } from '../library/Panel';
-import { SIZE_STEPS } from './timing';
+import { FIT_START, SIZE_STEPS, nextFit } from './timing';
 
 /*
  * What every exam card shares: the theme's card (Panel, taped down on paper themes), its entrance, a small label,
- * and the font size step at which the card fits its stage.
- * Card layout never depends on the frame (animations only use transform and opacity), so the fit measured once
- * holds for every frame of the scene.
+ * and the fit of the card to its stage.
+ * Card layout never depends on the frame (animations only use transform and opacity), so the card is measured only
+ * when the room or the fit changes, and the result holds for every frame of the scene.
  */
-
-/** True when no [data-fit] block inside `el` is narrower than its content (a formula or word too wide to wrap). */
-export const fitsWidth = (el) => [...el.querySelectorAll('[data-fit]')].every((b) => b.scrollWidth <= b.clientWidth + 1);
 
 /**
- * The size factor for a card (ref): SIZE_STEPS are tried in turn until the card is no taller than `room` and
- * nothing in it is too wide. Should the last step still be too tall, `squeeze` scales the whole card down to fit,
- * so text is never cut.
+ * The text blocks (data-fit="key") inside `el` whose content is wider than the block, a formula or word too wide
+ * to wrap, as [{ key, ratio }] with ratio = block width / content width.
  */
-export const useFit = (ref, room) => {
-  const [fit, setFit] = useState({ step: 0, squeeze: 1 });
+export const tooWide = (el) =>
+  [...el.querySelectorAll('[data-fit]')]
+    .filter((b) => b.scrollWidth > b.clientWidth + 1)
+    .map((b) => ({ key: b.dataset.fit, ratio: b.clientWidth / b.scrollWidth }));
+
+/**
+ * Fits a card (ref) to `room`: the whole card steps down through SIZE_STEPS until it is no taller than the room and
+ * no block is too wide; at the last step a block still too wide shrinks its own text (`size(key, px)`), and a card
+ * still too tall is scaled down (`squeeze`), so text is never cut. The card is measured on mount and again only when
+ * the room, the drawn `content` or the fit itself changes; nextFit settles (returns null) after a few steps.
+ */
+export const useFit = (ref, room, content) => {
+  const [fit, setFit] = useState(FIT_START);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || !room) return;
-    const h = el.offsetHeight;
-    const ok = h <= room && fitsWidth(el);
-    if (!ok && fit.step < SIZE_STEPS.length - 1) setFit({ step: fit.step + 1, squeeze: 1 });
-    else if (fit.squeeze === 1 && h > room) setFit({ step: fit.step, squeeze: room / h });
-  });
-  return { k: SIZE_STEPS[fit.step], squeeze: fit.squeeze };
+    const next = nextFit(fit, { tall: el.offsetHeight / room, wide: tooWide(el) });
+    if (next) setFit(next);
+  }, [ref, room, content, fit]);
+  const k = SIZE_STEPS[fit.step];
+  return { k, squeeze: fit.squeeze, size: (key, px) => px * (fit.shrink[key] || 1) };
 };
 
 /** The card: pops in at `start`; `cardRef` is the element measured by useFit. */
@@ -47,12 +53,12 @@ export const ExamCard = ({ cardRef, accent, width, padding, squeeze = 1, start, 
 };
 
 /** Small accent-framed label at the top of a card: the source, "সমাধান", "উত্তর". May wrap to a second line. */
-export const Label = ({ text, accent, size }) => {
+export const Label = ({ text, accent, size, fitKey = 'label' }) => {
   const T = theme();
   const square = ['terminal', 'solid', 'brutal'].includes(T.card);
   return (
     <div
-      data-fit
+      data-fit={fitKey}
       style={{
         flex: '0 1 auto',
         minWidth: 0,

@@ -141,6 +141,30 @@ module.exports = [
       ],
     },
   },
+  // Formulas too wide to wrap (a braced group or one fraction never breaks): the question's still overflows at the
+  // smallest size step in both formats, so that block shrinks its own text; the option and the line step down.
+  {
+    name: 'question-wide',
+    visual: {
+      type: 'question',
+      text: 'সরল করুন: ${\\dfrac{(x+1)(x+2)(x+3)(x+4)(x+5)(x+6)(x+7)(x+8)(x+9)(x+10)(x+11)(x+12)(x+13)(x+14)}{x+15}}$',
+      options: ['${1234567 \\times 7654321 = 9449772114007}$', '$x + 1$', '$x^{14}$', 'কোনোটিই নয়'],
+      answer: 3,
+      countdown: 3,
+      source: 'বীজগণিত অনুশীলনী',
+    },
+  },
+  {
+    name: 'solution-wide',
+    visual: {
+      type: 'solution',
+      lines: [
+        { text: 'ধরি, $y = (x+1)(x+2)(x+3)$', words: 3 },
+        { text: 'ফলে $\\dfrac{(x+1)(x+2)(x+3)(x+4)(x+5)(x+6)(x+7)(x+8)(x+9)}{2}$', words: 3 },
+        { text: 'অতএব $2^{64} = 18446744073709551616$', words: 3 },
+      ],
+    },
+  },
   { name: 'reveal', visual: { type: 'reveal', ...BCS_Q1 } },
   {
     name: 'tip',

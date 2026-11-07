@@ -17,7 +17,7 @@ export const Tip = ({ visual, accent, isShort, room, start }) => {
   const { fps } = useVideoConfig();
   const T = theme();
   const card = useRef(null);
-  const { k, squeeze } = useFit(card, room);
+  const { k, squeeze, size } = useFit(card, room, visual);
   const S = isShort ? SIZES.short : SIZES.wide;
   const z = (n) => n * k;
   const label = Math.min(1, pop(f, fps, start + 6, 11));
@@ -45,10 +45,10 @@ export const Tip = ({ visual, accent, isShort, room, start }) => {
         </div>
       </div>
       <div
-        data-fit
+        data-fit="tip"
         style={{
           fontFamily: bodyFont(),
-          fontSize: z(S.text),
+          fontSize: size('tip', z(S.text)),
           lineHeight: 1.45,
           textWrap: 'pretty',
           color: T.text,

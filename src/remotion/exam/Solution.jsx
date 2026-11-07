@@ -3,9 +3,9 @@ import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { isVox, pop, theme } from '../shared';
 import { wordStarts } from '../timeline';
 import { draw } from '../Vox';
-import { ExamCard, Label, fitsWidth } from './Card';
+import { ExamCard, Label, tooWide } from './Card';
 import { MathText } from './Math';
-import { MAX_LINES, SIZE_STEPS, lineStarts, newestLine, scrollFor, solutionViewport } from './timing';
+import { FIT_START, MAX_LINES, SIZE_STEPS, lineStarts, newestLine, nextFit, scrollFor, solutionViewport } from './timing';
 
 /*
  * The worked solution, written line by line as the voice reaches each line (the captions' word timing). At most
@@ -24,23 +24,27 @@ export const Solution = ({ visual, accent, isShort, room, voiceFrames, narration
   const card = useRef(null);
   const view = useRef(null);
   const block = useRef(null);
-  // Fit: the largest size step at which the first six lines fit the stage; then the window and line boxes there.
-  const [lay, setLay] = useState({ step: 0, viewport: 0, boxes: [] });
+  // Fit: the largest size step at which the first six lines fit the stage (a line still too wide at the last step
+  // shrinks its own text; the window, not a squeeze, handles height); then the window and line boxes at that fit.
+  // Measured only when the room, the lines or the fit change: the layout is the same on every frame.
+  const [lay, setLay] = useState({ fit: FIT_START, viewport: 0, boxes: [] });
   useLayoutEffect(() => {
     if (!room || !card.current) return;
     const boxes = [...block.current.children].map((el) => ({ top: el.offsetTop, bottom: el.offsetTop + el.offsetHeight }));
     const space = room - (card.current.offsetHeight - view.current.offsetHeight); // room minus label and padding
     const firstSix = boxes[Math.min(MAX_LINES, boxes.length) - 1].bottom;
-    if ((firstSix > space || !fitsWidth(block.current)) && lay.step < SIZE_STEPS.length - 1) {
-      setLay({ step: lay.step + 1, viewport: 0, boxes: [] });
+    const next = nextFit(lay.fit, { tall: space > 0 ? firstSix / space : Infinity, wide: tooWide(block.current) }, { squeeze: false });
+    if (next) {
+      setLay({ fit: next, viewport: 0, boxes: [] }); // measure again with the window open
       return;
     }
     const viewport = solutionViewport(boxes, space);
-    if (viewport !== lay.viewport || JSON.stringify(boxes) !== JSON.stringify(lay.boxes)) setLay({ step: lay.step, viewport, boxes });
-  });
+    if (viewport !== lay.viewport || JSON.stringify(boxes) !== JSON.stringify(lay.boxes)) setLay({ ...lay, viewport, boxes });
+  }, [room, visual, lay]);
 
   const S = isShort ? SIZES.short : SIZES.wide;
-  const z = (n) => n * SIZE_STEPS[lay.step];
+  const z = (n) => n * SIZE_STEPS[lay.fit.step];
+  const size = (key, px) => px * (lay.fit.shrink[key] || 1);
   const starts = lineStarts(visual.lines, wordStarts(narration, voiceFrames));
   const newest = newestLine(starts, f);
   let scroll = 0;
@@ -54,7 +58,7 @@ export const Solution = ({ visual, accent, isShort, room, voiceFrames, narration
   return (
     <ExamCard cardRef={card} accent={accent} width={S.width} padding={`${z(S.padY)}px ${z(S.padX)}px`} start={start}>
       <div style={{ display: 'flex', marginBottom: z(S.gapHead) }}>
-        <Label text="সমাধান" accent={accent} size={z(S.label)} />
+        <Label text="সমাধান" accent={accent} size={size('label', z(S.label))} />
       </div>
       <div ref={view} style={{ position: 'relative', overflow: 'hidden', height: lay.viewport || 'auto' }}>
         <div ref={block} style={{ position: 'relative', transform: `translateY(${-scroll}px)` }}>
@@ -65,10 +69,10 @@ export const Solution = ({ visual, accent, isShort, room, voiceFrames, narration
             return (
               <div
                 key={i}
-                data-fit
+                data-fit={`l${i}`}
                 style={{
                   position: 'relative',
-                  fontSize: z(S.line),
+                  fontSize: size(`l${i}`, z(S.line)),
                   lineHeight: 1.45,
                   padding: `${z(4)}px ${z(14)}px`,
                   marginBottom: i < visual.lines.length - 1 ? z(S.gap) : 0,

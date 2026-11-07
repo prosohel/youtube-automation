@@ -94,3 +94,28 @@ export const glue = (parts) => {
 
 /** Font size factors tried in turn until a card fits its stage: the base size, then at most 3 steps down. */
 export const SIZE_STEPS = [1, 0.87, 0.76, 0.66];
+
+/**
+ * How a card is fitted: `step` into SIZE_STEPS for the whole card; then, at the last step, `shrink[key]` for each
+ * text block (data-fit="key") whose content is still wider than it (a formula too wide to wrap), and `squeeze` to
+ * scale a card that is still too tall.
+ */
+export const FIT_START = { step: 0, shrink: {}, rounds: 0, squeeze: 1 };
+const SHRINK_ROUNDS = 4;
+
+/**
+ * The fit to try after measuring the card at `fit`, or null once it is settled (so measuring always ends).
+ * tall: card height / room (over 1 = too tall). wide: [{ key, ratio }] for each block whose content is wider than
+ * the block, ratio = block width / content width. `squeeze: false` for a card that handles height itself.
+ */
+export const nextFit = (fit, { tall, wide }, { squeeze = true } = {}) => {
+  if ((tall > 1 || wide.length) && fit.step < SIZE_STEPS.length - 1) return { ...FIT_START, step: fit.step + 1 };
+  if (wide.length && fit.rounds < SHRINK_ROUNDS) {
+    const shrink = { ...fit.shrink };
+    // A little under the ratio: the block's padding does not shrink with its text.
+    wide.forEach(({ key, ratio }) => (shrink[key] = (shrink[key] || 1) * ratio * 0.97));
+    return { ...fit, shrink, rounds: fit.rounds + 1 };
+  }
+  if (squeeze && tall > 1 && fit.squeeze === 1) return { ...fit, squeeze: 1 / tall };
+  return null;
+};

@@ -267,7 +267,7 @@ test('text written against a short formula stays on its line; long formulas stay
     { nowrap: false, parts: [t('মোট ')] },
     { nowrap: true, parts: [t('('), m('5'), t('টি)')] },
   ]);
-  const long = m('\dfrac{x^3 - 1}{x - 1} = x^2 + x + 1 = 13');
+  const long = m('\\dfrac{x^3 - 1}{x - 1} = x^2 + x + 1 = 13');
   assert.deepEqual(glue([long, t(', তাই')]), [
     { nowrap: false, parts: [long] },
     { nowrap: false, parts: [t(', তাই')] },
@@ -275,4 +275,43 @@ test('text written against a short formula stays on its line; long formulas stay
   // every character survives, in order
   const parts = [t('ক'), m('a'), t(',খ '), m('b'), m('c'), t(' ঘ')];
   assert.equal(glue(parts).flatMap((s) => s.parts.map((p) => p.v)).join(''), parts.map((p) => p.v).join(''));
+});
+
+/* ---------- fitting a card: size steps, then too-wide blocks shrink, then a too-tall card squeezes ---------- */
+
+test('a card that fits is settled; one too tall or too wide steps down, starting fresh', () => {
+  const { FIT_START, nextFit } = require('../src/remotion/exam/timing.js');
+  assert.equal(nextFit(FIT_START, { tall: 0.9, wide: [] }), null);
+  assert.deepEqual(nextFit(FIT_START, { tall: 1.2, wide: [] }), { ...FIT_START, step: 1 });
+  const shrunk = { step: 2, shrink: { q: 0.8 }, rounds: 1, squeeze: 1 };
+  assert.deepEqual(nextFit(shrunk, { tall: 0.5, wide: [{ key: 'o1', ratio: 0.9 }] }), { ...FIT_START, step: 3 });
+});
+
+test('at the last step a block still too wide shrinks its own text until it fits, a few rounds at most', () => {
+  const { FIT_START, SIZE_STEPS, nextFit } = require('../src/remotion/exam/timing.js');
+  const last = { ...FIT_START, step: SIZE_STEPS.length - 1 };
+  const once = nextFit(last, { tall: 0.8, wide: [{ key: 'q', ratio: 0.5 }] });
+  assert.equal(once.step, last.step);
+  assert.ok(once.shrink.q <= 0.5 && once.shrink.q > 0.45, String(once.shrink.q)); // a little under, so it lands inside
+  assert.equal(once.rounds, 1);
+  const twice = nextFit(once, { tall: 0.8, wide: [{ key: 'q', ratio: 0.9 }, { key: 'o2', ratio: 0.8 }] });
+  assert.ok(twice.shrink.q < once.shrink.q * 0.9);
+  assert.ok(twice.shrink.o2 <= 0.8);
+  let fit = last;
+  for (let i = 0; i < 20 && fit; i++) {
+    const next = nextFit(fit, { tall: 0.8, wide: [{ key: 'q', ratio: 0.99 }] }); // never quite fits
+    if (!next) break;
+    fit = next;
+  }
+  assert.ok(fit.rounds <= 4, 'stops after a few rounds');
+  assert.equal(nextFit(fit, { tall: 0.8, wide: [{ key: 'q', ratio: 0.99 }] }), null);
+});
+
+test('at the last step a card still too tall is scaled down once to fit; the solution window never squeezes', () => {
+  const { FIT_START, SIZE_STEPS, nextFit } = require('../src/remotion/exam/timing.js');
+  const last = { ...FIT_START, step: SIZE_STEPS.length - 1 };
+  const squeezed = nextFit(last, { tall: 1.25, wide: [] });
+  assert.equal(squeezed.squeeze, 0.8);
+  assert.equal(nextFit(squeezed, { tall: 1.25, wide: [] }), null); // the transform does not change the measured height
+  assert.equal(nextFit(last, { tall: 1.25, wide: [] }, { squeeze: false }), null);
 });

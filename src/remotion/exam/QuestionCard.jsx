@@ -65,7 +65,7 @@ const Ring = ({ size, accent, voiceFrames, frames }) => {
   );
 };
 
-const Option = ({ option, i, z, S, accent, enter, lit, faded, tick }) => {
+const Option = ({ option, i, z, S, textSize, accent, enter, lit, faded, tick }) => {
   const T = theme();
   const G = green(T);
   const on = lit > 0.5;
@@ -104,7 +104,7 @@ const Option = ({ option, i, z, S, accent, enter, lit, faded, tick }) => {
           {LETTERS[i]}
         </span>
       </div>
-      <div data-fit style={{ position: 'relative', flex: 1, minWidth: 0, fontSize: z(S.opt), lineHeight: 1.3, color: T.text }}>
+      <div data-fit={`o${i}`} style={{ position: 'relative', flex: 1, minWidth: 0, fontSize: textSize, lineHeight: 1.3, color: T.text }}>
         <MathText parts={option.parts} />
       </div>
       {tick !== null ? <Check size={z(S.tick)} color={G} strokeWidth={3.5} style={{ position: 'relative', flex: 'none', transform: `scale(${tick})` }} /> : null}
@@ -118,7 +118,7 @@ export const QuestionCard = ({ visual, reveal, accent, isShort, room, voiceFrame
   const T = theme();
   const f = isVox() ? twos(f0) : f0;
   const card = useRef(null);
-  const { k, squeeze } = useFit(card, room);
+  const { k, squeeze, size } = useFit(card, room, visual);
   const S = isShort ? SIZES.short : SIZES.wide;
   const z = (n) => n * k;
   const shown = interpolate(f, [start + REVEAL_AT, start + REVEAL_AT + REVEAL_FRAMES], [0, 1], clamp);
@@ -128,7 +128,7 @@ export const QuestionCard = ({ visual, reveal, accent, isShort, room, voiceFrame
   return (
     <ExamCard cardRef={card} accent={accent} width={S.width} padding={`${z(S.padY)}px ${z(S.padX)}px`} squeeze={squeeze} start={start}>
       <div style={{ display: 'flex', alignItems: 'center', gap: z(20), marginBottom: z(S.gapHead), minHeight: reveal ? 0 : z(S.ring) }}>
-        {label ? <Label text={label} accent={accent} size={z(S.label)} /> : null}
+        {label ? <Label text={label} accent={accent} size={size('label', z(S.label))} /> : null}
         {reveal ? null : (
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: z(16), flex: 'none' }}>
             <div style={{ fontFamily: bodyFont(), fontSize: z(S.label), color: T.muted, whiteSpace: 'nowrap' }}>সেকেন্ড বাকি</div>
@@ -137,12 +137,12 @@ export const QuestionCard = ({ visual, reveal, accent, isShort, room, voiceFrame
         )}
       </div>
       <div
-        data-fit
-        style={{ fontSize: z(reveal ? S.qReveal : S.q), lineHeight: 1.4, textWrap: 'pretty', color: T.text, opacity: reveal ? 0.85 : 1, marginBottom: z(S.gapQ) }}
+        data-fit="q"
+        style={{ fontSize: size('q', z(reveal ? S.qReveal : S.q)), lineHeight: 1.4, textWrap: 'pretty', color: T.text, opacity: reveal ? 0.85 : 1, marginBottom: z(S.gapQ) }}
       >
         <MathText parts={visual.parts} />
       </div>
-      {/* minmax(0, …): a column never grows past its share, so a too-wide formula shows up as overflow and shrinks the card */}
+      {/* minmax(0, …): a column never grows past its share, so a too-wide formula shows up as overflow and is fitted */}
       <div style={{ display: 'grid', gridTemplateColumns: isShort ? 'minmax(0, 1fr)' : 'repeat(2, minmax(0, 1fr))', gap: z(S.gapOpt) }}>
         {visual.options.map((o, i) => {
           const right = reveal && i === visual.answer;
@@ -153,6 +153,7 @@ export const QuestionCard = ({ visual, reveal, accent, isShort, room, voiceFrame
               i={i}
               z={z}
               S={S}
+              textSize={size(`o${i}`, z(S.opt))}
               accent={accent}
               enter={reveal ? 1 : Math.min(1, pop(f0, fps, start + 6 + i * ITEM_STAGGER, 12))}
               lit={right ? r : 0}
