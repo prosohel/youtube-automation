@@ -5,7 +5,8 @@ const { INTRO_OUTRO_SEC, SCENE_TAIL_SEC } = require('../speech');
 const MAX_WORKING_LINES = 8;
 const SHORTS_MAX_SEC = 180; // YouTube counts vertical videos up to 3 minutes as Shorts
 const HOOK_AND_CLOSING_SEC = 12; // the hook scene before the questions and the closing scene after them
-// A working line is spoken in full sentences, its math in words: the dry run's lines took 4 to 15 words (about 12).
+// A working line is spoken in full sentences, its math in words: the dry runs' lines took 4 to 29 words. Each counts
+// at least this many, or its own spoken words when it says more.
 const WORDS_PER_WORKING_LINE = 13;
 const REVEAL_WORDS = 12; // the reveal ("সঠিক উত্তর ঘ, ক্ষতি পঞ্চাশ শতাংশ।") and the lead-ins around the question
 
@@ -50,7 +51,8 @@ function estimateSeconds(q, { wpm }) {
   const working = q.working || [];
   // Each option is read with its letter ("ক, লাভ পঁচিশ শতাংশ").
   const spoken = spokenWords(q.text) + q.options.reduce((n, o) => n + 1 + spokenWords(o), 0)
-    + WORDS_PER_WORKING_LINE * working.length + (q.tip ? spokenWords(q.tip) : 0) + REVEAL_WORDS;
+    + working.reduce((n, l) => n + Math.max(WORDS_PER_WORKING_LINE, spokenWords(l)), 0)
+    + (q.tip ? spokenWords(q.tip) : 0) + REVEAL_WORDS;
   const scenes = 2 + (working.length ? 1 : 0) + (q.tip ? 1 : 0); // question, [solution], reveal, [tip]
   return (spoken * 60) / wpm + (working.length ? 5 : 3) + SCENE_TAIL_SEC * scenes;
 }

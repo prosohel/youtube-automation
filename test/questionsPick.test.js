@@ -117,6 +117,11 @@ test('estimateSeconds: math is said a number, letter, command or sign at a time 
   assert.equal(at60({ ...plain, options: ['$\\dfrac{5}{6}$', 'খ', 'গ', 'ঘ'] }) - at60(plain), 3 - 1);
   // A tip: ক্ষতি, 50, %, and the tip scene's pause.
   assert.equal(at60({ ...plain, tip: 'ক্ষতি $50\\%$' }) - at60(plain), 3 + 0.25);
+  // A working line counts 13 words, or its own spoken words when it says more: this line of the 45th BCS page took
+  // 29 words in the dry run (3 words and 23 for its math, counted here as 26).
+  const oneLine = (line) => at60({ ...plain, working: [line] }) - at60({ ...plain, working: ['এক'] });
+  assert.equal(oneLine('উৎপাদকে ভাঙি: $x^2y + xy^2 = xy(x + y)$ এবং $x^2 + xy = x(x + y)$'), 26 - 13);
+  assert.equal(oneLine('ধরি ক্রয়মূল্য $= 100$ টাকা'), 0, 'a short line still counts 13');
 });
 
 test('fillBudget: a 3-minute Short of up to 5 questions from the real 44th BCS page stays a Short', () => {
