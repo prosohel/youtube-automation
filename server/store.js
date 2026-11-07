@@ -6,7 +6,7 @@ const PLATFORMS = ['youtube', 'tiktok', 'instagram', 'facebook'];
 const newId = (prefix) => prefix + Array.from(crypto.randomBytes(10), (b) => (b % 36).toString(36)).join('');
 const vKey = (id) => `video:${id}`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const clock = () => new Date().toISOString().slice(11, 19);
+const { localTime: clock } = require('../src/util');
 
 /**
  * Short Redis lock around read-modify-write. The web and worker processes both update videos,

@@ -7,6 +7,7 @@ const { createRedis } = require('./redis');
 const store = require('./store');
 const settings = require('./settings');
 const brands = require('./brands');
+const { localTime } = require('../src/util');
 const { runVideoJob } = require('./pipeline');
 const { QUEUE, createQueues, enqueueVideo } = require('./queues');
 const { processTick, runPublish, recheckProcessing, markPublishJobFailed, recoverPublishRecords } = require('./publishFlow');
@@ -14,7 +15,7 @@ const { syncSchedulers } = require('./scheduler');
 const { syncYoutube, clientForBrand } = require('./youtubeSync');
 
 const HEARTBEAT_KEY = 'worker:heartbeat';
-const log = (...a) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...a);
+const log = (...a) => console.log(`[${localTime()}]`, ...a);
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
 // A loadConfig while a video is being made must not change that video halfway (format, voice, theme...): only the

@@ -10,13 +10,13 @@ const hasExamScenes = (scenes) => (scenes || []).some((s) => s && s.visual && EX
  * without its question on screen. That video fails instead.
  * Returns { videoFile, thumbFile, credits[], coverMs }.
  */
-async function renderAny({ scenes, workDir, slug, title, theme, direction, thumbnail, sourceLabel }) {
+async function renderAny({ scenes, workDir, slug, title, theme, direction, thumbnail, sourceLabel, extraLabel }) {
   const exam = hasExamScenes(scenes);
   const refuse = (why) => new Error(`Remotion failed on a question video; not falling back to the plain render: ${why}`);
   if (cfg.useRemotion) {
     try {
       const { renderWithRemotion } = require('./render');
-      return await renderWithRemotion({ scenes, workDir, slug, title, theme, direction, thumbnail, sourceLabel });
+      return await renderWithRemotion({ scenes, workDir, slug, title, theme, direction, thumbnail, sourceLabel, extraLabel });
     } catch (e) {
       if (exam) throw refuse(e.message);
       log(`Remotion render failed: ${e.message}`);

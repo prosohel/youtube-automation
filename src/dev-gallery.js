@@ -51,6 +51,7 @@ const sceneTiming = (visual) => {
   const only = arg('only', null);
   const brand = (process.argv.find((a) => a.startsWith('--brand=')) || '').slice('--brand='.length) || null; // not split on commas
   const [site] = arg('source', [null]);
+  const [extra] = arg('extra', [null]); // --extra=ziggasa.com: the brand's own site on the outro
   const [frameName] = arg('frame', [null]);
   if (frameName && !FRAME_NAMES.includes(frameName)) throw new Error(`Unknown --frame "${frameName}" (intro or outro)`);
   const samples = SAMPLES.filter((s) => !only || only.includes(s.name) || only.includes(s.visual.type));
@@ -82,7 +83,7 @@ const sceneTiming = (visual) => {
           title: 'Gallery',
           kicker: null,
           brandLabel: brand,
-          sourceLabel: sourceLabel(site),
+          sourceLabel: sourceLabel(site), extraLabel: require('./extraLink').extraLabel(extra),
           subscribeText: 'Subscribe',
           ...size,
           fps: FPS,

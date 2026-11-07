@@ -80,7 +80,7 @@ test('the intro and outro draw brandLabel only when it is set', () => {
     const next = main.indexOf('\nconst ', start + 1);
     return main.slice(start, next);
   };
-  for (const name of ['Intro', 'Outro']) {
+  for (const name of ['Intro']) {
     const src = body(name);
     const guard = src.search(/\{\s*brandLabel\s*\?/);
     assert.ok(guard >= 0, `${name} draws brandLabel behind a truthiness guard`);
@@ -94,17 +94,20 @@ test('the intro and outro draw brandLabel only when it is set', () => {
   assert.match(main, /<Outro [^>]*brandLabel=\{brandLabel\}/, 'Main hands brandLabel to Outro');
 });
 
-test('the outro draws sourceLabel under the button only when it is set, fitted like brandLabel', () => {
+test('the outro draws sourceLabel, extraLabel and brandLabel under the button, only when set, fitted alike', () => {
   const main = read('Main.jsx');
   const start = main.indexOf('const Outro = (');
   const src = main.slice(start, main.indexOf('\nconst ', start + 1));
-  const guard = src.search(/\{\s*sourceLabel\s*\?/);
-  assert.ok(guard >= 0, 'Outro draws sourceLabel behind a truthiness guard');
-  assert.ok(guard > src.indexOf('{subscribeText}'), 'it sits under the subscribe button');
+  const guard = src.search(/\[\s*sourceLabel\s*,\s*extraLabel\s*,\s*brandLabel\s*\]\s*\.filter\(Boolean\)/);
+  assert.ok(guard >= 0, 'Outro draws its labels from one list with unset ones filtered out');
+  assert.ok(guard > src.indexOf('{subscribeText}'), 'they sit under the subscribe button');
   const block = src.slice(guard, src.indexOf('</div>', guard));
-  assert.match(block, /sourceLabel\.length > 16/, 'a long label shrinks');
+  assert.match(block, /label\.length > 16/, 'a long label shrinks');
   assert.match(block, /bodyFont\(\)/, 'body font');
   assert.match(block, /whiteSpace: 'nowrap'/);
   assert.match(block, /textOverflow: 'ellipsis'/);
+  assert.match(block, /T\.muted/, 'the theme muted colour');
   assert.match(main, /<Outro [^>]*sourceLabel=\{sourceLabel\}/, 'Main hands sourceLabel to Outro');
+  assert.match(main, /<Outro [^>]*extraLabel=\{extraLabel\}/, 'Main hands extraLabel to Outro');
+  assert.match(main, /<Outro [^>]*brandLabel=\{brandLabel\}/, 'Main hands brandLabel to Outro');
 });
