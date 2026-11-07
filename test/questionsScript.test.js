@@ -723,3 +723,43 @@ test('the pause sentence is taken out whichever way Claude spells য় in "থ
     assert.deepEqual(answerProblems(scriptOf(parts, info), info), [], JSON.stringify(ya));
   }
 });
+
+// mathsuggestion.com 44th BCS question 3, as the dry run found it: math options are read in words, so they never
+// match as written, and the right option "কোনটিই নয়" is the only one that does.
+const NONE_Q = {
+  ...Q1,
+  id: `${MS_URL.replace('https://', '')}#3`,
+  n: 3,
+  text: '$6a^2bc$ এবং $4a^3b^2c^2$ এর সংখ্যা সহগের গ.সা.গু. নিচের কোনটি?',
+  options: ['$a^2bc$', '$2a^2bc$', '$2a^2b^2c^2$', 'কোনটিই নয়'],
+  answer: 3,
+  working: [],
+  tip: null,
+};
+const NONE_INFO = { ...INFO, questions: [NONE_Q] };
+const noneAsk = (ask) =>
+  scriptOf(partsWith((p) => (p.questions = [{ ask, working: [], reveal: 'সঠিক উত্তর ঘ, কোনটিই নয়।' }])), NONE_INFO);
+const NONE_READ =
+  'ছয় এ বর্গ বি সি এবং চার এ ঘন বি বর্গ সি বর্গ, এর সংখ্যা সহগের গসাগু কত? ক, এ বর্গ বি সি। খ, দুই এ বর্গ বি সি। ' +
+  'গ, দুই এ বর্গ বি বর্গ সি বর্গ। ঘ, কোনটিই নয়।';
+
+test('answer check: reading the options is allowed when only the right one is written as on the page ("ঘ, কোনটিই নয়")', () => {
+  assert.deepEqual(answerProblems(noneAsk(`${NONE_READ} ${PAUSE}।`), NONE_INFO), []);
+  // Digit options are read in words too.
+  const digits = { ...INFO, questions: [{ ...NONE_Q, text: 'বারো ও আঠারোর গ.সা.গু. কত?', options: ['2', '3', '4', 'কোনটিই নয়'] }] };
+  const read = 'বারো ও আঠারোর গসাগু কত? ক, দুই; খ, তিন; গ, চার; ঘ) কোনটিই নয়। ভিডিও থামিয়ে চেষ্টা করুন।';
+  const parts = partsWith((p) => (p.questions = [{ ask: read, working: [], reveal: 'সঠিক উত্তর ঘ, কোনটিই নয়।' }]));
+  assert.deepEqual(answerProblems(scriptOf(parts, digits), digits), []);
+});
+
+test('answer check: the right option said again after reading it with its letter, or without its letter, still gives it away', () => {
+  for (const ask of [
+    `${NONE_READ} ঠিক ধরেছেন, ঘ, কোনটিই নয়। ${PAUSE}।`,
+    `${NONE_READ} মনে রাখুন, কোনটিই নয়। ${PAUSE}।`,
+    `ছয় এ বর্গ বি সি এবং চার এ ঘন বি বর্গ সি বর্গ, এর সংখ্যা সহগের গসাগু কত? কোনটিই নয়। ${PAUSE}।`,
+  ]) {
+    const problems = answerProblems(noneAsk(ask), NONE_INFO);
+    assert.equal(problems.length, 1, ask);
+    assert.match(problems[0], /question narration says the right option/);
+  }
+});
