@@ -192,10 +192,18 @@ function assembleScenes(topicInfo, parts) {
 const IN_WORD = '\\u0980-\\u09E5\\u09F0-\\u09FF\\u200C\\u200D';
 const BANGLA = '\\u0980-\\u09FF'; // the whole Bangla block, digits too
 const LETTER_RE = LETTERS.map((l) => new RegExp(`(?<![${IN_WORD}])${l}(?![${IN_WORD}])`, 'u'));
-// The right letter said not to be the answer: "ঘ নয়", "ঘ না", "ঘ নহে" (য় written as one sign or as য + nukta).
-const NEGATED_RE = LETTERS.map((l) => new RegExp(`(?<![${IN_WORD}])${l}[\\s,]*(?:ন(?:\\u09DF|\\u09AF\\u09BC)|না|নহে)(?![${IN_WORD}])`, 'u'));
-// An option letter given as the answer: "উত্তর ঘ", "উত্তর হলো (ঘ)", "উত্তরঃ ঘ", "উত্তরটি হবে ঘ".
-const NAMES_ANSWER = `উত্তর(?:টি)?\\s*(?:হলো|হল|হচ্ছে|হবে)?\\s*[:ঃ]?\\s*\\(?\\s*[কখগঘ]\\s*\\)?(?![${IN_WORD}])`;
+// "নয়", "না", "নহে" after a letter: that option is said not to be the answer (য় written as one sign or as য + nukta).
+const NOT_WORD = '(?:ন(?:\\u09DF|\\u09AF\\u09BC)|না|নহে)';
+// The right letter said not to be the answer: "ঘ নয়", "ঘ না", "ঘ নহে".
+const NEGATED_RE = LETTERS.map((l) => new RegExp(`(?<![${IN_WORD}])${l}[\\s,]*${NOT_WORD}(?![${IN_WORD}])`, 'u'));
+// Any option letter ruled out: "ক বা খ বা গ নয়" leaves only ঘ.
+const RULED_OUT_RE = new RegExp(`(?<![${IN_WORD}])([কখগঘ])[\\s,]*(${NOT_WORD})(?![${IN_WORD}])`, 'gu');
+// An option letter given as the answer: "উত্তর ঘ", "উত্তর হলো (ঘ)", "উত্তরঃ ঘ", "উত্তরটি হবে ঘ", "সঠিক উত্তরটা কিন্তু ঘ",
+// "উত্তর তো ঘ", "সঠিক ঘ", "ঠিক বিকল্প ঘ", "সঠিক অপশনটি হলো (ঘ)".
+const FILLERS = '(?:\\s*(?:কিন্তু|হলো|হল|হচ্ছে|হবে|তো))*';
+const NAMES_ANSWER =
+  `(?:উত্তর(?:টি|টা)?|(?<![${IN_WORD}])স?ঠিক(?:\\s*(?:বিকল্প|অপশন)(?:টি|টা)?)?)` +
+  `${FILLERS}\\s*[:ঃ]?\\s*\\(?\\s*[কখগঘ]\\s*\\)?(?![${IN_WORD}])`;
 const namesAnswer = (s) => (typeof s === 'string' ? s.match(new RegExp(NAMES_ANSWER, 'u')) : null);
 const TEX = /[$\\]/;
 // A narration with no Bangla or Latin letter in it ("", "।", "...") says nothing: the voice cannot read it.
@@ -294,21 +302,38 @@ function readsOptionsInOrder(narration, q) {
 
 /**
  * True when a narration, without its pause sentence, says the right option's text more often than reading the
- * question needs (and, when it reads the options aloud, reading them once: all four as written, or ক to ঘ in order
- * with the right one after its letter). Options with digits are spoken in words, so they never match as written: for
- * them only a digit slip is caught.
+ * question needs. With readsOptions (the question narration), reading the four options once is allowed too, but only
+ * as readsOptionsInOrder checks it: ক, খ, গ, ঘ in order, the right option and every plain-words option straight after
+ * its letter. Saying every option somewhere is not enough ("ক, গোলাপ; গ, জবা; ঘ, বেলি। জাতীয় ফুল শাপলা।" and
+ * "গোলাপ, জবা, বেলি নয়, শাপলা।" both state the answer), and an option inside the question text is not a reading
+ * of the options. Options with digits are spoken in words, so they never match as written: for them only a digit
+ * slip is caught.
  */
 function saysAnswer(narration, q, { readsOptions = false } = {}) {
   const re = optionRe(q.options[q.answer]);
   if (!re) return false;
   const said = withoutPause(narration);
   let allowed = hits(re, q.text);
-  const read = q.options.map((o, i) => i === q.answer || hits(optionRe(o), said) > 0);
-  // One reading of the options: the right option's text inside each option that was read as written.
-  if (readsOptions && (read.every(Boolean) || readsOptionsInOrder(narration, q))) {
-    allowed += q.options.reduce((n, o, i) => n + (read[i] ? hits(re, o) : 0), 0);
+  if (readsOptions && readsOptionsInOrder(narration, q)) {
+    // The options readsOptionsInOrder found read as written after their letters: the right option's text inside each.
+    const asWritten = (o, i) => i === q.answer || (speakable(o) && optionRe(o));
+    allowed += q.options.reduce((n, o, i) => n + (asWritten(o, i) ? hits(re, o) : 0), 0);
   }
   return hits(re, said) > allowed;
+}
+
+/**
+ * The first option letter the narration rules out ("ক বা খ বা গ নয়", "খ না"), or null. Reading an option that is the
+ * word itself after its letter ("খ, না" when খ is "না") rules nothing out. False hits are safe: the script is asked
+ * again, then gets a fixed text.
+ */
+function rulesOut(narration, q) {
+  for (const m of String(narration || '').replace(ABBREV_DOT, '').matchAll(RULED_OUT_RE)) {
+    const option = q ? norm(q.options[LETTERS.indexOf(m[1])]) : '';
+    if (option && option.split(' ')[0] === norm(m[2])) continue;
+    return m[0];
+  }
+  return null;
 }
 
 /** A wrong option's text in the reveal, outside the right option's own text, or null. */
@@ -336,6 +361,8 @@ function hookProblem(narration, qs) {
   if (TEX.test(narration)) return texWhy(narration);
   const named = namesAnswer(narration);
   if (named) return `names an answer letter (${quote(named[0])}) before the question`;
+  const out = rulesOut(narration, null);
+  if (out) return `rules out an option (${quote(out)}) before the question`;
   const k = qs.findIndex((q) => saysAnswer(narration, q));
   return k >= 0 ? `gives away the answer of question ${k + 1} before the question` : null;
 }
@@ -345,6 +372,8 @@ function askProblem(narration, q) {
   if (TEX.test(narration)) return texWhy(narration);
   const named = namesAnswer(narration);
   if (named) return `names an answer letter (${quote(named[0])}) before the countdown`;
+  const out = rulesOut(narration, q);
+  if (out) return `rules out an option (${quote(out)}) before the countdown`;
   if (saysAnswer(narration, q, { readsOptions: true })) return `says the right option ${quote(q.options[q.answer])} beyond reading the question and the four options`;
   return null;
 }
@@ -515,8 +544,10 @@ function findLeaks(script, info) {
 /**
  * Plain-language reasons why the script gives an answer away, gets it wrong or cannot be voiced; [] when it is
  * fine. Checks the reveal (the right letter, no other letter, not negated, no wrong option's text), the question and
- * working narration (no answer letter, no right option beyond reading the question and options), the title, hook,
- * kicker and thumbnail (no right option, no number of it), TeX anywhere, and narration with no word in it.
+ * working narration (no answer letter, no right option beyond reading the question and options), the hook and question
+ * narration (no option ruled out by letter), the title, hook, kicker and thumbnail (no right option, no number of it),
+ * TeX anywhere, and narration with no word in it. The description and tags are not sent back: writeQuestionScript
+ * drops the parts of them that leak.
  */
 function answerProblems(script, topicInfo) {
   return findLeaks(script, topicInfo).map((l) => l.reason);
@@ -552,6 +583,25 @@ function withSourceLink(description, url) {
 }
 
 const tidyLines = (s) => (typeof s === 'string' ? s.replace(/[ \t]+$/gm, '').trim() : '');
+
+/**
+ * The description and tags without what gives an answer away (they are public before anyone watches, and tags feed
+ * the captions): each description paragraph, each hashtag of its last line and each tag passes the same check as the
+ * text on the thumbnail, or is dropped. Returns { description, tags, dropped }.
+ */
+function publicText(script, qs) {
+  const dropped = [];
+  const keep = (s) => {
+    if (!screenProblem(s.replace(/_/g, ' '), qs)) return true;
+    dropped.push(s);
+    return false;
+  };
+  const tags = (Array.isArray(script.tags) ? script.tags : []).filter((t) => typeof t === 'string' && keep(t));
+  const lines = tidyLines(script.description).split('\n');
+  const hashtags = /^#/.test(lines[lines.length - 1]) ? lines.pop().split(/\s+/).filter((h) => h && keep(h)).join(' ') : '';
+  const paragraphs = lines.join('\n').split(/\n\s*\n/).map(tidyLines).filter((p) => p && keep(p));
+  return { description: [...paragraphs, hashtags].filter(Boolean).join('\n\n'), tags, dropped };
+}
 
 function build(info, parts) {
   const p = parts && typeof parts === 'object' ? parts : {};
@@ -599,7 +649,12 @@ async function writeQuestionScript(topicInfo, deps = {}) {
     // future change fails the video rather than publish an answer early.
     if (left.length) throw new Error(`Question script still gives an answer away: ${left.join(' ')}`);
   }
-  script.description = withSourceLink(script.description, topicInfo.sourceUrl);
+  const { description, tags, dropped } = publicText(script, topicInfo.questions);
+  if (dropped.length) {
+    await d.log(`Question script: dropped from the description and tags as they give an answer away: ${dropped.map(quote).join(' | ')}`);
+  }
+  script.tags = tags;
+  script.description = withSourceLink(description, topicInfo.sourceUrl);
   return script;
 }
 

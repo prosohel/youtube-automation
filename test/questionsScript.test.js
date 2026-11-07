@@ -776,6 +776,9 @@ test('answer check: the right option said again after reading it with its letter
   }
 });
 
+// Any of the reasons a question narration gives the answer away.
+const ASK_LEAK = /question narration (says the right option|names an answer letter|rules out an option)/;
+
 test('answer check: the right option with its letter counts as reading the options only when ক, খ, গ, ঘ are all read, in order', () => {
   const math = [
     `${NONE_STEM} ঘ, কোনটিই নয়। ${PAUSE}।`, // the others skipped
@@ -789,7 +792,7 @@ test('answer check: the right option with its letter counts as reading the optio
   for (const ask of math) {
     const problems = answerProblems(noneAsk(ask), NONE_INFO);
     assert.equal(problems.length, 1, ask);
-    assert.match(problems[0], /question narration says the right option/);
+    assert.match(problems[0], ASK_LEAK);
   }
   const capital = { ...wordQ(1, ['চট্টগ্রাম', 'খুলনা', 'ঢাকা', 'রাজশাহী'], 'বাংলাদেশের রাজধানী কোনটি?'), answer: 2 };
   const info = { ...INFO, questions: [capital] };
@@ -843,7 +846,7 @@ test('answer check: when the question holds ক, খ or গ itself, reading the 
   for (const [q, ask] of leaks) {
     const problems = askProblems(q, ask);
     assert.equal(problems.length, 1, ask);
-    assert.match(problems[0], /question narration says the right option/);
+    assert.match(problems[0], ASK_LEAK);
   }
 });
 
@@ -871,4 +874,100 @@ test('answer check: word options must each be read as written after their letter
   ]) {
     assert.equal(askProblems(twins, ask).length, 1, ask);
   }
+});
+
+/* ---------- final review: options read only with their letters, colloquial answer letters, rule-outs ---------- */
+
+const FLOWER = { ...wordQ(1, ['গোলাপ', 'শাপলা', 'জবা', 'বেলি'], 'বাংলাদেশের জাতীয় ফুল কোনটি?'), answer: 1 };
+const TALLEST = { ...wordQ(1, ['রহিম', 'করিম', 'জামাল', 'কামাল'], 'রহিম, করিম ও জামালের মধ্যে কে সবচেয়ে লম্বা?'), answer: 3 };
+const TALLEST_ALL = { ...TALLEST, text: 'রহিম, করিম, জামাল ও কামালের মধ্যে কে সবচেয়ে লম্বা?' };
+
+test('answer check: the right option stated outside a reading of ক to ঘ in order gives it away, even when every option is said somewhere', () => {
+  for (const [q, ask] of [
+    // The question names the wrong options; the narration states the right one.
+    [TALLEST, `রহিম, করিম ও জামালের মধ্যে কে সবচেয়ে লম্বা? সবচেয়ে লম্বা কামাল। ${PAUSE}।`],
+    // Three options read with their letters, the right one left out of the list and then stated.
+    [FLOWER, `বাংলাদেশের জাতীয় ফুল কোনটি? ক, গোলাপ; গ, জবা; ঘ, বেলি। জাতীয় ফুল শাপলা। ${PAUSE}।`],
+    // The options read without letters, the right one last as the answer.
+    [FLOWER, `বাংলাদেশের জাতীয় ফুল কোনটি? গোলাপ, জবা, বেলি নয়, শাপলা। ${PAUSE}।`],
+    [FLOWER, `বাংলাদেশের জাতীয় ফুল কোনটি? গোলাপ, শাপলা, জবা, বেলি। ${PAUSE}।`],
+  ]) {
+    const problems = askProblems(q, ask);
+    assert.equal(problems.length, 1, ask);
+    assert.match(problems[0], /question narration says the right option/);
+  }
+  // Reading ক to ঘ in order with each option after its letter is fine, wherever else the question names them.
+  for (const [q, ask] of [
+    [FLOWER, `বাংলাদেশের জাতীয় ফুল কোনটি? ক, গোলাপ; খ, শাপলা; গ, জবা; ঘ, বেলি। ${PAUSE}।`],
+    [TALLEST, `রহিম, করিম ও জামালের মধ্যে কে সবচেয়ে লম্বা? ক, রহিম; খ, করিম; গ, জামাল; ঘ, কামাল। ${PAUSE}।`],
+    [TALLEST_ALL, `রহিম, করিম, জামাল ও কামালের মধ্যে কে সবচেয়ে লম্বা? ক, রহিম; খ, করিম; গ, জামাল; ঘ, কামাল। ${PAUSE}।`],
+    [TALLEST_ALL, `রহিম, করিম, জামাল ও কামালের মধ্যে কে সবচেয়ে লম্বা? ${PAUSE}।`],
+  ]) {
+    assert.deepEqual(askProblems(q, ask), [], ask);
+  }
+  // The real asks of the dry runs still pass.
+  for (const ask of DRY_RUN_ASKS) assert.deepEqual(answerProblems(noneAsk(ask), NONE_INFO), [], ask);
+});
+
+const DIGITS_Q = { ...wordQ(1, ['2', '3', '6', '4'], 'বারো ও আঠারোর গসাগু কত?'), answer: 2, subject: 'গণিত' };
+const DIGITS_READ = 'বারো ও আঠারোর গসাগু কত? ক, দুই; খ, তিন; গ, ছয়; ঘ, চার।';
+
+test('answer check: an answer letter named in everyday words is caught before the countdown ("উত্তরটা কিন্তু গ", "সঠিক বিকল্প গ")', () => {
+  for (const said of [
+    'সঠিক উত্তরটা গ।',
+    'উত্তরটা কিন্তু গ।',
+    'উত্তর তো গ।',
+    'উত্তরটি হচ্ছে গ।',
+    'সঠিক গ।',
+    'ঠিক বিকল্প গ।',
+    'সঠিক অপশন হলো গ।',
+    'সঠিক বিকল্পটি (গ)।',
+  ]) {
+    const problems = askProblems(DIGITS_Q, `${DIGITS_READ} ${said} ${PAUSE}।`);
+    assert.equal(problems.length, 1, said);
+    assert.match(problems[0], /names an answer letter/, said);
+  }
+  const hook = oneQuestion({ ...INFO, questions: [FLOWER] }, 'সঠিক উত্তর খ, শাপলা।', (p) => (p.hook.narration = 'আজ দেখি, উত্তরটা খ কিনা।'));
+  const problems = answerProblems(hook, { ...INFO, questions: [FLOWER] });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /^The hook narration names an answer letter/);
+  // Words that only start like these are not an answer letter.
+  assert.deepEqual(askProblems(DIGITS_Q, `${DIGITS_READ} ঠিক কত হবে ভাবুন। ${PAUSE}।`), []);
+});
+
+test('answer check: options ruled out by letter before the countdown give the answer away ("ক বা খ বা গ নয়")', () => {
+  for (const ask of [
+    `${NONE_STEM} ক বা খ বা গ নয়, ঘ, কোনটিই নয়। ${PAUSE}।`,
+    `${NONE_READ} ক না, খ না, গ না। ${PAUSE}।`,
+    `${NONE_READ} খ, নহে। ${PAUSE}।`,
+  ]) {
+    const problems = answerProblems(noneAsk(ask), NONE_INFO);
+    assert.ok(problems.some((r) => /rules out an option/.test(r)), `${ask}\n${problems.join('\n')}`);
+  }
+  // য় written as one sign or as য + nukta.
+  for (const ya of ['য়', 'য়']) {
+    assert.ok(answerProblems(noneAsk(`${NONE_READ} গ ন${ya}। ${PAUSE}।`), NONE_INFO).some((r) => /rules out/.test(r)), JSON.stringify(ya));
+  }
+  // An option that is the word itself, read after its letter, rules nothing out.
+  const neg = { ...wordQ(1, ['না', 'নি', 'নেই', 'নয়'], 'নঞর্থক অব্যয় কোনটি?'), answer: 1 };
+  assert.deepEqual(askProblems(neg, `নঞর্থক অব্যয় কোনটি? ক, না; খ, নি; গ, নেই; ঘ, নয়। ${PAUSE}।`), []);
+  // The hook too.
+  const hook = oneQuestion(NONE_INFO, 'সঠিক উত্তর ঘ, কোনটিই নয়।', (p) => (p.hook.narration = 'ক বা খ নয়, তাহলে কোনটি?'));
+  assert.ok(answerProblems(hook, NONE_INFO).some((r) => /^The hook narration rules out an option/.test(r)));
+});
+
+test('writeQuestionScript: description paragraphs, tags and hashtags that give an answer away are dropped; the source link stays', async () => {
+  const leaky = partsWith((p) => {
+    p.description = 'দুটি আসল পরীক্ষার প্রশ্ন, ধাপে ধাপে সমাধান।\n\nপ্রথম প্রশ্নের উত্তর ক্ষতি ৫০%, দ্বিতীয়টির তিনটি।\n\n#বিসিএস #ক্ষতি_৫০ #গণিত';
+    p.tags = ['বিসিএস', 'ক্ষতি 50%', 'গণিত', 'পরাশ্রয়ী বর্ণ ৩টি'];
+  });
+  const lines = [];
+  const script = await writeQuestionScript(INFO, { log: async (l) => lines.push(l), askJson: fakeClaude(leaky).askJson });
+  assert.equal(script.description, `দুটি আসল পরীক্ষার প্রশ্ন, ধাপে ধাপে সমাধান।\n\nসম্পূর্ণ সমাধান: ${MS_URL}\n\n#বিসিএস #গণিত`);
+  assert.deepEqual(script.tags, ['বিসিএস', 'গণিত']);
+  assert.ok(lines.some((l) => /^Question script: dropped from the description and tags/.test(l)), lines.join('\n'));
+  // A clean description and tags are kept as written.
+  const clean = await writeQuestionScript(INFO, { ...quiet, askJson: fakeClaude(GOOD).askJson });
+  assert.deepEqual(clean.tags, GOOD.tags);
+  assert.equal(clean.description, `দুটি আসল পরীক্ষার প্রশ্ন, ধাপে ধাপে সমাধান।\n\nআগে নিজে চেষ্টা করুন।\n\nসম্পূর্ণ সমাধান: ${MS_URL}\n\n#বিসিএস #গণিত #চাকরির_প্রস্তুতি`);
 });
