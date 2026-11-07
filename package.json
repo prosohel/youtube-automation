@@ -35,6 +35,7 @@
     "render:test": "node src/dev-render.js",
     "render:gallery": "node src/dev-gallery.js",
     "render:thumbs": "node src/dev-thumbs.js",
+    "questions:dry": "node src/dev-questions.js",
     "test": "node --test --test-concurrency=1 \"test/**/*.test.js\"",
     "test:redis": "docker run -d --rm --name yt-test-redis -p 127.0.0.1:6380:6379 redis:7-alpine",
     "web": "node server/api.js",
