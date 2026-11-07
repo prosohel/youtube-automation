@@ -98,4 +98,4 @@ function checkExamVisual(v) {
   return CHECK[v.type](v);
 }
 
-module.exports = { EXAM_TYPES, toParts, checkExamVisual };
+module.exports = { EXAM_TYPES, LIMIT, toParts, checkExamVisual };

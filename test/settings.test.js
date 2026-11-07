@@ -144,6 +144,7 @@ test('BRAND_KEYS is exactly what each brand keeps for itself', () => {
   const expected = [
     // channel
     'NICHE', 'LANGUAGE', 'VIDEO_FORMAT', 'TARGET_MINUTES', 'TOPIC_CATEGORIES', 'PRIVACY_STATUS', 'YT_CATEGORY_ID', 'SYNTHETIC_MEDIA',
+    'QUESTION_SOURCE', 'QUESTION_SUBJECT', 'QUESTIONS_PER_VIDEO',
     // look
     'THEME', 'VISUALS', 'THUMB_STYLE', 'THUMB_INTRO',
     // voice
@@ -216,4 +217,34 @@ test('the thumbnail settings feed the config: style empty = Claude picks, the in
   const cfg = require('../src/config');
   assert.equal(typeof cfg.thumbStyle, 'string');
   assert.equal(typeof cfg.thumbIntro, 'boolean');
+});
+
+test('question mode settings are per brand, in the Channel card, off by default, and feed the config', () => {
+  const spec = (key) => S.SETTINGS_SCHEMA.find((s) => s.key === key);
+  const source = spec('QUESTION_SOURCE');
+  assert.equal(source.type, 'enum');
+  assert.deepEqual(source.options, ['', 'mathsuggestion.com', 'recentjobsolution.com', 'both']);
+  assert.equal(source.default, '');
+  assert.equal(source.cfg, 'questionSource');
+  const subject = spec('QUESTION_SUBJECT');
+  assert.equal(subject.type, 'enum');
+  assert.deepEqual(subject.options, ['all', 'math']);
+  assert.equal(subject.default, 'all');
+  assert.equal(subject.cfg, 'questionSubject');
+  const perVideo = spec('QUESTIONS_PER_VIDEO');
+  assert.equal(perVideo.type, 'number');
+  assert.equal(perVideo.default, 2);
+  assert.equal(perVideo.cfg, 'questionsPerVideo');
+  for (const s of [source, subject, perVideo]) {
+    assert.equal(s.scope, 'brand', s.key);
+    assert.equal(s.group, 'channel', s.key);
+  }
+  const c = S.toConfig(S.defaults());
+  assert.equal(c.questionSource, '');
+  assert.equal(c.questionSubject, 'all');
+  assert.equal(c.questionsPerVideo, 2);
+  const cfg = require('../src/config');
+  assert.equal(typeof cfg.questionSource, 'string');
+  assert.equal(typeof cfg.questionSubject, 'string');
+  assert.equal(typeof cfg.questionsPerVideo, 'number');
 });

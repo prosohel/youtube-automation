@@ -68,6 +68,22 @@ const SETTINGS_SCHEMA = [
   { key: 'BRAND_HANDLE', cfg: 'brandHandle', scope: 'brand', requires: 'SHOW_BRAND', group: 'channel', type: 'string', default: '', label: 'Brand handle (shown on the video)' },
   { key: 'SHOW_BRAND', cfg: 'showBrand', scope: 'brand', group: 'channel', type: 'boolean', default: false, label: 'Show brand on video' },
   { key: 'TOPIC_CATEGORIES', scope: 'brand', group: 'channel', type: 'json', default: ['AI', 'নতুন প্রযুক্তি ও আবিষ্কার', 'চাকরি হারানো', 'Privacy', 'AI বনাম মানুষ', 'Cybersecurity', 'Tech updates'], label: 'Topic categories for auto-picked videos' },
+  {
+    key: 'QUESTION_SOURCE', scope: 'brand', cfg: 'questionSource', group: 'channel', type: 'enum', options: ['', 'mathsuggestion.com', 'recentjobsolution.com', 'both'], default: '', label: 'Questions from your site',
+    optionLabels: { '': 'Off', both: 'Both sites' },
+    optionHints: {
+      '': 'Off: Claude finds topics as before.',
+      'mathsuggestion.com': 'Each video solves real questions from one page, with the site’s working. When none is left, Claude finds a topic.',
+      'recentjobsolution.com': 'Each video quizzes real questions from one page, with the site’s explanation. When none is left, Claude finds a topic.',
+      both: 'Each video takes its questions from one page of either site. When none is left, Claude finds a topic.',
+    },
+  },
+  {
+    key: 'QUESTION_SUBJECT', scope: 'brand', cfg: 'questionSubject', requires: 'QUESTION_SOURCE', group: 'channel', type: 'enum', options: ['all', 'math'], default: 'all', label: 'Question subject',
+    optionLabels: { all: 'All subjects', math: 'Math only' },
+    optionHints: { math: 'Only math questions that have a number in them. mathsuggestion.com is all math.' },
+  },
+  { key: 'QUESTIONS_PER_VIDEO', scope: 'brand', cfg: 'questionsPerVideo', requires: 'QUESTION_SOURCE', group: 'channel', type: 'number', default: 2, label: 'Questions per video (1–5)', hint: 'At most: the video length wins, so long questions leave room for fewer.' },
   // Platforms
   { key: 'YOUTUBE_CLIENT_SECRET', cfg: 'youtubeClientSecret', group: 'youtube', type: 'json', secret: true, default: null, label: 'Google OAuth client (client_secret.json)' },
   { key: 'YOUTUBE_TOKEN', scope: 'brand', cfg: 'youtubeToken', group: 'youtube', type: 'json', secret: true, default: null, label: 'YouTube sign-in' },

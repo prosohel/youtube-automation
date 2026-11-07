@@ -47,13 +47,18 @@ async function runWithVideoConfig(redis, brandId, fn) {
   }
 }
 
-/** History (topics/themes of earlier videos) of one brand, from Redis instead of history.json. */
+/**
+ * History (topics/themes of earlier videos) of one brand, from Redis instead of history.json. A question video
+ * counts from the moment its questions are picked, so a video still being made never lends them to another.
+ */
 async function loadHistory(redis, exceptId, brandId) {
+  const questionsOf = (v) => (v.topicInfo?.questions || []).map((q) => q.id);
   const list = (await store.listVideos(redis, { limit: 500, brandId }))
-    .filter((v) => v.id !== exceptId && v.done && v.done.script)
+    .filter((v) => v.id !== exceptId && v.done && (v.done.script || questionsOf(v).length > 0))
     .reverse() // oldest first, like history.json
     .map((v) => ({
       topic: v.topic,
+      questions: questionsOf(v),
       title: v.title,
       theme: v.theme && v.theme.id,
       direction: summarizeDirection(v.direction),

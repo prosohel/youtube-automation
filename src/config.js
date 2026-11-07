@@ -59,6 +59,11 @@ const cfg = (module.exports = {
   pronunciationFixes: [],
   captionFont: process.env.CAPTION_FONT || 'DejaVu Sans',
   targetMinutes: Number(process.env.TARGET_MINUTES || 3),
+  // Question mode: videos made from real exam questions on the owner's sites (src/questions).
+  // '' = off (Claude finds topics), 'mathsuggestion.com', 'recentjobsolution.com' or 'both'.
+  questionSource: (process.env.QUESTION_SOURCE || '').trim(),
+  questionSubject: (process.env.QUESTION_SUBJECT || 'all').trim(), // 'all' or 'math'
+  questionsPerVideo: Number(process.env.QUESTIONS_PER_VIDEO || 2), // at most; the video length wins (1-5)
 
   format,
   width: format === 'shorts' ? 1080 : 1920,

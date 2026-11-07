@@ -3,7 +3,7 @@ const path = require('path');
 
 /**
  * Stand-ins for the real pipeline stages. Every call is pushed to `calls`.
- * opts: { title, scenes = 5, failVoiceOn: 'scene-02.mp3', renderFailsOnce, delayMs, outDir, onRender(args) }
+ * opts: { title, scenes = 5, failVoiceOn: 'scene-02.mp3', renderFailsOnce, delayMs, outDir, onRender(args), questionInfo, noQuestionReason }
  */
 function fakeDeps(calls, opts = {}) {
   const wait = () => new Promise((r) => setTimeout(r, opts.delayMs || 0));
@@ -13,6 +13,14 @@ function fakeDeps(calls, opts = {}) {
       calls.push(`topic:${category || ''}`);
       await wait();
       return { topic: 'auto topic', angle: 'a', hook: 'h', searchQuery: 'q' };
+    },
+    // Question mode: none found unless opts.questionInfo is given; opts.noQuestionReason is logged through opts.log.
+    findQuestions: async (category, { log } = {}) => {
+      calls.push(`questions:${category || ''}`);
+      await wait();
+      if (opts.questionInfo) return opts.questionInfo;
+      if (log && opts.noQuestionReason) log(opts.noQuestionReason);
+      return null;
     },
     writeScript: async () => {
       calls.push('script');

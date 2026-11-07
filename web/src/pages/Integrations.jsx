@@ -86,7 +86,7 @@ export function Field({ spec, value, draft, setDraft, values, effective, lang, i
       <label className="field">
         {spec.label}
         <select value={v ?? ''} disabled={blocked} onChange={(e) => set(e.target.value)}>
-          {spec.options.map((o) => <option key={o} value={o}>{o === '' ? 'Claude picks per video' : spec.optionLabels?.[o] || o}</option>)}
+          {spec.options.map((o) => <option key={o} value={o}>{spec.optionLabels?.[o] || (o === '' ? 'Claude picks per video' : o)}</option>)}
         </select>
         {spec.optionHints?.[v ?? ''] && <span className="hint">{spec.optionHints[v ?? '']}</span>}
       </label>

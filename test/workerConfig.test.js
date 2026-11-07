@@ -72,6 +72,32 @@ test('history only holds the brand\'s own videos', async () => {
   }
 });
 
+test('a question video counts as used once its questions are picked, before its script is written', async () => {
+  const r = await freshRedis();
+  const brand = await seedBrand(r, { name: 'A' });
+  const scripted = await store.createVideo(r, { brandId: brand.id });
+  await store.updateVideo(r, scripted.id, { done: { topic: true, script: true }, topic: 'old idea' });
+  const picked = await store.createVideo(r, { brandId: brand.id });
+  const ids = ['mathsuggestion.com/44th-bcs#1', 'mathsuggestion.com/44th-bcs#3'];
+  await store.updateVideo(r, picked.id, {
+    done: { topic: true },
+    topic: 'বিসিএস গণিত',
+    topicInfo: { topic: 'বিসিএস গণিত', questions: ids.map((id) => ({ id })) },
+  });
+  // An idea video still waiting for its script is not history yet, as before.
+  const idea = await store.createVideo(r, { brandId: brand.id });
+  await store.updateVideo(r, idea.id, { done: { topic: true }, topic: 'idea in progress', topicInfo: { topic: 'idea in progress' } });
+  await loadHistory(r, null, brand.id);
+  try {
+    const h = require('../src/history').loadHistory();
+    assert.deepEqual(h.map((e) => e.topic), ['old idea', 'বিসিএস গণিত']);
+    assert.deepEqual(h[0].questions, []);
+    assert.deepEqual(h[1].questions, ids);
+  } finally {
+    require('../src/history').setHistoryBackend(null);
+  }
+});
+
 test('recent videos\' picks come from Redis, so Claude avoids repeating them', async () => {
   const { recentDirection } = require('../src/direction');
   const r = await freshRedis();
