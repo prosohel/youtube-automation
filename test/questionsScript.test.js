@@ -739,12 +739,21 @@ const NONE_Q = {
 const NONE_INFO = { ...INFO, questions: [NONE_Q] };
 const noneAsk = (ask) =>
   scriptOf(partsWith((p) => (p.questions = [{ ask, working: [], reveal: 'সঠিক উত্তর ঘ, কোনটিই নয়।' }])), NONE_INFO);
+const DRY_RUN_ASKS = [
+  'ছয় এ স্কয়ার বি সি এবং চার এ কিউব বি স্কয়ার সি স্কয়ার, এদের সংখ্যা সহগের গসাগু নিচের কোনটি? ক, এ স্কয়ার বি সি। খ, দুই এ স্কয়ার বি সি। ' +
+    'গ, দুই এ স্কয়ার বি স্কয়ার সি স্কয়ার। ঘ, কোনটিই নয়। ভিডিও থামিয়ে চেষ্টা করুন।',
+  'প্রথম প্রশ্ন। ছয় এ বর্গ বি সি, এবং চার এ ঘন বি বর্গ সি বর্গ, এর সংখ্যা সহগের গসাগু কত? ক, এ বর্গ বি সি। খ, দুই এ বর্গ বি সি। ' +
+    'গ, দুই এ বর্গ বি বর্গ সি বর্গ। ঘ, কোনটিই নয়। ভিডিও থামিয়ে চেষ্টা করুন।',
+];
+const NONE_STEM = 'ছয় এ বর্গ বি সি এবং চার এ ঘন বি বর্গ সি বর্গ, এর সংখ্যা সহগের গসাগু কত?';
 const NONE_READ =
   'ছয় এ বর্গ বি সি এবং চার এ ঘন বি বর্গ সি বর্গ, এর সংখ্যা সহগের গসাগু কত? ক, এ বর্গ বি সি। খ, দুই এ বর্গ বি সি। ' +
   'গ, দুই এ বর্গ বি বর্গ সি বর্গ। ঘ, কোনটিই নয়।';
 
-test('answer check: reading the options is allowed when only the right one is written as on the page ("ঘ, কোনটিই নয়")', () => {
+test('answer check: reading ক to ঘ in order is allowed when only the right option is written as on the page ("ঘ, কোনটিই নয়")', () => {
   assert.deepEqual(answerProblems(noneAsk(`${NONE_READ} ${PAUSE}।`), NONE_INFO), []);
+  // Both asks Claude wrote in the first dry run (each was failed, and replaced by a fixed text, before the fix).
+  for (const ask of DRY_RUN_ASKS) assert.deepEqual(answerProblems(noneAsk(ask), NONE_INFO), [], ask);
   // Digit options are read in words too.
   const digits = { ...INFO, questions: [{ ...NONE_Q, text: 'বারো ও আঠারোর গ.সা.গু. কত?', options: ['2', '3', '4', 'কোনটিই নয়'] }] };
   const read = 'বারো ও আঠারোর গসাগু কত? ক, দুই; খ, তিন; গ, চার; ঘ) কোনটিই নয়। ভিডিও থামিয়ে চেষ্টা করুন।';
@@ -761,5 +770,31 @@ test('answer check: the right option said again after reading it with its letter
     const problems = answerProblems(noneAsk(ask), NONE_INFO);
     assert.equal(problems.length, 1, ask);
     assert.match(problems[0], /question narration says the right option/);
+  }
+});
+
+test('answer check: the right option with its letter counts as reading the options only when ক, খ, গ, ঘ are all read, in order', () => {
+  const math = [
+    `${NONE_STEM} ঘ, কোনটিই নয়। ${PAUSE}।`, // the others skipped
+    `${NONE_STEM} সঠিক ঘ, কোনটিই নয়। ${PAUSE}।`,
+    `${NONE_STEM} ঠিক ধরেছেন, ঘ, কোনটিই নয়। ${PAUSE}।`,
+    `${NONE_STEM} ঘ, কোনটিই নয়। ক, এ বর্গ বি সি। খ, দুই এ বর্গ বি সি। গ, দুই এ বর্গ বি বর্গ সি বর্গ। ${PAUSE}।`, // out of order
+    `${NONE_STEM} ক, খ, গ নয়, ঘ, কোনটিই নয়। ${PAUSE}।`, // letters with nothing read after them
+  ];
+  for (const ask of math) {
+    const problems = answerProblems(noneAsk(ask), NONE_INFO);
+    assert.equal(problems.length, 1, ask);
+    assert.match(problems[0], /question narration says the right option/);
+  }
+  const capital = { ...wordQ(1, ['চট্টগ্রাম', 'খুলনা', 'ঢাকা', 'রাজশাহী'], 'বাংলাদেশের রাজধানী কোনটি?'), answer: 2 };
+  const info = { ...INFO, questions: [capital] };
+  const ask = (text) => partsWith((p) => (p.questions = [{ ask: text, working: [], reveal: 'সঠিক উত্তর গ, ঢাকা।' }]));
+  const read = `বাংলাদেশের রাজধানী কোনটি? ক, চট্টগ্রাম; খ, খুলনা; গ, ঢাকা; ঘ, রাজশাহী। ${PAUSE}।`;
+  assert.deepEqual(answerProblems(scriptOf(ask(read), info), info), []);
+  for (const text of [
+    `বাংলাদেশের রাজধানী কোনটি? গ, ঢাকা। ${PAUSE}।`,
+    `বাংলাদেশের রাজধানী কোনটি? ক, চট্টগ্রাম; খ, খুলনা; গ, ঢাকা। ${PAUSE}।`, // ঘ skipped
+  ]) {
+    assert.equal(answerProblems(scriptOf(ask(text), info), info).length, 1, text);
   }
 });

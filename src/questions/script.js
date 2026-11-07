@@ -249,20 +249,23 @@ function showsAnswer(value, q) {
 }
 
 /**
- * The right option read after its own letter ("ঘ, কোনটিই নয়"): how the options are read out. Options with math or
- * digits are spoken in words and never match as written, so this is the only sign that a word answer such as
- * "কোনটিই নয়" was read as one of the four options.
+ * True when the normalized narration reads the four options in order: ক, খ, গ, ঘ each as a letter on its own, each
+ * followed by something, and the right option's text straight after its letter ("ক, এ বর্গ বি সি। খ, … ঘ, কোনটিই
+ * নয়"). Options with math or digits are spoken in words and never match as written, so the letters in order are
+ * the only sign that a word answer such as "কোনটিই নয়" was read as one of the four options.
  */
-function readsRightWithLetter(said, q) {
-  const o = norm(q.options[q.answer]);
-  return new RegExp(`(?<![${IN_WORD}])${LETTERS[q.answer]}\\s+${o.split(' ').map(escapeRe).join('\\s*')}(?![0-9])`, 'u').test(said);
+function readsOptionsInOrder(said, q) {
+  const option = norm(q.options[q.answer]).split(' ').map(escapeRe).join('\\s*');
+  const letter = (l) => `(?<![${IN_WORD}])${l}(?![${IN_WORD}])`;
+  const parts = LETTERS.map((l, i) => (i === q.answer ? `${letter(l)}\\s+${option}(?![0-9])` : `${letter(l)}\\s+\\S`));
+  return new RegExp(parts.join('[\\s\\S]*?'), 'u').test(said);
 }
 
 /**
  * True when a narration, without its pause sentence, says the right option's text more often than reading the
- * question needs (and, when it reads the options aloud, reading them once: all four as written, or the right one
- * after its letter). Options with digits are spoken in words, so they never match as written: for them only a digit
- * slip is caught.
+ * question needs (and, when it reads the options aloud, reading them once: all four as written, or ক to ঘ in order
+ * with the right one after its letter). Options with digits are spoken in words, so they never match as written: for
+ * them only a digit slip is caught.
  */
 function saysAnswer(narration, q, { readsOptions = false } = {}) {
   const re = optionRe(q.options[q.answer]);
@@ -271,7 +274,7 @@ function saysAnswer(narration, q, { readsOptions = false } = {}) {
   let allowed = hits(re, q.text);
   const read = q.options.map((o, i) => i === q.answer || hits(optionRe(o), said) > 0);
   // One reading of the options: the right option's text inside each option that was read as written.
-  if (readsOptions && (read.every(Boolean) || readsRightWithLetter(said, q))) {
+  if (readsOptions && (read.every(Boolean) || readsOptionsInOrder(said, q))) {
     allowed += q.options.reduce((n, o, i) => n + (read[i] ? hits(re, o) : 0), 0);
   }
   return hits(re, said) > allowed;

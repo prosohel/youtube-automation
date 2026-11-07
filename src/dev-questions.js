@@ -16,7 +16,8 @@ const { findQuestions } = require('./questions');
 const { writeQuestionScript, answerProblems } = require('./questions/script');
 
 const LETTERS = ['ক', 'খ', 'গ', 'ঘ'];
-// What each brand's dashboard says (niche), so Claude picks pages as it will for that brand.
+// What each brand's dashboard says (niche), so Claude picks pages as it will for that brand. Copied by hand from the
+// dashboard on 2026-11-07: they may drift from it; --niche overrides them.
 const NICHES = {
   'mathsuggestion.com': 'Math Suggestions, Math Solutions, Job Exam Math Solutions News',
   both: 'Math Suggestions, Math Solutions, Job Exam Math Solutions News',
