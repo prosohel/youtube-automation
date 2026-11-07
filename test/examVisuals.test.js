@@ -140,3 +140,139 @@ test('EXAM_RENDERED in the Remotion exam module lists the same types in the same
   assert.deepEqual(rendered, EXAM_TYPES);
   assert.deepEqual(EXAM_TYPES, ['question', 'solution', 'reveal', 'tip']);
 });
+
+/* ---------- Remotion timing (pure helpers the exam scenes use) ---------- */
+
+// The composition's helpers are ES modules; Node 22 loads them through require().
+const { OVERLAP, wordStarts } = require('../src/remotion/timeline.js');
+const { toBangla, secondsLeft, ringLeft, lineStarts, newestLine, solutionViewport, scrollFor } = require('../src/remotion/exam/timing.js');
+const { sceneFrames } = require('../src/render');
+
+// What Captions computed before wordStarts existed, copied so a timing change shows up here.
+const oldCaptionStarts = (narration, frames) => {
+  const words = narration.split(/\s+/).filter(Boolean);
+  const weights = words.map((w) => [...w].length + 2);
+  const sum = weights.reduce((x, y) => x + y, 0);
+  const span = frames * 0.96;
+  const starts = [];
+  let acc = 0;
+  for (const w of weights) {
+    starts.push(OVERLAP + ((span - OVERLAP) * acc) / sum);
+    acc += w;
+  }
+  return starts;
+};
+
+test('wordStarts is the captions word timing, unchanged', () => {
+  for (const [n, frames] of [['ধরি, ক্রয়মূল্য ১০০ টাকা', 120], ['a bb ccc   dddd', 301], ['one', 30]]) {
+    assert.deepEqual(wordStarts(n, frames), oldCaptionStarts(n, frames));
+  }
+  assert.deepEqual(wordStarts('ক খখ', 100), [OVERLAP, OVERLAP + ((96 - OVERLAP) * 3) / 7]);
+  assert.deepEqual(wordStarts('   ', 100), []);
+});
+
+test('Captions takes its timing from wordStarts and the scene passes the voice length', () => {
+  const text = fs.readFileSync(path.join(__dirname, '..', 'src', 'remotion', 'Text.jsx'), 'utf8');
+  assert.match(text, /wordStarts\(narration, frames\)/);
+  assert.match(text, /export \{[^}]*\bwordStarts\b[^}]*\}/);
+  const main = fs.readFileSync(path.join(__dirname, '..', 'src', 'remotion', 'Main.jsx'), 'utf8');
+  assert.match(main, /const voiceFrames = scene\.voiceFrames \|\| scene\.frames;/);
+  assert.match(main, /<Captions[^>]*frames=\{voiceFrames\}/);
+});
+
+test('exam visuals are drawn before the Vox branch can swallow them', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'remotion', 'Visuals.jsx'), 'utf8');
+  const exam = src.indexOf('EXAM_RENDERED.includes(v.type)');
+  assert.ok(exam > 0, 'SceneVisual checks EXAM_RENDERED');
+  assert.ok(exam < src.indexOf('if (isVox())'), 'before the Vox branch');
+});
+
+test('a scene lasts its voice plus a tail; a question adds its countdown', () => {
+  assert.deepEqual(sceneFrames({ duration: 4, visual: { type: 'icon' } }, 30), { voiceFrames: 128, frames: 128 });
+  assert.deepEqual(sceneFrames({ duration: 4, visual: null }, 30), { voiceFrames: 128, frames: 128 });
+  assert.deepEqual(sceneFrames({ duration: 0.2, visual: null }, 30), { voiceFrames: 30, frames: 30 });
+  assert.deepEqual(sceneFrames({ duration: 4, visual: { type: 'question', countdown: 5 } }, 30), { voiceFrames: 128, frames: 278 });
+  assert.deepEqual(sceneFrames({ duration: 4, visual: { type: 'question', countdown: 3 } }, 30), { voiceFrames: 128, frames: 218 });
+  assert.deepEqual(sceneFrames({ duration: 4, visual: { type: 'reveal', countdown: 5 } }, 30), { voiceFrames: 128, frames: 128 });
+});
+
+test('the countdown shows whole seconds left in Bangla digits', () => {
+  assert.equal(toBangla(5), '৫');
+  assert.equal(toBangla('10'), '১০');
+  // voice 60 frames, then 5 s at 30 fps
+  assert.equal(secondsLeft(0, 60, 210, 30), 5);
+  assert.equal(secondsLeft(60, 60, 210, 30), 5);
+  assert.equal(secondsLeft(105, 60, 210, 30), 4);
+  assert.equal(secondsLeft(209, 60, 210, 30), 1);
+  assert.equal(secondsLeft(210, 60, 210, 30), 0);
+  assert.equal(secondsLeft(400, 60, 210, 30), 0);
+  assert.equal(ringLeft(10, 60, 210), 1);
+  assert.equal(ringLeft(135, 60, 210), 0.5);
+  assert.equal(ringLeft(300, 60, 210), 0);
+  assert.equal(ringLeft(10, 60, 60), 1); // no countdown: the ring stays full
+});
+
+test('solution line i appears at the start of its first word; past the narration it clamps to the last word', () => {
+  const starts = [15, 20, 25, 30, 35, 40, 45];
+  assert.deepEqual(lineStarts([{ words: 2 }, { words: 3 }, { words: 2 }], starts), [15, 25, 40]);
+  assert.deepEqual(lineStarts([{ words: 4 }, { words: 6 }, { words: 6 }], starts), [15, 35, 45]);
+  assert.deepEqual(lineStarts([{ words: 1 }, { words: 1 }], []), [OVERLAP, OVERLAP]);
+  assert.equal(newestLine([15, 25, 40], 10), -1);
+  assert.equal(newestLine([15, 25, 40], 25), 1);
+  assert.equal(newestLine([15, 25, 40], 99), 2);
+});
+
+test('with more than 6 lines the block scrolls so the newest line is visible', () => {
+  const boxes = Array.from({ length: 8 }, (_, i) => ({ top: i * 110, bottom: i * 110 + 100 })); // 100 px lines, 10 px apart
+  const view = solutionViewport(boxes, 2000);
+  assert.equal(view, 650); // six lines
+  assert.equal(scrollFor(boxes, -1, view), 0);
+  assert.equal(scrollFor(boxes, 5, view), 0);
+  assert.equal(scrollFor(boxes, 6, view), 110);
+  assert.equal(scrollFor(boxes, 7, view), 220);
+  assert.equal(solutionViewport(boxes, 500), 500); // less room than six lines: the room there is
+  const two = [{ top: 0, bottom: 120 }, { top: 140, bottom: 260 }];
+  assert.equal(solutionViewport(two, 2000), 260); // short working: no scrolling at all
+  assert.equal(scrollFor(two, 1, 260), 0);
+});
+
+test('a scrolled window starts at a line top, so no line is cut in half at the top', () => {
+  const boxes = [{ top: 0, bottom: 100 }, { top: 110, bottom: 250 }, { top: 260, bottom: 400 }]; // a taller fraction line
+  assert.equal(scrollFor(boxes, 2, 300), 110); // 400 - 110 fits in 300, 400 - 0 does not
+  assert.equal(scrollFor(boxes, 2, 100), 260); // the newest line alone is taller than the window: its top
+});
+
+test('an exam scene never gets B-roll footage (footage would hide its card); other scenes are unchanged', () => {
+  const { wantsFootage } = require('../src/render');
+  for (const type of EXAM_TYPES) {
+    assert.equal(wantsFootage({ visual: { type }, broll: true }, 'footage'), false, type);
+    assert.equal(wantsFootage({ visual: { type }, broll: true }, 'mixed'), false, type);
+  }
+  assert.equal(wantsFootage({ visual: { type: 'icon' }, broll: false }, 'footage'), true);
+  assert.equal(wantsFootage({ visual: { type: 'icon' }, broll: true }, 'mixed'), true);
+  assert.equal(wantsFootage({ visual: null, broll: false }, 'mixed'), false);
+  assert.equal(wantsFootage({ visual: { type: 'icon' }, broll: true }, 'motion'), false);
+});
+
+test('text written against a short formula stays on its line; long formulas stay breakable', () => {
+  const { glue } = require('../src/remotion/exam/timing.js');
+  const t = (v) => ({ math: false, v });
+  const m = (v) => ({ math: true, v });
+  assert.deepEqual(glue([t('অতএব '), m('x = 3'), t('; কারণ')]), [
+    { nowrap: false, parts: [t('অতএব ')] },
+    { nowrap: true, parts: [m('x = 3'), t(';')] },
+    { nowrap: false, parts: [t(' কারণ')] },
+  ]);
+  assert.deepEqual(glue([t('মোট ('), m('5'), t('টি)')]), [
+    { nowrap: false, parts: [t('মোট ')] },
+    { nowrap: true, parts: [t('('), m('5'), t('টি)')] },
+  ]);
+  const long = m('\dfrac{x^3 - 1}{x - 1} = x^2 + x + 1 = 13');
+  assert.deepEqual(glue([long, t(', তাই')]), [
+    { nowrap: false, parts: [long] },
+    { nowrap: false, parts: [t(', তাই')] },
+  ]);
+  // every character survives, in order
+  const parts = [t('ক'), m('a'), t(',খ '), m('b'), m('c'), t(' ঘ')];
+  assert.equal(glue(parts).flatMap((s) => s.parts.map((p) => p.v)).join(''), parts.map((p) => p.v).join(''));
+});

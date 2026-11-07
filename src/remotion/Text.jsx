@@ -1,9 +1,12 @@
 import React from 'react';
 import { interpolate, random, useCurrentFrame, useVideoConfig } from 'remotion';
 import { GRAIN, bodyFont, cardStyle, headFont, pop, theme, tornClip } from './shared';
-import { OVERLAP } from './timeline';
+import { OVERLAP, wordStarts } from './timeline';
 import { VISUAL_START } from './Visuals';
 import { Highlighter, MarkerUnderline, Tape, draw } from './Vox';
+
+// The word timing lives in timeline.js (pure, so Node tests and the exam scenes share it without an import cycle).
+export { wordStarts };
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
 
@@ -188,15 +191,7 @@ export const Captions = ({ narration, frames, accent, isShort, onFootage = false
   if (!words.length) return null;
   const perChunk = isShort ? 3 : 6;
 
-  const weights = words.map((w) => [...w].length + 2);
-  const sum = weights.reduce((x, y) => x + y, 0);
-  const span = frames * 0.96;
-  const starts = [];
-  let acc = 0;
-  for (const w of weights) {
-    starts.push(OVERLAP + ((span - OVERLAP) * acc) / sum);
-    acc += w;
-  }
+  const starts = wordStarts(narration, frames);
   let active = 0;
   for (let i = 0; i < words.length; i++) if (f >= starts[i]) active = i;
   const first = Math.floor(active / perChunk) * perChunk;

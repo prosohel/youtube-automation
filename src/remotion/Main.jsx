@@ -24,6 +24,7 @@ import { OVERLAP, buildTimeline } from './timeline';
 import { accentFor, bodyFont, cardStyle, energy, headFont, isVox, pop, setTheme, theme } from './shared';
 import { MarkerUnderline, Tape, draw } from './Vox';
 import { SceneVisual, VISUAL_START } from './Visuals';
+import { EXAM_FULL_CARD } from './exam';
 import { COUNT_FRAMES, ITEM_STAGGER } from './library/timing';
 import { MotionBg, Overlays, Particles } from './Backgrounds';
 import { Captions, HeadlineCard } from './Text';
@@ -84,6 +85,7 @@ const Scene = ({ scene, index, total, isShort, kicker }) => {
   const { fps } = useVideoConfig();
   const accent = accentFor(index);
   const dur = scene.frames + OVERLAP;
+  const voiceFrames = scene.voiceFrames || scene.frames; // scenes rendered before voiceFrames existed: all voice
   const kb = interpolate(f, [0, dur], [1.06, 1.22]);
   const dir = index % 2 === 0 ? 1 : -1;
   const pan = interpolate(f, [0, dur], [-1.5 * dir, 1.5 * dir]);
@@ -134,8 +136,18 @@ const Scene = ({ scene, index, total, isShort, kicker }) => {
         <Particles count={isShort ? 14 : 18} seed={index + 7} />
         <BlurWhileMoving moving={(f >= VISUAL_START - 1 && f <= VISUAL_START + 40) || f >= scene.frames - 13}>
           <AbsoluteFill>
-            {scene.bg ? null : <SceneVisual visual={scene.visual} accent={accent} isShort={isShort} />}
-            {scene.headline && scene.frames > 60 ? (
+            {scene.bg ? null : (
+              <SceneVisual
+                visual={scene.visual}
+                accent={accent}
+                isShort={isShort}
+                voiceFrames={voiceFrames}
+                frames={scene.frames}
+                narration={scene.narration}
+              />
+            )}
+            {/* A question, solution or reveal card is the content itself: no headline over it. */}
+            {scene.headline && scene.frames > 60 && !EXAM_FULL_CARD.includes(scene.visual?.type) ? (
               <HeadlineCard text={scene.headline} accent={accent} frames={scene.frames} isShort={isShort} kicker={kicker} seed={index} />
             ) : null}
           </AbsoluteFill>
@@ -143,7 +155,8 @@ const Scene = ({ scene, index, total, isShort, kicker }) => {
         {scene.emoji ? <EmojiPop name={scene.emoji} frames={dur} delay={VISUAL_START + 10} isShort={isShort} /> : null}
       </AbsoluteFill>
       <SceneBadge index={index} total={total} accent={accent} frames={scene.frames} isShort={isShort} />
-      <Captions narration={scene.narration} frames={scene.frames} accent={accent} isShort={isShort} onFootage={Boolean(scene.bg)} />
+      {/* Timed to the voice only, so the captions never stretch over a question's silent countdown. */}
+      <Captions narration={scene.narration} frames={voiceFrames} accent={accent} isShort={isShort} onFootage={Boolean(scene.bg)} />
     </AbsoluteFill>
   );
 };
