@@ -200,12 +200,16 @@ const TEX = /[$\\]/;
 // A narration with no Bangla or Latin letter in it ("", "।", "...") says nothing: the voice cannot read it.
 const silent = (s) => !/[অ-হৎড়-ৡA-Za-z]/.test(s || '');
 
-// For comparing: Latin digits; sentence punctuation, quotes, `$`, TeX braces and backslashes become spaces (a full
-// stop too, but not a decimal point), and so does the visarga written as a colon ("উত্তরঃবিসর্গ"); one space between
-// words; lower case. Options are compared in this form on both sides, so "তুমি যাও।" is caught as "তুমি যাও".
+// For comparing: one Unicode spelling (NFC writes য়, ড়, ঢ় as letter + nukta whichever way they were typed); Latin
+// digits, with thousands separators joined ("১,২০০" is 1200); sentence punctuation, quotes, `$`, TeX braces and
+// backslashes become spaces (a full stop too, but not a decimal point), and so does the visarga written as a colon
+// ("উত্তরঃবিসর্গ"); one space between words; lower case. Every comparison of option text, numbers and the pause
+// sentence goes through this, on both sides, so "তুমি যাও।" is caught as "তুমি যাও".
 const norm = (s) =>
   String(s || '')
+    .normalize('NFC')
     .replace(/[০-৯]/g, (d) => String(BN_DIGITS.indexOf(d)))
+    .replace(/(\d),(?=\d)/g, '$1')
     .replace(/(?<!\d)\.|\.(?!\d)/g, ' ')
     .replace(/[$\\{}।॥?!,;:()'"‘’“”ঃ]/g, ' ')
     .replace(/\s+/g, ' ')

@@ -677,3 +677,49 @@ test('the fixed title falls back to the topic, then to a plain title, when the p
   assert.equal(safe.title, 'প্রশ্ন ও সমাধান');
   assert.deepEqual(answerProblems(safe, info2), []);
 });
+
+/* ---------- fix round 3: thousands separators, Unicode spellings ---------- */
+
+test('a number with a thousands separator is the same number ("১,২০০" is 1200), and 2.5 is not 25', () => {
+  const priceQ = (right) => ({ ...INFO, questions: [wordQ(1, [right, '১০০০ টাকা', '৮০০ টাকা', '৬০০ টাকা'], 'বিক্রয়মূল্য কত?')] });
+  const withThumb = (info, number) =>
+    oneQuestion(info, 'সঠিক উত্তর ক।', (p) => (p.thumbnail = { style: 'number', text: 'দাম কত হবে?', number, color: 'red' }));
+  const comma = priceQ('১,২০০ টাকা');
+  assert.equal(answerProblems(withThumb(comma, '১২০০'), comma).length, 1);
+  assert.equal(answerProblems(withThumb(comma, '1200'), comma).length, 1);
+  const plain = priceQ('১২০০ টাকা');
+  assert.equal(answerProblems(withThumb(plain, '১,২০০'), plain).length, 1);
+  const title = { ...oneQuestion(plain, 'সঠিক উত্তর ক।'), title: 'লাভ ২০% হলে দাম ১,২০০' };
+  const problems = answerProblems(title, plain);
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /^The title/);
+  const decimal = { ...INFO, questions: [wordQ(1, ['লাভ 2.5%', 'লাভ 5%', 'লাভ 10%', 'লাভ 20%'], 'শতকরা লাভ কত?')] };
+  const decimalThumb = (number) =>
+    oneQuestion(decimal, 'সঠিক উত্তর ক।', (p) => (p.thumbnail = { style: 'number', text: 'লাভ কত?', number, color: 'red' }));
+  assert.deepEqual(answerProblems(decimalThumb('২৫%'), decimal), []);
+  assert.equal(answerProblems(decimalThumb('২.৫%'), decimal).length, 1);
+});
+
+test('one-sign and letter-plus-nukta spellings (য়, ড়, ঢ়) are the same text, either way round', () => {
+  const ONE = 'য়'; // য় as one sign
+  const TWO = 'য়'; // য + nukta
+  for (const [source, shown] of [[TWO, ONE], [ONE, TWO]]) {
+    const info = { ...INFO, questions: [wordQ(1, [`ভ${source}`, 'রাগ', 'দুঃখ', 'আনন্দ'])] };
+    const s = oneQuestion(info, 'সঠিক উত্তর ক।', (p) => (p.thumbnail = { style: 'question', text: `ভ${shown} পাবেন?`, highlight: 'পাবেন?', color: 'red' }));
+    assert.equal(answerProblems(s, info).length, 1, `source ${JSON.stringify(source)}, shown ${JSON.stringify(shown)}`);
+  }
+  const rara = { ...INFO, questions: [wordQ(1, ['পড়া', 'লেখা', 'শোনা', 'বলা'])] };
+  const s = oneQuestion(rara, 'সঠিক উত্তর ক।', (p) => (p.hook.headline = 'পড়া চাই'));
+  assert.equal(answerProblems(s, rara).length, 1, 'ড় as one sign in the source, ড + nukta on screen');
+});
+
+test('the pause sentence is taken out whichever way Claude spells য় in "থামিয়ে"', () => {
+  const right = 'চেষ্টা করুন।';
+  const info = { ...INFO, questions: [wordQ(1, [right, 'চেষ্টা করেন।', 'চেষ্টা করো।', 'চেষ্টা করিস।'], 'কোনটি অনুজ্ঞাসূচক বাক্য?')] };
+  for (const ya of ['য়', 'য়']) {
+    const pause = `ভিডিও থামি${ya}ে চেষ্টা করুন।`;
+    const ask = `কোনটি অনুজ্ঞাসূচক বাক্য? ক, ${right} খ, চেষ্টা করেন। গ, চেষ্টা করো। ঘ, চেষ্টা করিস। ${pause}`;
+    const parts = partsWith((p) => (p.questions = [{ ask, working: [], reveal: `সঠিক উত্তর ক, ${right}` }]));
+    assert.deepEqual(answerProblems(scriptOf(parts, info), info), [], JSON.stringify(ya));
+  }
+});
