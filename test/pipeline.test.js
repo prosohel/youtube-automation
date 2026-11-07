@@ -308,3 +308,139 @@ test('a video scripted before thumbnails existed still gets one when it renders'
   assert.equal(renders[0].thumbnail.style, 'bigText');
   assert.equal(done.coverMs, null, 'no cover time from a render that gave none');
 });
+
+/** Runs fn with question mode set to `source`, then turns it off again. */
+async function withQuestionSource(source, fn) {
+  const cfg = require('../src/config');
+  cfg.applySettings({ questionSource: source });
+  try {
+    await fn();
+  } finally {
+    cfg.applySettings({ questionSource: '' });
+  }
+}
+
+test('question mode off (QUESTION_SOURCE empty, the default): the question finder is never called', async () => {
+  await withQuestionSource('', async () => {
+    const r = await freshRedis();
+    const outDir = tmpOut();
+    const calls = [];
+    const v = await store.createVideo(r, { category: 'Privacy' });
+    const done = await runVideoJob(v.id, { redis: r, deps: fakeDeps(calls, { outDir }), outDir });
+    assert.equal(calls.filter((c) => c.startsWith('questions:')).length, 0);
+    assert.equal(calls.filter((c) => c === 'topic:Privacy').length, 1);
+    assert.ok(done.log.some((l) => l.endsWith('Finding a topic in "Privacy"...')));
+  });
+});
+
+test('question mode: no usable questions -> the topic finder makes the video and the log says why', async () => {
+  await withQuestionSource('mathsuggestion.com', async () => {
+    const r = await freshRedis();
+    const outDir = tmpOut();
+    const calls = [];
+    const deps = fakeDeps(calls, { outDir, noQuestionReason: 'every question on the tried pages is used' });
+    const v = await store.createVideo(r, { category: 'HSC' });
+    const done = await runVideoJob(v.id, { redis: r, deps, outDir });
+    assert.deepEqual(calls.slice(0, 2), ['questions:HSC', 'topic:HSC']);
+    assert.equal(done.status, 'ready');
+    assert.equal(done.topicInfo.topic, 'auto topic');
+    assert.ok(done.log.some((l) => l.includes('No usable questions (every question on the tried pages is used), finding a topic instead')), done.log.join('\n'));
+  });
+});
+
+test('question mode: the picked questions become the video\'s topic', async () => {
+  await withQuestionSource('both', async () => {
+    const r = await freshRedis();
+    const outDir = tmpOut();
+    const calls = [];
+    const url = 'https://mathsuggestion.com/44th-bcs';
+    const questionInfo = {
+      topic: '৪৪তম বিসিএস গণিত', angle: 'a', hook: 'h', searchQuery: 'q', whyItWorks: 'w',
+      questions: [{ id: 'mathsuggestion.com/44th-bcs#1' }, { id: 'mathsuggestion.com/44th-bcs#3' }],
+      sourceUrl: url, siteName: 'mathsuggestion.com',
+    };
+    const v = await store.createVideo(r, {});
+    const done = await runVideoJob(v.id, { redis: r, deps: fakeDeps(calls, { outDir, questionInfo }), outDir });
+    assert.equal(calls.filter((c) => c.startsWith('topic:')).length, 0);
+    assert.deepEqual(done.topicInfo, questionInfo);
+    assert.equal(done.topic, '৪৪তম বিসিএস গণিত');
+    assert.ok(done.log.some((l) => l.endsWith(`Questions: 2 from ${url}`)), done.log.join('\n'));
+  });
+});
+
+test('question mode: a resumed video keeps the questions it picked', async () => {
+  await withQuestionSource('mathsuggestion.com', async () => {
+    const r = await freshRedis();
+    const outDir = tmpOut();
+    const calls = [];
+    const topicInfo = { topic: 't', questions: [{ id: 'mathsuggestion.com/44th-bcs#1' }], sourceUrl: 'https://mathsuggestion.com/44th-bcs' };
+    const v = await store.createVideo(r, {});
+    await store.updateVideo(r, v.id, { done: { topic: true }, topic: 't', topicInfo });
+    const done = await runVideoJob(v.id, { redis: r, deps: fakeDeps(calls, { outDir }), outDir });
+    assert.equal(calls.filter((c) => c.startsWith('questions:') || c.startsWith('topic:')).length, 0);
+    assert.deepEqual(done.topicInfo, topicInfo);
+  });
+});
+
+test('question mode: a video with questions is scripted by writeQuestionScript, keeps its exam cards and gets an exam theme', async () => {
+  const cfg = require('../src/config');
+  const { setHistoryBackend } = require('../src/history');
+  const { resolveStyle } = require('../src/style');
+  const pinned = cfg.theme;
+  cfg.theme = ''; // whatever .env pins
+  setHistoryBackend({ load: () => [], save() {} });
+  try {
+    const r = await freshRedis();
+    const outDir = tmpOut();
+    const calls = [];
+    const renders = [];
+    const deps = fakeDeps(calls, { outDir, onRender: (args) => renders.push(args) });
+    deps.resolveStyle = (style, opts) => resolveStyle(style, opts);
+    // The script writer's notes (a retry, fixed texts) land in the video's log.
+    const write = deps.writeQuestionScript;
+    deps.writeQuestionScript = async (info, opts) => {
+      await opts.log('Question script: asking Claude again (Question 1: the reveal must name the right letter ঘ)');
+      return write(info, opts);
+    };
+    const topicInfo = { topic: 't', questions: [{ id: 'mathsuggestion.com/44th-bcs#1' }], sourceUrl: 'https://mathsuggestion.com/44th-bcs', siteName: 'mathsuggestion.com' };
+    const v = await store.createVideo(r, {});
+    await store.updateVideo(r, v.id, { done: { topic: true }, topic: 't', topicInfo });
+    const done = await runVideoJob(v.id, { redis: r, deps, outDir });
+    assert.ok(done.log.some((l) => l.endsWith('Question script: asking Claude again (Question 1: the reveal must name the right letter ঘ)')), done.log.join('\n'));
+    assert.deepEqual(calls.filter((c) => c === 'script' || c.startsWith('questionScript')), ['questionScript:1']);
+    assert.deepEqual(done.script.scenes.map((s) => s.visual.type), ['icon', 'question', 'reveal', 'icon']);
+    assert.ok(Array.isArray(done.script.scenes[1].visual.parts), 'checked as an exam card, not turned into an icon');
+    assert.equal(renders[0].scenes[1].visual.type, 'question');
+    assert.equal(renders[0].sourceLabel, 'সম্পূর্ণ সমাধান: mathsuggestion.com', 'the outro names the source site');
+    assert.equal(done.theme.family, 'exam');
+  } finally {
+    setHistoryBackend(null);
+    cfg.theme = pinned;
+  }
+});
+
+test('idea mode: a video without questions is scripted as before, with no exam cards and no theme family', async () => {
+  const r = await freshRedis();
+  const outDir = tmpOut();
+  const calls = [];
+  const renders = [];
+  const deps = fakeDeps(calls, { outDir, onRender: (args) => renders.push(args) });
+  const styleArgs = [];
+  deps.resolveStyle = (...a) => {
+    styleArgs.push(a);
+    return { theme: { id: 'neon', seed: 7 } };
+  };
+  const write = deps.writeScript;
+  deps.writeScript = async (t) => {
+    const s = await write(t);
+    s.scenes[0] = { ...s.scenes[0], visual: { type: 'question', text: 'কত?', options: ['১', '২', '৩', '৪'], answer: 0, countdown: 3 } };
+    return s;
+  };
+  const v = await store.createVideo(r, {});
+  const done = await runVideoJob(v.id, { redis: r, deps, outDir });
+  assert.equal(calls.filter((c) => c.startsWith('questionScript')).length, 0);
+  assert.equal(calls.filter((c) => c === 'script').length, 1);
+  assert.deepEqual(done.script.scenes[0].visual, { type: 'icon', icon: 'Sparkles' }, 'exam cards only in question mode');
+  assert.deepEqual(styleArgs, [[{}]]);
+  assert.equal(renders[0].sourceLabel, null, 'no source site, no outro label');
+});

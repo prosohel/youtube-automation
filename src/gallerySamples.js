@@ -1,5 +1,13 @@
 // One raw sample per scene graphic for `npm run render:gallery`. Library samples use labels at
 // exactly their character limits (see src/graphics.js) so the gallery shows the worst case.
+
+// 44th BCS preliminary, question 1 (mathsuggestion.com): the question the exam looks were designed with.
+const BCS_Q1 = {
+  text: 'ক্রয়মূল্য বিক্রয়মূল্যের দ্বিগুণ হলে শতকরা লাভ বা ক্ষতির পরিমাণ কত?',
+  options: ['লাভ 25%', 'ক্ষতি 25%', 'লাভ 10%', 'ক্ষতি 50%'],
+  answer: 3,
+};
+
 module.exports = [
   {
     name: 'bigNumber',
@@ -84,5 +92,85 @@ module.exports = [
   {
     name: 'compare',
     visual: { type: 'compare', left: { title: 'আসল অ্যাপ', points: ['প্লে স্টোরে', 'যাচাই করা'] }, right: { title: 'নকল অ্যাপ', points: ['লিংকে আসে', 'তাড়া দেয়'] } },
+  },
+
+  // Exam scenes (src/examVisuals.js). The real 44th BCS preliminary Q1 from mathsuggestion.com, and a worst
+  // case at the text limits: a 160-character question and 48-character options mixing Latin and Bangla.
+  { name: 'question', visual: { type: 'question', ...BCS_Q1, countdown: 5, source: '৪৪তম বিসিএস প্রিলিমিনারি · প্রশ্ন ১' } },
+  {
+    name: 'question-long',
+    visual: {
+      type: 'question',
+      text: 'একটি ট্রেন 72 km/h বেগে চলে 150 m লম্বা একটি platform $\\dfrac{3}{4}$ মিনিটে পার হয়। Platform-টির দৈর্ঘ্য কত মিটার, আর ট্রেনটি 1.5 km যেতে কত সেকেন্ড সময় নেবে?',
+      options: [
+        'প্ল্যাটফর্ম 750 m এবং সময় লাগবে 75 seconds মোটে',
+        'প্ল্যাটফর্ম 600 m, সময় $\\dfrac{150}{2}$ সেকেন্ড',
+        'Platform length 750 m and time taken 90 seconds.',
+        'কোনোটিই নয়, কারণ ট্রেনের দৈর্ঘ্য জানা নেই এখানে',
+      ],
+      answer: 0,
+      countdown: 5,
+      source: 'রেলওয়ে স্টেশন মাস্টার ২০২৪ · প্রশ্ন ১০৭',
+    },
+  },
+  {
+    name: 'solution',
+    visual: {
+      type: 'solution',
+      lines: [
+        { text: 'ধরি, ক্রয়মূল্য $= 100$ টাকা', words: 4 },
+        { text: 'বিক্রয়মূল্য $= \\dfrac{100}{2} = 50$ টাকা', words: 6 },
+        { text: 'ক্ষতি $= 100 - 50 = 50$ টাকা', words: 6 },
+        { text: 'শতকরা ক্ষতি $= \\dfrac{50}{100} \\times 100 = 50\\%$', words: 8 },
+      ],
+    },
+  },
+  {
+    name: 'solution-long',
+    visual: {
+      type: 'solution',
+      lines: [
+        { text: 'ধরি, সংখ্যাটি $= x$, তাহলে শর্তমতে $x^2 + 2x = 15$', words: 5 },
+        { text: 'বা, $x^2 + 2x - 15 = 0$', words: 5 },
+        { text: 'বা, $x^2 + 5x - 3x - 15 = 0$', words: 5 },
+        { text: 'বা, $x(x + 5) - 3(x + 5) = 0$', words: 5 },
+        { text: 'বা, $(x + 5)(x - 3) = 0$, অতএব $x = 3$; কারণ সংখ্যাটি ধনাত্মক, তাই $-5$ বাদ যাবে', words: 5 },
+        { text: 'এখন $\\sqrt{x^2 + 16} = \\sqrt{9 + 16} = \\sqrt{25} = 5$', words: 5 },
+        { text: 'আবার $\\dfrac{x^3 - 1}{x - 1} = x^2 + x + 1 = 13$', words: 5 },
+        { text: 'নির্ণেয় মান $= \\dfrac{5}{13}$ এবং $i^{-49} = -i$', words: 5 },
+      ],
+    },
+  },
+  // Formulas too wide to wrap (a braced group or one fraction never breaks): the question's still overflows at the
+  // smallest size step in both formats, so that block shrinks its own text; the option and the line step down.
+  {
+    name: 'question-wide',
+    visual: {
+      type: 'question',
+      text: 'সরল করুন: ${\\dfrac{(x+1)(x+2)(x+3)(x+4)(x+5)(x+6)(x+7)(x+8)(x+9)(x+10)(x+11)(x+12)(x+13)(x+14)}{x+15}}$',
+      options: ['${1234567 \\times 7654321 = 9449772114007}$', '$x + 1$', '$x^{14}$', 'কোনোটিই নয়'],
+      answer: 3,
+      countdown: 3,
+      source: 'বীজগণিত অনুশীলনী',
+    },
+  },
+  {
+    name: 'solution-wide',
+    visual: {
+      type: 'solution',
+      lines: [
+        { text: 'ধরি, $y = (x+1)(x+2)(x+3)$', words: 3 },
+        { text: 'ফলে $\\dfrac{(x+1)(x+2)(x+3)(x+4)(x+5)(x+6)(x+7)(x+8)(x+9)}{2}$', words: 3 },
+        { text: 'অতএব $2^{64} = 18446744073709551616$', words: 3 },
+      ],
+    },
+  },
+  { name: 'reveal', visual: { type: 'reveal', ...BCS_Q1 } },
+  {
+    name: 'tip',
+    visual: {
+      type: 'tip',
+      text: 'শতকরা লাভ ও ক্ষতি সবসময় ক্রয়মূল্যের উপর হিসাব হয়, বিক্রয়মূল্যের উপর নয়। তাই, লাভ% $= \\dfrac{\\text{লাভ}}{\\text{ক্রয়মূল্য}} \\times 100$ এই সূত্রটি মনে রাখুন',
+    },
   },
 ];

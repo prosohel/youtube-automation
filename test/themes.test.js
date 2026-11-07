@@ -16,6 +16,7 @@ const cards = [...shared.matchAll(/case '(\w+)':/g)].map((m) => m[1]);
 const headlines = ['swipe', ...[...text.matchAll(/style === '(\w+)'/g)].map((m) => m[1])]; // swipe = default branch
 const bgStyles = [...backgrounds.matchAll(/style === '(\w+)' &&/g)].map((m) => m[1]);
 const motions = [...shared.matchAll(/^\s+(\w+): \{ damping/gm)].map((m) => m[1]);
+const examLooks = [...read('exam/looks.js').matchAll(/^  (\w+): \{/gm)].map((m) => m[1]);
 
 const luminance = (hex) => {
   const n = parseInt(hex.slice(1), 16);
@@ -40,9 +41,10 @@ for (const [id, t] of Object.entries(THEMES)) {
     assert.ok(motions.includes(t.motion), `motion ${t.motion}`);
     for (const b of t.bgStyles) assert.ok(bgStyles.includes(b), `background ${b}`);
     assert.ok(t.accents.length >= 2 && t.transitions.length >= 1);
+    if (t.examLook) assert.ok(examLooks.includes(t.examLook), `exam look ${t.examLook}`);
   });
 
-  if (t.family === 'vox') {
+  if (t.family === 'vox' || t.family === 'exam') {
     test(`theme ${id}: text is readable on the background and on its accents`, () => {
       assert.ok(contrast(t.text, t.bg[0]) >= 7, 'body text on background');
       for (const a of t.accents) assert.ok(contrast(a, t.onAccent) >= 3, `onAccent on ${a}`);
@@ -90,4 +92,19 @@ test('the intro and outro draw brandLabel only when it is set', () => {
   }
   assert.match(main, /<Intro [^>]*brandLabel=\{brandLabel\}/, 'Main hands brandLabel to Intro');
   assert.match(main, /<Outro [^>]*brandLabel=\{brandLabel\}/, 'Main hands brandLabel to Outro');
+});
+
+test('the outro draws sourceLabel under the button only when it is set, fitted like brandLabel', () => {
+  const main = read('Main.jsx');
+  const start = main.indexOf('const Outro = (');
+  const src = main.slice(start, main.indexOf('\nconst ', start + 1));
+  const guard = src.search(/\{\s*sourceLabel\s*\?/);
+  assert.ok(guard >= 0, 'Outro draws sourceLabel behind a truthiness guard');
+  assert.ok(guard > src.indexOf('{subscribeText}'), 'it sits under the subscribe button');
+  const block = src.slice(guard, src.indexOf('</div>', guard));
+  assert.match(block, /sourceLabel\.length > 16/, 'a long label shrinks');
+  assert.match(block, /bodyFont\(\)/, 'body font');
+  assert.match(block, /whiteSpace: 'nowrap'/);
+  assert.match(block, /textOverflow: 'ellipsis'/);
+  assert.match(main, /<Outro [^>]*sourceLabel=\{sourceLabel\}/, 'Main hands sourceLabel to Outro');
 });

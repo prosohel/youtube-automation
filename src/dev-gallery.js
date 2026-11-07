@@ -1,8 +1,9 @@
 // Contact sheet of every scene graphic, so the look can be reviewed without making a video.
 // Usage: npm run render:gallery -- [--themes=neon,vox-paper,news] [--formats=shorts,landscape] [--only=bars,donut]
-//        [--brand=@TechBangla] [--frame=intro|outro]
-// --brand sets the brandLabel prop (the small channel name on the intro and outro). --frame=intro or outro takes the
-// still from the intro (frame 30) or the outro (20 frames before the end) instead of mid-scene.
+//        [--brand=@TechBangla] [--source=mathsuggestion.com] [--frame=intro|outro]
+// --brand sets the brandLabel prop (the small channel name on the intro and outro); --source=<site> the outro's sourceLabel. --frame=intro or outro takes the
+// still from the intro (frame 30) or the outro (20 frames before the end) instead of mid-scene. Exam samples are
+// validated as question-mode scenes (examGraphics) and shown mid-countdown, after the reveal, or fully written.
 // --only matches a sample name or a graphic type. Output: output/gallery/<format>-<theme>-<name>.jpg
 // and output/gallery/sheet-<format>.jpg (one row per theme, one column per sample).
 const fs = require('fs');
@@ -11,6 +12,7 @@ const cfg = require('./config');
 const { ensureDir, run, log } = require('./util');
 const { resolveStyle } = require('./style');
 const { validateVisual } = require('./graphics');
+const { sourceLabel } = require('./examVisuals');
 const SAMPLES = require('./gallerySamples');
 
 const arg = (k, def) => {
@@ -25,18 +27,32 @@ const FORMATS = { shorts: { width: 1080, height: 1920, isShort: true }, landscap
 // VISUAL_START in Visuals.jsx is OVERLAP + 2; read OVERLAP from the (ESM) timeline module so they never drift.
 const OVERLAP = Number(fs.readFileSync(path.join(__dirname, 'remotion', 'timeline.js'), 'utf8').match(/OVERLAP = (\d+)/)[1]);
 const SCENE_FRAMES = 150; // the one sample scene below
-const STILL_FRAME = Math.round(INTRO_SECONDS * FPS) + OVERLAP + 2 + 60; // the graphic, well after it landed
-const LAST_FRAME = Math.round(INTRO_SECONDS * FPS) + SCENE_FRAMES + Math.round(OUTRO_SECONDS * FPS) - 1;
-const FRAMES = { intro: 30, outro: LAST_FRAME - 20 };
+const INTRO_FRAMES = Math.round(INTRO_SECONDS * FPS);
+const OUTRO_FRAMES = Math.round(OUTRO_SECONDS * FPS);
+const FRAME_NAMES = ['intro', 'outro'];
+
+/**
+ * The sample scene's length and the frame shown (inside the scene): the graphic well after it landed; a question
+ * 45 frames into its countdown (60 frames of "voice", then the countdown); a reveal once the answer lit up;
+ * a solution at its last frame, every line written.
+ */
+const sceneTiming = (visual) => {
+  if (visual.type === 'question') {
+    const voiceFrames = 60;
+    return { voiceFrames, frames: voiceFrames + visual.countdown * FPS, still: voiceFrames + 45 };
+  }
+  const still = { reveal: 40, solution: SCENE_FRAMES - 1 }[visual.type] ?? OVERLAP + 2 + 60;
+  return { voiceFrames: SCENE_FRAMES, frames: SCENE_FRAMES, still };
+};
 
 (async () => {
   const themes = arg('themes', ['neon', 'vox-paper', 'news']);
   const formats = arg('formats', ['shorts', 'landscape']);
   const only = arg('only', null);
   const brand = (process.argv.find((a) => a.startsWith('--brand=')) || '').slice('--brand='.length) || null; // not split on commas
+  const [site] = arg('source', [null]);
   const [frameName] = arg('frame', [null]);
-  if (frameName && !FRAMES[frameName]) throw new Error(`Unknown --frame "${frameName}" (intro or outro)`);
-  const stillFrame = frameName ? FRAMES[frameName] : STILL_FRAME;
+  if (frameName && !FRAME_NAMES.includes(frameName)) throw new Error(`Unknown --frame "${frameName}" (intro or outro)`);
   const samples = SAMPLES.filter((s) => !only || only.includes(s.name) || only.includes(s.visual.type));
   if (!samples.length) throw new Error(`No sample matches --only=${only.join(',')}`);
 
@@ -58,12 +74,15 @@ const FRAMES = { intro: 30, outro: LAST_FRAME - 20 };
       const { theme } = resolveStyle({}, { forceTheme: themeId, seed: 5 });
       if (theme.id !== themeId) throw new Error(`Unknown theme "${themeId}"`);
       for (const { name, visual: raw } of samples) {
-        const visual = validateVisual(raw, { directGraphics: true, language: 'Bangla' });
+        const visual = validateVisual(raw, { directGraphics: true, examGraphics: true, language: 'Bangla' });
         if (visual.type !== raw.type) log(`Gallery: WARNING sample "${name}" failed validation and shows as an icon`);
+        const { voiceFrames, frames, still } = sceneTiming(visual);
+        const stillFrame = { intro: 30, outro: INTRO_FRAMES + frames + OUTRO_FRAMES - 1 - 20 }[frameName] ?? INTRO_FRAMES + still;
         const inputProps = {
           title: 'Gallery',
           kicker: null,
           brandLabel: brand,
+          sourceLabel: sourceLabel(site),
           subscribeText: 'Subscribe',
           ...size,
           fps: FPS,
@@ -74,7 +93,7 @@ const FRAMES = { intro: 30, outro: LAST_FRAME - 20 };
           theme,
           scenes: [
             // A realistic 4-word headline (wraps to two lines in some themes); the caption names the sample.
-            { frames: SCENE_FRAMES, narration: name, headline: 'অনলাইন প্রতারণার নতুন কৌশল', visual, emoji: null, bg: null, audio: null },
+            { frames, voiceFrames, narration: name, headline: 'অনলাইন প্রতারণার নতুন কৌশল', visual, emoji: null, bg: null, audio: null },
           ],
         };
         const output = path.join(outDir, `${format}-${themeId}-${name}${frameName ? `-${frameName}` : ''}.jpg`);

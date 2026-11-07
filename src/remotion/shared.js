@@ -16,16 +16,24 @@ import THEMES from './themes.json';
 const FONT_LOADERS = { HindSiliguri, AnekBangla, NotoSansBengali, NotoSerifBengali, BalooDa2, Galada, Mina };
 const FALLBACK = '"Nirmala UI", "Noto Sans Bengali", sans-serif';
 const fontCache = {};
+const fontWaits = {};
 
 const loadFamily = (name, weight) => {
   const key = `${name}:${weight}`;
   if (!fontCache[key]) {
     const loader = FONT_LOADERS[name] || HindSiliguri;
-    const { fontFamily } = loader('normal', { weights: [String(weight)], subsets: ['bengali', 'latin'] });
+    const { fontFamily, waitUntilDone } = loader('normal', { weights: [String(weight)], subsets: ['bengali', 'latin'] });
     fontCache[key] = `"${fontFamily}", ${FALLBACK}`;
+    fontWaits[key] = waitUntilDone;
   }
   return fontCache[key];
 };
+
+/** Resolves once the theme's heading and body fonts have loaded (before text is measured). Never rejects. */
+export const themeFontsReady = () =>
+  Promise.all(
+    [`${T.headingFont}:${T.headingWeight}`, `${T.bodyFont}:${T.bodyWeight}`].map((k) => (fontWaits[k] ? fontWaits[k]().catch(() => {}) : null))
+  ).then(() => undefined);
 
 // Spring feel per theme: snappy = quick and tight, bouncy = overshoot, smooth = slow and elegant.
 // stepped = stop-motion paper: tight settle, and time is cut "on twos" (see `pop`), used by the Vox themes.
@@ -144,6 +152,32 @@ export const cardStyle = (accent, opts = {}) => {
         borderRadius: '8px 16px 10px 14px',
         border: '4px solid #1c1c1c',
         boxShadow: `5px 6px 0 ${accent}`,
+      };
+    /* exam family */
+    case 'chalk':
+      // A box drawn in coloured chalk on the board: a darker wiped patch, a chalk line with a soft glow.
+      return {
+        background: T.surface,
+        borderRadius: r,
+        border: `4px solid ${accent}d9`,
+        boxShadow: `0 0 12px ${accent}40, inset 0 0 14px ${accent}26`,
+      };
+    case 'sheet':
+      // A printed box on the answer sheet: navy outline, a coloured header rule, a soft paper shadow.
+      return {
+        background: T.surface,
+        borderRadius: r,
+        border: '2px solid rgba(28,37,84,0.5)',
+        borderTop: `10px solid ${accent}`,
+        boxShadow: T.shadow,
+      };
+    case 'sticky':
+      // A sticky note on the page: a coloured strip along the top where it sticks, a soft shadow under it.
+      return {
+        background: T.surface,
+        borderRadius: r,
+        borderTop: `10px solid ${accent}`,
+        boxShadow: T.shadow,
       };
     case 'left':
     default:

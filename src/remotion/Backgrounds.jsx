@@ -335,6 +335,133 @@ const Graph = ({ accent }) => {
   );
 };
 
+/* ---------- exam family: board and paper ---------- */
+
+// Fine chalk dust: white specks where a noise field peaks, rasterised once like GRAIN.
+const CHALK_DUST =
+  'url("data:image/svg+xml;utf8,' +
+  "<svg xmlns='http://www.w3.org/2000/svg' width='360' height='360'>" +
+  "<filter id='d'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='4' stitchTiles='stitch'/>" +
+  "<feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  3.2 0 0 0 -1.7'/></filter>" +
+  "<rect width='100%25' height='100%25' filter='url(%23d)'/></svg>\")";
+
+const WOOD = (deg) =>
+  `repeating-linear-gradient(${deg}deg, #7a5532 0 11px, #6c4829 11px 14px, #845d37 14px 27px, #714d2c 27px 31px)`;
+
+/** Classroom chalkboard: a green board with half-wiped chalk and dust in a wooden frame. The smudges drift slowly. */
+const Chalkboard = ({ seed }) => {
+  const frame = useCurrentFrame();
+  const { width, height } = useVideoConfig();
+  const base = Math.min(width, height);
+  const wood = Math.round(base * 0.034);
+  const bar = (style, deg) => <div style={{ position: 'absolute', background: WOOD(deg), boxShadow: 'inset 0 0 0 2px rgba(0,0,0,0.18), inset 0 3px 0 rgba(255,235,200,0.12)', ...style }} />;
+  return (
+    <>
+      <AbsoluteFill style={{ background: 'radial-gradient(120% 90% at 50% 50%, #2a4437 0%, #1d3128 75%, #172820 100%)' }} />
+      {[0, 1, 2].map((i) => {
+        // clouds of chalk left by the eraser
+        const w = width * (0.7 + random(`cw-${seed}-${i}`) * 0.5);
+        const h = height * (0.22 + random(`ch-${seed}-${i}`) * 0.18);
+        const x = width * (0.1 + random(`cx-${seed}-${i}`) * 0.8) - w / 2 + Math.sin(frame / 90 + i * 2.1) * base * 0.02;
+        const y = height * (0.18 + 0.32 * i) - h / 2 + Math.cos(frame / 110 + i) * base * 0.015;
+        return <div key={i} style={{ position: 'absolute', left: x, top: y, width: w, height: h, background: 'radial-gradient(closest-side, rgba(241,238,227,0.075), rgba(241,238,227,0))' }} />;
+      })}
+      <svg width={width} height={height} style={{ position: 'absolute', inset: 0 }}>
+        {[0, 1].map((i) => {
+          // long eraser sweeps across the board
+          const y = height * (0.32 + 0.38 * i + (random(`ey-${seed}-${i}`) - 0.5) * 0.12);
+          const bow = base * (0.08 + random(`eb-${seed}-${i}`) * 0.1) * (i ? -1 : 1);
+          return (
+            <path
+              key={i}
+              d={`M ${-base * 0.1} ${y} Q ${width / 2} ${y - bow} ${width + base * 0.1} ${y + base * 0.04}`}
+              fill="none"
+              stroke="rgba(241,238,227,0.035)"
+              strokeWidth={base * 0.14}
+              strokeLinecap="round"
+            />
+          );
+        })}
+      </svg>
+      <AbsoluteFill style={{ backgroundImage: CHALK_DUST, opacity: 0.24 }} />
+      {/* the groove where the board meets the frame */}
+      <div style={{ position: 'absolute', left: wood, top: wood, right: wood, bottom: wood, boxShadow: 'inset 0 0 0 3px rgba(0,0,0,0.4), inset 0 8px 22px rgba(0,0,0,0.4)' }} />
+      {bar({ left: 0, top: 0, bottom: 0, width: wood }, 0)}
+      {bar({ right: 0, top: 0, bottom: 0, width: wood }, 0)}
+      {bar({ left: wood, right: wood, top: 0, height: wood }, 90)}
+      {bar({ left: wood, right: wood, bottom: 0, height: wood }, 90)}
+    </>
+  );
+};
+
+/** A soft shade drifting slowly over a paper page, so the still page is not dead flat. */
+const PageShade = ({ seed }) => {
+  const frame = useCurrentFrame();
+  const { width, height } = useVideoConfig();
+  const r = Math.max(width, height) * 0.7;
+  const x = width * (0.5 + 0.35 * Math.sin(frame / 140 + seed));
+  const y = height * (0.5 + 0.3 * Math.cos(frame / 170 + seed));
+  return (
+    <>
+      <div style={{ position: 'absolute', left: x - r, top: y - r, width: r * 2, height: r * 2, borderRadius: '50%', background: 'radial-gradient(circle, rgba(28,37,84,0.045) 0%, rgba(28,37,84,0) 70%)' }} />
+      <AbsoluteFill style={{ background: 'radial-gradient(ellipse at center, transparent 62%, rgba(28,37,84,0.07) 100%)' }} />
+    </>
+  );
+};
+
+/** Exam answer sheet: faint blue ruled lines and a red margin line, left of where the cards start. */
+const Ruled = ({ seed }) => {
+  const { width, height } = useVideoConfig();
+  const gap = Math.round(Math.min(width, height) * 0.074);
+  return (
+    <>
+      <AbsoluteFill style={{ background: '#fdfdfa' }} />
+      <AbsoluteFill style={{ backgroundImage: `repeating-linear-gradient(180deg, transparent 0 ${gap - 2}px, #c8d7ef ${gap - 2}px ${gap}px)` }} />
+      <div style={{ position: 'absolute', top: 0, bottom: 0, left: Math.round(width * 0.078), width: 4, background: '#e2504a' }} />
+      <PageShade seed={seed} />
+    </>
+  );
+};
+
+/** Graph-paper notebook page with a spiral binding down the left edge. */
+const Notebook = ({ seed }) => {
+  const { width, height } = useVideoConfig();
+  const base = Math.min(width, height);
+  const cell = Math.round(base * 0.05);
+  const x = Math.round(base * 0.044); // centre of the punched holes
+  const r = Math.round(base * 0.016);
+  const step = Math.round(base * 0.08);
+  const grid = 'rgba(37,99,235,0.13)';
+  return (
+    <>
+      <AbsoluteFill style={{ background: '#fbfbf6' }} />
+      <AbsoluteFill
+        style={{
+          backgroundImage: `linear-gradient(90deg, ${grid} 2px, transparent 2px), linear-gradient(180deg, ${grid} 2px, transparent 2px)`,
+          backgroundSize: `${cell}px ${cell}px`,
+          backgroundPosition: `${x + r * 3}px 0`,
+        }}
+      />
+      <PageShade seed={seed} />
+      <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: x + r * 3, background: 'linear-gradient(90deg, rgba(0,0,0,0.07), rgba(0,0,0,0))' }} />
+      <svg width={width} height={height} style={{ position: 'absolute', inset: 0 }}>
+        {Array.from({ length: Math.ceil(height / step) }).map((_, i) => {
+          const cy = step * (i + 0.5);
+          // the hole, then the wire arching over the page edge into it
+          const wire = `M ${-r} ${cy + r * 0.2} C ${x - r * 1.8} ${cy - r * 1.1}, ${x - r * 0.5} ${cy - r * 1.2}, ${x + r * 0.2} ${cy - r * 0.15}`;
+          return (
+            <g key={i}>
+              <circle cx={x} cy={cy} r={r} fill="#c9ccd3" stroke="#8d929c" strokeWidth={r * 0.25} />
+              <path d={wire} fill="none" stroke="#7f858f" strokeWidth={r * 0.62} strokeLinecap="round" />
+              <path d={wire} fill="none" stroke="#e4e6ea" strokeWidth={r * 0.2} strokeLinecap="round" transform={`translate(${-r * 0.1} ${-r * 0.12})`} />
+            </g>
+          );
+        })}
+      </svg>
+    </>
+  );
+};
+
 /** Background for a scene/intro/outro, in the active theme's style. `variant` picks among the theme's styles. */
 export const MotionBg = ({ index, accent, variant }) => {
   const T = theme();
@@ -355,6 +482,9 @@ export const MotionBg = ({ index, accent, variant }) => {
       {style === 'kraft' && <Kraft seed={index} accent={accent} />}
       {style === 'newsprint' && <Newsprint seed={index} />}
       {style === 'graph' && <Graph accent={accent} />}
+      {style === 'chalkboard' && <Chalkboard seed={index} />}
+      {style === 'ruled' && <Ruled seed={index} />}
+      {style === 'notebook' && <Notebook seed={index} />}
       {['grid', 'rings', 'waves', 'stripes'].includes(style) && T.dark ? <Orbs seed={index + 3} accent={accent} strength={0.7} /> : null}
     </AbsoluteFill>
   );

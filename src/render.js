@@ -5,6 +5,7 @@ const { run, log, ensureDir } = require('./util');
 const { fetchClip } = require('./footage');
 const { SOUNDS, sceneDirection } = require('./direction');
 const { COLORS, pickPhotoScenes } = require('./thumbnail');
+const { EXAM_TYPES } = require('./examVisuals');
 
 const INTRO_SECONDS = 1.8;
 const OUTRO_SECONDS = 2.2;
@@ -168,6 +169,25 @@ async function prepBackground(scene, i, workDir, publicDir) {
   return name;
 }
 
+/**
+ * A scene's length in frames: its voice plus a 0.25 s tail (voiceFrames), and on a question card the silent
+ * countdown after it (frames). Captions and solution lines are timed to voiceFrames only.
+ */
+function sceneFrames(sc, fps) {
+  const voiceFrames = Math.max(30, Math.round((sc.duration + 0.25) * fps));
+  const countdown = sc.visual && sc.visual.type === 'question' ? Math.round(sc.visual.countdown * fps) : 0;
+  return { voiceFrames, frames: voiceFrames + countdown };
+}
+
+/**
+ * B-roll: footage on scenes the script marked (mixed), on every scene (footage), or never (motion). Never behind
+ * an exam card: a scene with footage draws no graphic, and the card is the scene's content.
+ */
+function wantsFootage(sc, visuals) {
+  if (sc.visual && EXAM_TYPES.includes(sc.visual.type)) return false;
+  return visuals === 'footage' || (visuals === 'mixed' && Boolean(sc.broll));
+}
+
 /** The text drawn on the video to name its brand, or null when the brand is not shown. */
 const brandLabel = (c) => (c.showBrand ? c.brandHandle || c.brandName || null : null);
 
@@ -177,7 +197,7 @@ const subscribeLabel = () => (/bangla|bengali|bn\b/i.test(cfg.language) ? 'рж╕рж
  * Render the animated Remotion composition.
  * scenes: output of makeVoice. Returns { videoFile, thumbFile, credits[], coverMs }.
  */
-async function renderWithRemotion({ scenes, workDir, slug, title, theme, direction, thumbnail }) {
+async function renderWithRemotion({ scenes, workDir, slug, title, theme, direction, thumbnail, sourceLabel = null }) {
   // Required lazily so the ffmpeg-only fallback works even if Remotion is not installed.
   const { bundle } = require('@remotion/bundler');
   const { renderMedia, renderStill, selectComposition, ensureBrowser } = require('@remotion/renderer');
@@ -190,15 +210,13 @@ async function renderWithRemotion({ scenes, workDir, slug, title, theme, directi
   const sceneProps = [];
   for (let i = 0; i < scenes.length; i++) {
     const sc = scenes[i];
-    const frames = Math.max(30, Math.round((sc.duration + 0.25) * fps));
+    const { voiceFrames, frames } = sceneFrames(sc, fps);
     const audio = `audio-${String(i).padStart(2, '0')}.mp3`;
     fs.copyFileSync(sc.audioFile, path.join(publicDir, audio));
-    // B-roll: footage on scenes the script marked (mixed), on every scene (footage), or never (motion).
     // If no clip is found the scene just shows its animated graphic.
-    const wantsFootage = cfg.visuals === 'footage' || (cfg.visuals === 'mixed' && sc.broll);
-    const bg = wantsFootage ? await prepBackground({ ...sc, frames }, i, workDir, publicDir) : null;
+    const bg = wantsFootage(sc, cfg.visuals) ? await prepBackground({ ...sc, frames }, i, workDir, publicDir) : null;
     const emoji = await prepEmoji(sc.emoji, publicDir);
-    sceneProps.push({ frames, narration: sc.narration, headline: sc.headline || '', visual: sc.visual || null, emoji, bg, audio, ...sceneDirection(direction, i) });
+    sceneProps.push({ frames, voiceFrames, narration: sc.narration, headline: sc.headline || '', visual: sc.visual || null, emoji, bg, audio, ...sceneDirection(direction, i) });
   }
 
   const thumb = await prepThumbnail(thumbnail, sceneProps, publicDir);
@@ -214,6 +232,7 @@ async function renderWithRemotion({ scenes, workDir, slug, title, theme, directi
     kicker: (direction && direction.kicker) || null, // never the NICHE sentence: that is only for picking topics
     subscribeText: subscribeLabel(),
     brandLabel: brandLabel(cfg),
+    sourceLabel: sourceLabel || null, // question videos: the site the questions came from, on the outro
     width: cfg.width,
     height: cfg.height,
     fps,
@@ -288,4 +307,4 @@ async function renderWithRemotion({ scenes, workDir, slug, title, theme, directi
   };
 }
 
-module.exports = { renderWithRemotion, brandLabel, prepThumbnail, cachedEmojiPng, COVER_MS, THUMB_COMPOSITION };
+module.exports = { renderWithRemotion, brandLabel, sceneFrames, wantsFootage, prepThumbnail, cachedEmojiPng, COVER_MS, THUMB_COMPOSITION };

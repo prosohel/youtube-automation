@@ -47,13 +47,25 @@ async function runWithVideoConfig(redis, brandId, fn) {
   }
 }
 
-/** History (topics/themes of earlier videos) of one brand, from Redis instead of history.json. */
+const HISTORY_VIDEOS = 500; // the latest videos whose topics, themes and picks are remembered
+
+/**
+ * History (topics/themes of earlier videos) of one brand, from Redis instead of history.json. A question video
+ * counts from the moment its questions are picked, so a video still being made never lends them to another.
+ * Used questions are remembered for every video the brand ever made: those of videos older than the latest
+ * HISTORY_VIDEOS come first, in one entry that holds only `questions`.
+ */
 async function loadHistory(redis, exceptId, brandId) {
-  const list = (await store.listVideos(redis, { limit: 500, brandId }))
-    .filter((v) => v.id !== exceptId && v.done && v.done.script)
+  const questionsOf = (v) => (v.topicInfo?.questions || []).map((q) => q.id);
+  const videos = (await store.listVideos(redis, { limit: Infinity, brandId })).filter((v) => v.id !== exceptId); // newest first
+  const olderQuestions = videos.slice(HISTORY_VIDEOS).flatMap(questionsOf);
+  const list = videos
+    .slice(0, HISTORY_VIDEOS)
+    .filter((v) => v.done && (v.done.script || questionsOf(v).length > 0))
     .reverse() // oldest first, like history.json
     .map((v) => ({
       topic: v.topic,
+      questions: questionsOf(v),
       title: v.title,
       theme: v.theme && v.theme.id,
       direction: summarizeDirection(v.direction),
@@ -61,6 +73,7 @@ async function loadHistory(redis, exceptId, brandId) {
       thumb: (v.thumbnail && v.thumbnail.style) || null,
       url: v.platforms?.youtube?.url || null,
     }));
+  if (olderQuestions.length) list.unshift({ questions: olderQuestions });
   setHistoryBackend({ load: () => list, save: () => {} });
 }
 

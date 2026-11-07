@@ -4,6 +4,7 @@
 // a check becomes a plain icon, the way an invalid visual falls back today.
 
 const { loadHistory } = require('./history');
+const { EXAM_TYPES, checkExamVisual } = require('./examVisuals');
 
 const BASIC_TYPES = ['icon', 'stat', 'list', 'compare'];
 const LIBRARY_TYPES = ['bigNumber', 'bars', 'line', 'donut', 'timeline'];
@@ -122,6 +123,7 @@ function validateVisual(visual, opts) {
   const v = visual && typeof visual === 'object' ? visual : {};
   if (BASIC_TYPES.includes(v.type)) return visual;
   const icon = { type: 'icon', icon: typeof v.icon === 'string' && v.icon ? v.icon : 'Sparkles' };
+  if (EXAM_TYPES.includes(v.type)) return (opts && opts.examGraphics && checkExamVisual(v)) || icon;
   if (!LIBRARY_TYPES.includes(v.type) || !(opts && opts.directGraphics)) return icon;
   return CHECK[v.type](v, isBangla(opts.language)) || icon;
 }
@@ -134,23 +136,25 @@ function validateVisuals(script, opts) {
 /* ---------- memory: lean away from the graphics the last videos used most ---------- */
 
 const RECENT = 3;
+// The graphics an idea video picks from (icons and the exam scenes not counted): what "use them less" can name.
+const COUNTED = [...BASIC_TYPES.filter((t) => t !== 'icon'), ...LIBRARY_TYPES];
 
-/** How often one video used each graphic type (icons not counted); stored in its history entry. */
+/** How often one video used each graphic type it picked (icons and exam scenes not counted); stored in its history entry. */
 function summarizeGraphics(scenes) {
   if (!Array.isArray(scenes)) return null;
   const counts = {};
   for (const s of scenes) {
     const type = s && s.visual && s.visual.type;
-    if (type && type !== 'icon') counts[type] = (counts[type] || 0) + 1;
+    if (COUNTED.includes(type)) counts[type] = (counts[type] || 0) + 1;
   }
   return counts;
 }
 
-/** The two most-used graphic types of the last few videos that recorded them. */
+/** The two most-used graphic types of the last few videos that recorded them (types not counted any more are skipped). */
 function recentGraphics(n = RECENT) {
   const sum = {};
   for (const g of loadHistory().map((e) => e.graphics).filter(Boolean).slice(-n)) {
-    for (const [type, c] of Object.entries(g)) sum[type] = (sum[type] || 0) + c;
+    for (const [type, c] of Object.entries(g)) if (COUNTED.includes(type)) sum[type] = (sum[type] || 0) + c;
   }
   return Object.entries(sum)
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))

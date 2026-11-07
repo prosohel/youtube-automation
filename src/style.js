@@ -52,16 +52,21 @@ function recentThemes(n = RECENT) {
   return loadHistory().map((e) => e.theme).filter(Boolean).slice(-n);
 }
 
-/** Text block for the script prompt: every theme with its mood, plus the ones to avoid. */
-function themeMenu() {
-  return THEME_IDS.map((id) => `  - ${id}: ${THEMES[id].label} (${THEMES[id].mood})`).join('\n');
+/** Text block for the script prompt: every theme with its mood, or only the themes of `family` (e.g. 'exam'). */
+function themeMenu(family) {
+  return THEME_IDS.filter((id) => !family || THEMES[id].family === family)
+    .map((id) => `  - ${id}: ${THEMES[id].label} (${THEMES[id].mood})`)
+    .join('\n');
 }
 
 /**
  * Turn the script's requested style into the full theme object the composition renders with.
  * requested: { theme, energy, accent } from Claude (all optional, all validated here).
+ * family: keep to the themes of that family (e.g. 'exam' for question videos); a pinned theme still wins.
+ * Without a family, a theme Claude did not choose (none asked for, unknown, or used recently) is never an exam look:
+ * those are for question videos. Claude may still pick one from the menu by mood, and THEME may pin one.
  */
-function resolveStyle(requested = {}, { forceTheme, seed } = {}) {
+function resolveStyle(requested = {}, { forceTheme, seed, family } = {}) {
   const recent = recentThemes();
   const forced = forceTheme || cfg.theme;
   let id = forced && THEMES[forced] ? forced : null;
@@ -69,10 +74,16 @@ function resolveStyle(requested = {}, { forceTheme, seed } = {}) {
 
   if (!id) {
     const asked = String(requested.theme || '').toLowerCase();
-    if (THEMES[asked] && !recent.includes(asked)) id = asked;
+    const inFamily = family ? THEME_IDS.filter((t) => THEMES[t].family === family) : [];
+    const allowed = inFamily.length ? inFamily : THEME_IDS;
+    if (THEMES[asked] && allowed.includes(asked) && !recent.includes(asked)) id = asked;
     else {
-      if (THEMES[asked]) notes.push(`"${asked}" was used recently`);
-      const pool = THEME_IDS.filter((t) => !recent.includes(t));
+      if (THEMES[asked] && !allowed.includes(asked)) notes.push(`"${asked}" is not in the ${family} family`);
+      else if (THEMES[asked]) notes.push(`"${asked}" was used recently`);
+      const randomPool = inFamily.length ? allowed : allowed.filter((t) => THEMES[t].family !== 'exam');
+      const fresh = randomPool.filter((t) => !recent.includes(t));
+      // A family keeps to its own looks even when all of them were used recently.
+      const pool = fresh.length ? fresh : inFamily;
       id = pool[Math.floor(Math.random() * pool.length)] || THEME_IDS[0];
     }
   }

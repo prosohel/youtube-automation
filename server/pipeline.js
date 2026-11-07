@@ -5,13 +5,20 @@ const store = require('./store');
 const { resolveDirection } = require('../src/direction');
 const { validateVisuals } = require('../src/graphics');
 const { resolveThumbnail } = require('../src/thumbnail');
+const { sourceLabel } = require('../src/examVisuals');
 
 /** The real stage functions. Tests pass their own. Required lazily: Remotion etc. load only when used. */
 function realDeps() {
   return {
     findTopic: (category) => require('../src/topics').findTopic(category),
+    // opts.log receives the reason when no question is usable (the pipeline puts it in the video's log).
+    findQuestions: (category, opts) => require('../src/questions').findQuestions(category, opts),
     writeScript: (topic) => require('../src/script').writeScript(topic),
-    resolveStyle: (style) => require('../src/style').resolveStyle(style),
+    // Question mode: the script of a video made from exam questions (topicInfo.questions). opts.log receives the
+    // retry and the fixed texts (the pipeline puts them in the video's log).
+    writeQuestionScript: (topicInfo, opts) => require('../src/questions/script').writeQuestionScript(topicInfo, opts),
+    // opts: { family } keeps question videos to the exam looks.
+    resolveStyle: (style, opts) => require('../src/style').resolveStyle(style, opts),
     pickProvider: () => require('../src/voice').pickProvider(),
     edgeProvider: () => require('../src/voice').edgeProvider(),
     synthScene: (...a) => require('../src/voice').synthScene(...a),
@@ -41,19 +48,36 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
   let v = await save({ status: 'working', error: null });
 
   if (!v.done.topic) {
-    await startStage('topic', v.topic ? `Topic given: ${v.topic}` : `Finding a topic${v.category ? ` in "${v.category}"` : ''}...`);
-    const info = v.topic
-      ? { topic: v.topic, angle: 'practical and clear', hook: '', searchQuery: v.topic }
-      : await deps.findTopic(v.category || undefined);
+    // Question mode (QUESTION_SOURCE set): real exam questions from the brand's site; the category is only a
+    // preference. When none is usable the video gets a found topic as before, and the log says why.
+    const questionMode = !v.topic && Boolean(cfg.questionSource);
+    const site = cfg.questionSource === 'both' ? 'both sites' : cfg.questionSource;
+    await startStage(
+      'topic',
+      v.topic ? `Topic given: ${v.topic}` : questionMode ? `Finding questions on ${site}...` : `Finding a topic${v.category ? ` in "${v.category}"` : ''}...`
+    );
+    const category = v.category || undefined;
+    let info = null;
+    if (v.topic) info = { topic: v.topic, angle: 'practical and clear', hook: '', searchQuery: v.topic };
+    else if (questionMode) {
+      let reason = 'none found';
+      info = await deps.findQuestions(category, { log: (r) => (reason = r) });
+      await say(info ? `Questions: ${info.questions.length} from ${info.sourceUrl}` : `No usable questions (${reason}), finding a topic instead`);
+    }
+    info = info || (await deps.findTopic(category));
     v = await markDone('topic', { topicInfo: info, topic: info.topic });
     await say(`Topic: ${info.topic}`);
   }
 
   if (!v.done.script) {
     await startStage('script', 'Writing script...');
-    // Graphics are checked once here, so the stored script (and any resumed render) holds clean data.
-    const script = validateVisuals(await deps.writeScript(v.topicInfo), cfg);
-    const { theme } = deps.resolveStyle(script.style || {});
+    // Question mode: the scenes are built from the source questions and checked so no answer leaks; only these
+    // videos get the exam cards and an exam look. Graphics are checked once here, so the stored script (and any
+    // resumed render) holds clean data.
+    const questionVideo = Boolean(v.topicInfo.questions?.length);
+    const raw = questionVideo ? await deps.writeQuestionScript(v.topicInfo, { log: say }) : await deps.writeScript(v.topicInfo);
+    const script = validateVisuals(raw, { ...cfg, examGraphics: questionVideo });
+    const { theme } = questionVideo ? deps.resolveStyle(script.style || {}, { family: 'exam' }) : deps.resolveStyle(script.style || {});
     v = await markDone('script', {
       script,
       title: script.title,
@@ -129,7 +153,7 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
     fs.rmSync(path.join(outDir, `${v.slug}.mp4`), { force: true });
     // Videos scripted before thumbnails existed get one from their script now.
     const thumbnail = v.thumbnail || resolveThumbnail(v.script, cfg);
-    const res = await deps.renderAny({ scenes: v.scenes, workDir, slug: v.slug, title: v.title, theme: v.theme, direction: v.direction, thumbnail });
+    const res = await deps.renderAny({ scenes: v.scenes, workDir, slug: v.slug, title: v.title, theme: v.theme, direction: v.direction, thumbnail, sourceLabel: sourceLabel(v.topicInfo && v.topicInfo.siteName) });
     const credits = res.credits || [];
     v = await markDone('render', {
       files: { video: res.videoFile, thumb: res.thumbFile || null },

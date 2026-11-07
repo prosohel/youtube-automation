@@ -27,7 +27,8 @@ const cfg = (module.exports = {
   voice: process.env.VOICE || 'en-US-AndrewNeural',
   // Animated Remotion video (set USE_REMOTION=false for the plain ffmpeg pipeline)
   useRemotion: (process.env.USE_REMOTION || 'true').toLowerCase() !== 'false',
-  // Force one design theme (neon, minimal, news, sunset, gold, pop, glass, hacker, vox-paper, vox-newsprint, vox-marker); empty = Claude picks per video
+  // Force one design theme (neon, minimal, news, sunset, gold, pop, glass, hacker, vox-paper, vox-newsprint, vox-marker,
+  // chalkboard, exam-paper, notebook); empty = Claude picks per video
   theme: (process.env.THEME || '').toLowerCase(),
   // Sound effects on transitions/cards (whoosh, click, ding). SFX=false to turn off.
   sfx: (process.env.SFX || 'true').toLowerCase() !== 'false',
@@ -58,6 +59,11 @@ const cfg = (module.exports = {
   pronunciationFixes: [],
   captionFont: process.env.CAPTION_FONT || 'DejaVu Sans',
   targetMinutes: Number(process.env.TARGET_MINUTES || 3),
+  // Question mode: videos made from real exam questions on the owner's sites (src/questions).
+  // '' = off (Claude finds topics), 'mathsuggestion.com', 'recentjobsolution.com' or 'both'.
+  questionSource: (process.env.QUESTION_SOURCE || '').trim(),
+  questionSubject: (process.env.QUESTION_SUBJECT || 'all').trim(), // 'all' or 'math'
+  questionsPerVideo: Number(process.env.QUESTIONS_PER_VIDEO || 2), // at most; the video length wins (1-5)
 
   format,
   width: format === 'shorts' ? 1080 : 1920,

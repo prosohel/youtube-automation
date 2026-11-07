@@ -5,18 +5,22 @@ import { accentFor, bodyFont, cardStyle, headFont, isVox, parseStat, pop, theme 
 import { OVERLAP } from './timeline';
 import { VoxVisual } from './Vox';
 import { LibraryVisual, LIBRARY_RENDERED } from './library';
+import { EXAM_FULL_CARD, EXAM_RENDERED, ExamVisual } from './exam';
 
 export const VISUAL_START = OVERLAP + 2; // visuals begin as the scene transition finishes
 const START = VISUAL_START;
 
-/** Area between the headline and the captions where the visual lives. */
-const Stage = ({ isShort, children }) => (
+/**
+ * Area between the headline and the captions where the visual lives. `tall`: a scene without a headline card,
+ * so the stage starts just under the scene badge (and the news ticker) instead.
+ */
+const Stage = ({ isShort, tall = false, children }) => (
   <div
     style={{
       position: 'absolute',
       left: 0,
       right: 0,
-      top: isShort ? 380 : 150,
+      top: tall ? (isShort ? 260 : 90) : isShort ? 380 : 150,
       bottom: isShort ? 600 : 250,
       display: 'flex',
       alignItems: 'center',
@@ -264,9 +268,20 @@ const CompareVisual = ({ left, right, isShort }) => {
   );
 };
 
-/** Picks the visual for a scene from the script's `visual` object; always falls back to an icon. */
-export const SceneVisual = ({ visual, accent, isShort }) => {
+/**
+ * Picks the visual for a scene from the script's `visual` object; always falls back to an icon.
+ * voiceFrames, frames and narration time the exam scenes (the countdown, the solution lines).
+ */
+export const SceneVisual = ({ visual, accent, isShort, voiceFrames, frames, narration }) => {
   const v = visual || {};
+  if (EXAM_RENDERED.includes(v.type)) {
+    // Exam cards draw every theme themselves, like the library graphics.
+    return (
+      <Stage isShort={isShort} tall={EXAM_FULL_CARD.includes(v.type)}>
+        <ExamVisual visual={v} accent={accent} isShort={isShort} voiceFrames={voiceFrames} frames={frames} narration={narration} start={START} />
+      </Stage>
+    );
+  }
   if (LIBRARY_RENDERED.includes(v.type)) {
     // Library graphics draw every theme themselves (the Vox look comes from Panel and pop).
     return (

@@ -3,7 +3,7 @@ const path = require('path');
 
 /**
  * Stand-ins for the real pipeline stages. Every call is pushed to `calls`.
- * opts: { title, scenes = 5, failVoiceOn: 'scene-02.mp3', renderFailsOnce, delayMs, outDir, onRender(args) }
+ * opts: { title, scenes = 5, failVoiceOn: 'scene-02.mp3', renderFailsOnce, delayMs, outDir, onRender(args), questionInfo, noQuestionReason }
  */
 function fakeDeps(calls, opts = {}) {
   const wait = () => new Promise((r) => setTimeout(r, opts.delayMs || 0));
@@ -14,6 +14,14 @@ function fakeDeps(calls, opts = {}) {
       await wait();
       return { topic: 'auto topic', angle: 'a', hook: 'h', searchQuery: 'q' };
     },
+    // Question mode: none found unless opts.questionInfo is given; opts.noQuestionReason is logged through opts.log.
+    findQuestions: async (category, { log } = {}) => {
+      calls.push(`questions:${category || ''}`);
+      await wait();
+      if (opts.questionInfo) return opts.questionInfo;
+      if (log && opts.noQuestionReason) log(opts.noQuestionReason);
+      return null;
+    },
     writeScript: async () => {
       calls.push('script');
       await wait();
@@ -23,6 +31,24 @@ function fakeDeps(calls, opts = {}) {
         tags: ['ai'],
         style: {},
         scenes: Array.from({ length: opts.scenes || 5 }, (_, i) => ({ narration: `scene ${i}` })),
+      };
+    },
+    // Question mode's script: hook, one question card and its reveal, closing.
+    writeQuestionScript: async (info) => {
+      calls.push(`questionScript:${info.questions.length}`);
+      await wait();
+      const card = { text: 'শতকরা ক্ষতি কত?', options: ['লাভ 25%', 'ক্ষতি 25%', 'লাভ 10%', 'ক্ষতি 50%'], answer: 3 };
+      return {
+        title: opts.title || 'প্রশ্ন সমাধান',
+        description: 'desc',
+        tags: ['math'],
+        style: { theme: 'neon' },
+        scenes: [
+          { narration: 'হুক', headline: 'h', visual: { type: 'icon', icon: 'GraduationCap' }, broll: false },
+          { narration: 'প্রশ্ন', headline: '', visual: { type: 'question', ...card, countdown: 3, source: null }, broll: false },
+          { narration: 'সঠিক উত্তর ঘ।', headline: '', visual: { type: 'reveal', ...card }, broll: false },
+          { narration: 'সাবস্ক্রাইব', headline: '', visual: { type: 'icon', icon: 'Bell' }, broll: false },
+        ],
       };
     },
     resolveStyle: () => ({ theme: { id: 'neon', seed: 7 } }),

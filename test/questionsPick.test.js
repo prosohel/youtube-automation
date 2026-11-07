@@ -1,0 +1,371 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const cfg = require('../src/config');
+const { parseMathSuggestion, parseRecentJobSolution } = require('../src/questions/parse');
+const { fitsVideo, estimateSeconds, usedQuestionIds, budgetSeconds, questionsWanted, fillBudget } = require('../src/questions/pick');
+const { findQuestions } = require('../src/questions');
+const { WPM } = require('../src/speech');
+
+const fixture = (name) => fs.readFileSync(path.join(__dirname, 'fixtures', 'sites', name), 'utf8');
+const MS_HTML = fixture('mathsuggestion-44th-bcs.html');
+
+const MS_URL = 'https://mathsuggestion.com/44th-bcs-preliminary-math-question-solution-with-bangla-explanation';
+const MS_URL_B = 'https://mathsuggestion.com/43rd-bcs-preliminary-math-question-solution';
+const RJS_BCS_URL = 'https://recentjobsolution.com/exam/47th-bcs-preliminary-exam-2025-full-200-mcqs/page/2';
+
+const Q1 = parseMathSuggestion(MS_HTML, MS_URL).find((q) => q.n === 1);
+const Q36 = parseRecentJobSolution(fixture('rjs-47th-bcs-p2.html'), RJS_BCS_URL).find((q) => q.n === 36);
+const ALL = { subject: 'all' };
+
+/* ---------- fitsVideo ---------- */
+
+test('fitsVideo: mathsuggestion question 1 fits a video', () => {
+  assert.equal(fitsVideo(Q1, ALL), true);
+});
+
+test('fitsVideo: text, option, working and tip limits', () => {
+  assert.equal(fitsVideo({ ...Q1, text: 'ক'.repeat(160) }, ALL), true);
+  assert.equal(fitsVideo({ ...Q1, text: 'ক'.repeat(161) }, ALL), false);
+  assert.equal(fitsVideo({ ...Q1, options: ['ক'.repeat(49), 'খ', 'গ', 'ঘ'] }, ALL), false);
+  assert.equal(fitsVideo({ ...Q1, tip: 'ক'.repeat(161) }, ALL), false);
+  assert.equal(fitsVideo({ ...Q1, tip: null }, ALL), true);
+  assert.equal(fitsVideo({ ...Q1, working: ['ক'.repeat(81)] }, ALL), false);
+  assert.equal(fitsVideo({ ...Q1, working: Array(9).fill('এক ধাপ') }, ALL), false);
+  assert.equal(fitsVideo({ ...Q1, working: Array(8).fill('এক ধাপ') }, ALL), true);
+  assert.equal(fitsVideo({ ...Q1, working: [] }, ALL), true, 'no working = quiz format');
+});
+
+test('fitsVideo: an empty question, option or working line does not fit; an empty tip is no tip', () => {
+  assert.equal(fitsVideo({ ...Q1, text: '' }, ALL), false);
+  assert.equal(fitsVideo({ ...Q1, text: '   ' }, ALL), false);
+  assert.equal(fitsVideo({ ...Q1, options: ['', 'খ', 'গ', 'ঘ'] }, ALL), false);
+  assert.equal(fitsVideo({ ...Q1, options: ['ক', ' ', 'গ', 'ঘ'] }, ALL), false);
+  assert.equal(fitsVideo({ ...Q1, working: ['এক ধাপ', ''] }, ALL), false);
+  assert.equal(fitsVideo({ ...Q1, tip: '' }, ALL), true);
+});
+
+test('fitsVideo: a question that needs a figure is skipped', () => {
+  const needsFigure = [
+    'নিচের চিত্রে ABCD একটি বর্গ। এর ক্ষেত্রফল কত?',
+    'চিত্র অনুযায়ী x এর মান কত?',
+    'চিত্রটির ক্ষেত্রফল কত?',
+    'চিত্রানুযায়ী x এর মান কত?',
+    'নিচের চিত্রগুলো দেখে উত্তর দাও: কোনটি বর্গ?',
+    'In the figure, what is the area of the square?',
+    'In the diagram below, what is x?',
+    'See Fig. 2: what is the angle?',
+  ];
+  for (const text of needsFigure) assert.equal(fitsVideo({ ...Q1, text }, ALL), false, text);
+  assert.equal(fitsVideo({ ...Q1, working: ['চিত্রে দেখানো ত্রিভুজের ভূমি 4 সেমি'] }, ALL), false);
+  assert.equal(fitsVideo({ ...Q1, options: ['চিত্র ক', 'খ', 'গ', 'ঘ'] }, ALL), false);
+  // "চলচ্চিত্র" (film) holds the letters of "চিত্র" but needs no figure; nor does "figurehead".
+  assert.equal(fitsVideo({ ...Q36, text: 'বাংলাদেশের প্রথম সবাক চলচ্চিত্র কোনটি?' }, ALL), true);
+  assert.equal(fitsVideo({ ...Q36, text: 'Who was the figurehead of the movement?' }, ALL), true);
+});
+
+test('fitsVideo: math KaTeX cannot draw would show as raw TeX, so its question is skipped', () => {
+  const broken = '$\\dfrac{50}{100$'; // unbalanced brace
+  assert.equal(fitsVideo({ ...Q1, text: `${broken} কত?` }, ALL), false);
+  assert.equal(fitsVideo({ ...Q1, options: [broken, 'খ', 'গ', 'ঘ'] }, ALL), false);
+  assert.equal(fitsVideo({ ...Q1, working: [...Q1.working.slice(0, 3), `শতকরা ক্ষতি ${broken}`] }, ALL), false);
+  assert.equal(fitsVideo({ ...Q1, tip: `মনে রাখুন ${broken}` }, ALL), false);
+  assert.equal(fitsVideo({ ...Q1, text: '$\\notacommand{2}$ কত?' }, ALL), false);
+  // A "$" left open turns the whole line into plain text with the TeX in it.
+  assert.equal(fitsVideo({ ...Q1, text: 'মান $\\dfrac{1}{2} কত?' }, ALL), false);
+  // Every question of the real page that fitted before still fits: their TeX all renders.
+  const fitting = parseMathSuggestion(MS_HTML, MS_URL).filter((q) => fitsVideo(q, ALL)).map((q) => q.n);
+  assert.deepEqual(fitting, [1, 3, 7, 8, 11, 12, 14, 15]);
+});
+
+test('fitsVideo: subject math keeps only গণিত questions that have a number', () => {
+  assert.equal(Q36.subject, 'গণিত');
+  assert.equal(fitsVideo(Q36, ALL), true);
+  assert.equal(fitsVideo(Q36, { subject: 'math' }), false, 'tagged গণিত but no digit (an English question)');
+  const percent = { ...Q36, text: 'কোনো সংখ্যার ৩০% হলো ষাট। সংখ্যাটি কত?', options: ['একশো', 'দুইশো', 'তিনশো', 'চারশো'] };
+  assert.equal(fitsVideo(percent, { subject: 'math' }), true);
+  assert.equal(fitsVideo({ ...percent, subject: 'সাধারণ জ্ঞান' }, { subject: 'math' }), false);
+  assert.equal(fitsVideo(Q1, { subject: 'math' }), true, 'digits in the options count');
+});
+
+/* ---------- time ---------- */
+
+test('estimateSeconds of question 1 (4 working lines) is near what its narration really took (~44 s in the dry run)', () => {
+  assert.equal(Q1.working.length, 4);
+  const s = estimateSeconds(Q1, { wpm: WPM.bangla });
+  // The first estimate said 31 s; the dry run's narration of this question spoke 88 words (~44 s with its pauses).
+  assert.ok(s >= 40 && s <= 55, String(s));
+});
+
+test('estimateSeconds: words at the speaking rate, the countdown and a short pause per scene', () => {
+  // 2 question words + 4 options (1 word, read with its letter) + 12 for the reveal and its lead-in = 22 words: 22 s at 60 wpm.
+  const quiz = { text: 'এক দুই', options: ['ক', 'খ', 'গ', 'ঘ'], working: [], tip: null };
+  assert.equal(estimateSeconds(quiz, { wpm: 60 }), 22 + 3 + 0.25 * 2); // countdown 3 s; question + reveal scenes
+  // Working adds 13 words a line (real lines speak 4 to 15), a 5 s countdown and the solution scene; a tip adds its
+  // words and its scene.
+  const full = { ...quiz, working: ['এক', 'দুই'], tip: 'মনে রাখুন এটা' };
+  assert.equal(estimateSeconds(full, { wpm: 60 }), 22 + 26 + 3 + 5 + 0.25 * 4);
+});
+
+test('estimateSeconds: math is said a number, letter, command or sign at a time ("$6a^2bc$" is five words)', () => {
+  const plain = { text: 'এক দুই', options: ['ক', 'খ', 'গ', 'ঘ'], working: [], tip: null };
+  const at60 = (q) => estimateSeconds(q, { wpm: 60 });
+  // "ছয় এ স্কয়ার বি সি": 6, a, 2, b, c; then "কত?". The plain text it replaces was two words.
+  assert.equal(at60({ ...plain, text: '$6a^2bc$ কত?' }) - at60(plain), 5 + 1 - 2);
+  // "পাঁচ ভাগ ছয়": \dfrac, 5, 6, in place of a one-word option.
+  assert.equal(at60({ ...plain, options: ['$\\dfrac{5}{6}$', 'খ', 'গ', 'ঘ'] }) - at60(plain), 3 - 1);
+  // A tip: ক্ষতি, 50, %, and the tip scene's pause.
+  assert.equal(at60({ ...plain, tip: 'ক্ষতি $50\\%$' }) - at60(plain), 3 + 0.25);
+  // A working line counts 13 words, or its own spoken words when it says more: this line of the 45th BCS page took
+  // 29 words in the dry run (3 words and 23 for its math, counted here as 26).
+  const oneLine = (line) => at60({ ...plain, working: [line] }) - at60({ ...plain, working: ['এক'] });
+  assert.equal(oneLine('উৎপাদকে ভাঙি: $x^2y + xy^2 = xy(x + y)$ এবং $x^2 + xy = x(x + y)$'), 26 - 13);
+  assert.equal(oneLine('ধরি ক্রয়মূল্য $= 100$ টাকা'), 0, 'a short line still counts 13');
+});
+
+test('fillBudget: a 3-minute Short of up to 5 questions from the real 44th BCS page stays a Short', () => {
+  const usable = parseMathSuggestion(MS_HTML, MS_URL).filter((q) => fitsVideo(q, { subject: 'math' }));
+  const budget = budgetSeconds({ format: 'shorts', targetMinutes: 3 });
+  const chosen = fillBudget(usable, { max: 5, budget, wpm: WPM.bangla });
+  const seconds = (q) => estimateSeconds(q, { wpm: WPM.bangla });
+  const total = chosen.reduce((n, q) => n + seconds(q), 0);
+  assert.ok(total <= budget, `${total} > ${budget}`);
+  // A full-format question takes about 35 to 70 s to say (the dry run measured 44 and 48 s for questions 1 and 3):
+  // three fit in 164 s, five never do. The first estimate chose all five (136 s estimated, about 245 s spoken).
+  assert.ok(chosen.length >= 2 && chosen.length <= 3, chosen.map((q) => q.n).join(','));
+  // Questions 1 and 3 are estimated near what the dry run measured.
+  for (const [n, measured] of [[1, 44], [3, 48]]) {
+    const q = usable.find((x) => x.n === n);
+    assert.ok(Math.abs(seconds(q) - measured) <= 6, `question ${n}: ${seconds(q)} s, measured ${measured} s`);
+  }
+});
+
+test('budgetSeconds: target length minus intro/outro and the hook and closing scenes; a Short stops at 3 minutes', () => {
+  assert.equal(budgetSeconds({ format: 'shorts', targetMinutes: 1 }), 44);
+  assert.equal(budgetSeconds({ format: 'landscape', targetMinutes: 1 }), 44);
+  assert.equal(budgetSeconds({ format: 'shorts', targetMinutes: 5 }), 164);
+  assert.equal(budgetSeconds({ format: 'landscape', targetMinutes: 5 }), 284);
+});
+
+test('questionsWanted keeps QUESTIONS_PER_VIDEO between 1 and 5', () => {
+  assert.deepEqual([9, 0, 3, '4', 'abc'].map(questionsWanted), [5, 1, 3, 4, 2]);
+});
+
+test('usedQuestionIds collects the question ids of every history entry', () => {
+  const used = usedQuestionIds([{ topic: 'a', questions: ['x#1', 'x#2'] }, { topic: 'idea video' }, { questions: ['y#7'] }]);
+  assert.deepEqual([...used].sort(), ['x#1', 'x#2', 'y#7']);
+});
+
+/* ---------- findQuestions ---------- */
+
+const idsOn = (url) => parseMathSuggestion(MS_HTML, url).map((q) => q.id);
+const PAGES = [
+  { url: MS_URL, title: '44th bcs preliminary math question solution with bangla explanation' },
+  { url: MS_URL_B, title: '43rd bcs preliminary math question solution' },
+];
+
+/** Fakes for every outside call. Both pages serve the same fixture HTML. */
+function fakes({ pages = PAGES, pick, history = [], order = [], listPages, fetchFails = [] } = {}) {
+  const seen = { fetched: [], asked: [], logs: [] };
+  const deps = {
+    listPages: listPages || (async (site) => (site === 'mathsuggestion.com' ? pages : [])),
+    fetchPage: async (url) => {
+      seen.fetched.push(url);
+      if (fetchFails.includes(url)) throw new Error(`GET ${url} failed: HTTP 500`);
+      return MS_HTML;
+    },
+    askJson: async (req) => {
+      seen.asked.push(req);
+      if (req.name === 'pick_question_page') return { url: pick };
+      return { order, topic: '৪৩তম বিসিএস প্রিলিমিনারি গণিত', angle: 'a', hook: 'h', searchQuery: 'q', whyItWorks: 'w' };
+    },
+    loadHistory: () => history,
+    log: (reason) => seen.logs.push(reason),
+  };
+  return { deps, seen };
+}
+
+function withCfg(values, fn) {
+  return async () => {
+    const keys = ['questionSource', 'questionSubject', 'questionsPerVideo', 'targetMinutes', 'format', 'language'];
+    const before = Object.fromEntries(keys.map((k) => [k, cfg[k]]));
+    cfg.applySettings({ questionSource: 'mathsuggestion.com', questionSubject: 'all', questionsPerVideo: 2, targetMinutes: 3, format: 'shorts', language: 'Bangla', ...values });
+    try {
+      await fn();
+    } finally {
+      cfg.applySettings(before);
+    }
+  };
+}
+
+test('findQuestions returns unused questions from the page Claude picked', withCfg({}, async () => {
+  const history = [{ topic: 'old', questions: [`mathsuggestion.com${new URL(MS_URL_B).pathname}#1`] }];
+  const { deps, seen } = fakes({ pick: MS_URL_B, history });
+  const info = await findQuestions('BCS', deps);
+  assert.equal(info.sourceUrl, MS_URL_B);
+  assert.equal(info.siteName, 'mathsuggestion.com');
+  assert.equal(info.questions.length, 2);
+  const used = usedQuestionIds(history);
+  for (const q of info.questions) {
+    assert.equal(q.url, MS_URL_B);
+    assert.ok(!used.has(q.id), q.id);
+    assert.equal(fitsVideo(q, ALL), true);
+  }
+  // Page order: question 1 is used and question 2's working is too long, so 3 and 7 come first.
+  assert.deepEqual(info.questions.map((q) => q.n), [3, 7]);
+  assert.equal(info.topic, '৪৩তম বিসিএস প্রিলিমিনারি গণিত');
+  assert.equal(info.hook, 'h');
+  // The category is shown to Claude with the page titles; the second call sees the chosen questions.
+  assert.match(seen.asked[0].prompt, /BCS/);
+  assert.match(seen.asked[0].prompt, /43rd bcs preliminary math question solution/);
+  assert.ok(seen.asked[1].prompt.includes(info.questions[0].text));
+  assert.deepEqual(seen.logs, []);
+}));
+
+test('findQuestions: Claude may reorder the chosen questions; numbers it was not given are ignored', withCfg({}, async () => {
+  // Chosen in page order: 1 and 3. Question 7 is on the page but was not chosen; 99 does not exist.
+  const { deps } = fakes({ pick: MS_URL, order: [3, 7, 99, 1] });
+  const info = await findQuestions(undefined, deps);
+  assert.deepEqual(info.questions.map((q) => q.n), [3, 1]);
+}));
+
+test('findQuestions: a chosen question Claude leaves out of the order is kept, after the ordered ones', withCfg({ questionsPerVideo: 3 }, async () => {
+  // Chosen in page order: 1, 3 and 7. Claude's topic names three questions, so all three stay.
+  const { deps } = fakes({ pick: MS_URL, order: [7] });
+  const info = await findQuestions(undefined, deps);
+  assert.deepEqual(info.questions.map((q) => q.n), [7, 1, 3]);
+  const none = await findQuestions(undefined, fakes({ pick: MS_URL, order: [] }).deps);
+  assert.deepEqual(none.questions.map((q) => q.n), [1, 3, 7], 'no order = page order');
+}));
+
+test('findQuestions: a page that cannot be read is passed over for the next one', withCfg({}, async () => {
+  const { deps, seen } = fakes({ pick: MS_URL, fetchFails: [MS_URL] });
+  const info = await findQuestions(undefined, deps);
+  assert.equal(info.sourceUrl, MS_URL_B);
+  assert.deepEqual(seen.fetched, [MS_URL, MS_URL_B]);
+  assert.deepEqual(seen.logs, []);
+}));
+
+test('findQuestions: no page can be read -> null, with the last error as the reason', withCfg({}, async () => {
+  const { deps, seen } = fakes({ pick: MS_URL, fetchFails: [MS_URL, MS_URL_B] });
+  assert.equal(await findQuestions(undefined, deps), null);
+  assert.deepEqual(seen.logs, [`GET ${MS_URL_B} failed: HTTP 500`]);
+}));
+
+test('findQuestions: pages read with nothing usable and pages not read are both named in the reason', withCfg({}, async () => {
+  const history = [{ questions: idsOn(MS_URL) }];
+  const { deps, seen } = fakes({ pick: MS_URL, history, fetchFails: [MS_URL_B] });
+  assert.equal(await findQuestions(undefined, deps), null);
+  assert.deepEqual(seen.logs, [`no unused question that fits a video on the 1 page read; 1 could not be read (GET ${MS_URL_B} failed: HTTP 500)`]);
+}));
+
+test('findQuestions: a URL Claude made up means the first candidate page', withCfg({}, async () => {
+  const { deps, seen } = fakes({ pick: 'https://example.com/not-listed' });
+  const info = await findQuestions('HSC', deps);
+  assert.equal(info.sourceUrl, MS_URL);
+  assert.deepEqual(seen.fetched, [MS_URL]);
+}));
+
+test('findQuestions: the video length wins over QUESTIONS_PER_VIDEO (at least one question)', withCfg({ questionsPerVideo: 5, targetMinutes: 1 }, async () => {
+  const { deps } = fakes({ pick: MS_URL });
+  const info = await findQuestions(undefined, deps);
+  assert.ok(info.questions.length >= 1 && info.questions.length < 5, String(info.questions.length));
+  const total = info.questions.reduce((s, q) => s + estimateSeconds(q, { wpm: WPM.bangla }), 0);
+  assert.ok(info.questions.length === 1 || total <= 44, String(total));
+}));
+
+test('findQuestions: a page whose questions are all used is passed over for the next one', withCfg({}, async () => {
+  const history = [{ questions: idsOn(MS_URL) }];
+  const { deps, seen } = fakes({ pick: MS_URL, history });
+  const info = await findQuestions(undefined, deps);
+  assert.equal(info.sourceUrl, MS_URL_B);
+  assert.deepEqual(seen.fetched, [MS_URL, MS_URL_B]);
+}));
+
+test('findQuestions: pages with used questions are shown to Claude after fresh ones', withCfg({}, async () => {
+  const history = [{ questions: [idsOn(MS_URL)[0]] }];
+  const { deps, seen } = fakes({ pick: MS_URL_B, history });
+  await findQuestions(undefined, deps);
+  const prompt = seen.asked[0].prompt;
+  assert.ok(prompt.indexOf(MS_URL_B) < prompt.indexOf(MS_URL), prompt);
+}));
+
+test('findQuestions: every question on every page used -> null, with the reason logged', withCfg({}, async () => {
+  const history = [{ questions: [...idsOn(MS_URL), ...idsOn(MS_URL_B)] }];
+  const { deps, seen } = fakes({ pick: MS_URL, history });
+  assert.equal(await findQuestions(undefined, deps), null);
+  assert.equal(seen.logs.length, 1);
+  assert.ok(seen.asked.every((r) => r.name === 'pick_question_page'), 'no topic is asked for without questions');
+}));
+
+test('findQuestions: listPages throwing -> null and no throw', withCfg({}, async () => {
+  const { deps, seen } = fakes({
+    listPages: async () => {
+      throw new Error('GET https://mathsuggestion.com/sitemap.xml failed: HTTP 503');
+    },
+  });
+  assert.equal(await findQuestions(undefined, deps), null);
+  assert.equal(seen.logs.length, 1);
+  assert.match(seen.logs[0], /HTTP 503/);
+}));
+
+test('findQuestions with both sites: Claude sees pages of each, and the page is read with its own site\'s parser', withCfg({ questionSource: 'both' }, async () => {
+  const RJS_URL = 'https://recentjobsolution.com/exam/security-printing-assistant-manager';
+  const RJS_HTML = fixture('rjs-security-printing.html');
+  const asked = [];
+  const deps = {
+    listPages: async (site) => (site === 'mathsuggestion.com' ? PAGES : [{ url: RJS_URL, title: 'security printing assistant manager' }]),
+    fetchPage: async (url) => (url === RJS_URL ? RJS_HTML : MS_HTML),
+    askJson: async (req) => {
+      asked.push(req);
+      return req.name === 'pick_question_page' ? { url: RJS_URL } : { order: [], topic: 't', angle: 'a', hook: 'h', searchQuery: 'q', whyItWorks: 'w' };
+    },
+    loadHistory: () => [],
+    log: (reason) => assert.fail(reason),
+  };
+  const info = await findQuestions(undefined, deps);
+  assert.match(asked[0].prompt, /mathsuggestion\.com\//);
+  assert.match(asked[0].prompt, /recentjobsolution\.com\//);
+  assert.equal(info.siteName, 'recentjobsolution.com');
+  assert.equal(info.sourceUrl, RJS_URL);
+  assert.deepEqual(info.questions.map((q) => q.n), [1, 2]);
+  for (const q of info.questions) assert.deepEqual(q.working, [], 'quiz format');
+}));
+
+test('findQuestions with both sites: a site whose sitemap fails is left out and the other site is used', withCfg({ questionSource: 'both' }, async () => {
+  const RJS_URL = 'https://recentjobsolution.com/exam/security-printing-assistant-manager';
+  const RJS_HTML = fixture('rjs-security-printing.html');
+  // Whichever site comes first in the random order, mathsuggestion.com fails and recentjobsolution.com works.
+  for (let run = 0; run < 6; run++) {
+    const logs = [];
+    const info = await findQuestions(undefined, {
+      listPages: async (site) => {
+        if (site === 'mathsuggestion.com') throw new Error('GET https://mathsuggestion.com/sitemap.xml failed: HTTP 503');
+        return [{ url: RJS_URL, title: 'security printing assistant manager' }];
+      },
+      fetchPage: async () => RJS_HTML,
+      askJson: async (req) => (req.name === 'pick_question_page' ? { url: RJS_URL } : { order: [], topic: 't', angle: 'a', hook: 'h', searchQuery: 'q', whyItWorks: 'w' }),
+      loadHistory: () => [],
+      log: (reason) => logs.push(reason),
+    });
+    assert.equal(info.siteName, 'recentjobsolution.com');
+    assert.deepEqual(logs, []);
+  }
+}));
+
+test('findQuestions with both sites: every sitemap failing -> null with the reason', withCfg({ questionSource: 'both' }, async () => {
+  const logs = [];
+  const info = await findQuestions(undefined, {
+    listPages: async (site) => {
+      throw new Error(`GET https://${site}/sitemap.xml failed: HTTP 503`);
+    },
+    fetchPage: async () => assert.fail('nothing to fetch'),
+    askJson: async () => assert.fail('nothing to ask'),
+    loadHistory: () => [],
+    log: (reason) => logs.push(reason),
+  });
+  assert.equal(info, null);
+  assert.equal(logs.length, 1);
+  assert.match(logs[0], /sitemap\.xml failed: HTTP 503/);
+}));
