@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const cfg = require('./config');
-const { ensureDir, slugify, log } = require('./util');
+const { ensureDir, slugify, log, localDate } = require('./util');
 const { findTopic, saveHistory } = require('./topics');
 const { writeScript } = require('./script');
 const { makeVoice } = require('./voice');
@@ -39,7 +39,7 @@ async function main() {
   // 2. Script
   log('Writing script...');
   const script = validateVisuals(await writeScript(topic), cfg);
-  const slug = `${new Date().toISOString().slice(0, 10)}-${slugify(script.title)}`;
+  const slug = `${localDate()}-${slugify(script.title)}`;
   const workDir = path.join(cfg.OUT_DIR, 'work', slug);
   ensureDir(workDir);
   fs.writeFileSync(path.join(cfg.OUT_DIR, `${slug}.script.json`), JSON.stringify(script, null, 2));

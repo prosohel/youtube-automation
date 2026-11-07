@@ -41,9 +41,17 @@ function slugify(s) {
     .replace(/(^-|-$)/g, '')
     .slice(0, 50);
   // Non-Latin titles (e.g. Bangla) slugify to nothing; use a time stamp so runs never overwrite each other.
-  return slug || `video-${new Date().toISOString().slice(11, 19).replace(/:/g, '')}`;
+  return slug || `video-${localTime().replace(/:/g, '')}`;
 }
 
-const log = (...a) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...a);
+const pad = (n) => String(n).padStart(2, '0');
 
-module.exports = { ensureDir, run, parseJson, slugify, log };
+/** HH:MM:SS in the machine's own time zone (TZ=Asia/Dhaka in Docker), not UTC. */
+const localTime = (d = new Date()) => `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+
+/** YYYY-MM-DD in the machine's own time zone. */
+const localDate = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+const log = (...a) => console.log(`[${localTime()}]`, ...a);
+
+module.exports = { ensureDir, run, parseJson, slugify, log, localTime, localDate };

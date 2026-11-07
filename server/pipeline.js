@@ -5,6 +5,7 @@ const store = require('./store');
 const { resolveDirection } = require('../src/direction');
 const { validateVisuals } = require('../src/graphics');
 const { resolveThumbnail } = require('../src/thumbnail');
+const { localDate } = require('../src/util');
 const { sourceLabel } = require('../src/examVisuals');
 
 /** The real stage functions. Tests pass their own. Required lazily: Remotion etc. load only when used. */
@@ -85,7 +86,7 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
       theme, // full object incl. seed, so a resumed render looks the same
       direction: resolveDirection(script, cfg), // checked once, so later settings changes never alter a resumed render
       thumbnail: resolveThumbnail(script, cfg),
-      slug: `${new Date().toISOString().slice(0, 10)}-${v.id}`, // id, not title: Bangla titles slugify to the same name
+      slug: `${localDate()}-${v.id}`, // id, not title: Bangla titles slugify to the same name
     });
     await say(`Script: "${script.title}" (${script.scenes.length} scenes, theme ${theme.id})`);
   }
