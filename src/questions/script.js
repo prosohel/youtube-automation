@@ -17,9 +17,22 @@ const LETTERS = ['ক', 'খ', 'গ', 'ঘ'];
 const PAUSE = 'ভিডিও থামিয়ে চেষ্টা করুন';
 const BN_DIGITS = '০১২৩৪৫৬৭৮৯';
 const SOURCE_LINK = 'সম্পূর্ণ সমাধান';
-// Used when Claude's hook gives an answer away (the fixed thumbnail is made from the hook headline).
-const SAFE_HEADLINE = 'আপনি পারবেন?';
 const THUMB_FIELDS = ['text', 'highlight', 'number', 'tag', 'left', 'right'];
+
+// Fixed texts. Each list is tried in order and the first that passes the same check as Claude's text is used. The
+// last one always passes, whatever the questions (see each note), so a fixed script is always safe.
+// "?" holds no number and is shorter than any option text that is checked (2+ characters).
+const HEADLINES = ['আপনি পারবেন?', 'চেষ্টা করে দেখুন', 'মাথা খাটান', '?'];
+// The pause sentence may always be said: every question narration says it.
+const hookLines = (n) => [
+  `${n === 1 ? 'প্রশ্নটি' : 'প্রশ্নগুলো'} আগে নিজে চেষ্টা করুন, তারপর সমাধান দেখুন।`,
+  `চলুন, আজকের ${n === 1 ? 'প্রশ্নটির' : 'প্রশ্নগুলোর'} সমাধান দেখি।`,
+  `${PAUSE}।`,
+];
+// Lines spoken after the countdown are only checked for an answer letter, TeX and emptiness: these pass.
+const SOLUTION_LINE = 'এবার ধাপে ধাপে সমাধান দেখি।';
+const TIP_LINE = 'এই কথাটি মনে রাখুন।';
+const OUTRO_LINE = 'এমন আরও প্রশ্নের সমাধান পেতে চ্যানেলটি সাবস্ক্রাইব করুন।';
 
 const tidy = (s) => (typeof s === 'string' ? s.replace(/\s+/g, ' ').replace(/\s+([,;।?!])/g, '$1').trim() : '');
 const wordCount = (s) => s.split(/\s+/).filter(Boolean).length;
@@ -45,8 +58,9 @@ function scriptSchema(count) {
         maxItems: count,
         items: {
           type: 'object',
+          // tip only for a question that has one: no tip scene is made without a source tip.
           properties: { ask: text, working: { type: 'array', items: text }, reveal: text, tip: text },
-          required: ['ask', 'working', 'reveal', 'tip'],
+          required: ['ask', 'working', 'reveal'],
         },
       },
       outro: { type: 'object', properties: { narration: text }, required: ['narration'] },
@@ -68,7 +82,7 @@ function questionBlock(q, k) {
       ? `Working (${working.length} line${working.length === 1 ? '' : 's'}, each written on screen as the voice reaches it):\n` +
         working.map((l, i) => `  ${i + 1}. ${l}`).join('\n')
       : 'Working: none (quiz format). Give "working": [].',
-    q.tip ? `Tip: ${q.tip}` : 'Tip: none. Give "tip": "".',
+    q.tip ? `Tip: ${q.tip}` : 'Tip: none. Leave "tip" out.',
   ].join('\n');
 }
 
@@ -102,7 +116,7 @@ ${qs.map(questionBlock).join('\n\n')}
 - ask: read the question, then the four options with their letters (e.g. "ক, লাভ পঁচিশ শতাংশ; খ, ক্ষতি পঁচিশ শতাংশ; ..."), then end with "${PAUSE}।". Never say or hint which option is right, and never put a letter (ক, খ, গ, ঘ) right after the word "উত্তর".
 - working: one string per working line, exactly as many as the question has (none when it has no working). String k speaks working line k in words: the same step, nothing added, nothing left out. Never name an option letter in it.
 - reveal: name the right letter and its option, e.g. "সঠিক উত্তর ঘ, ক্ষতি পঞ্চাশ শতাংশ।". Never name another option letter.
-- tip: the tip said in plain spoken words, one or two short sentences; "" when the question has no tip.
+- tip (only for a question that has a tip): the tip said in plain spoken words, one or two short sentences.
 
 The other spoken parts:
 - hook.narration: one or two short sentences built on the opening hook. It never gives away an answer.
@@ -129,7 +143,7 @@ ${thumbnailPrompt({ ...cfg, visuals: 'motion' }, recentThumbStyles())}
 
 Metadata rules:
 - title: under 70 characters, includes the search phrase naturally, no clickbait lies. It never gives away an answer.
-- kicker: a 1-3 word tag in ${cfg.language} naming what kind of video this is (e.g. "বিসিএস গণিত", "চাকরির প্রস্তুতি", "প্রশ্ন সমাধান"), shown small on the video's title cards and used as the thumbnail tag when the thumbnail has none. Not the title, not a sentence, no punctuation.
+- kicker: a 1-3 word tag in ${cfg.language} naming what kind of video this is (e.g. "বিসিএস গণিত", "চাকরির প্রস্তুতি", "প্রশ্ন সমাধান"), shown small on the video's title cards and used as the thumbnail tag when the thumbnail has none. Not the title, not a sentence, no punctuation. It never gives away an answer.
 - description: 2-3 short paragraphs, then 3 relevant hashtags on the last line. Do not add a link: the exam page's link is added for you.
 - tags: 8-12 tags.`;
 }
@@ -171,126 +185,128 @@ function assembleScenes(topicInfo, parts) {
   return scenes;
 }
 
-/** Index of each question's card, solution (or null) and reveal scene, in question order. */
-function questionScenes(scenes) {
-  const out = [];
-  scenes.forEach((s, i) => {
-    const type = s && s.visual && s.visual.type;
-    if (type === 'question') out.push({ ask: i, solution: null, reveal: null });
-    else if (out.length && (type === 'solution' || type === 'reveal')) out[out.length - 1][type] = i;
-  });
-  return out;
-}
-
 /* ---------- answer checks ---------- */
 
 // Bangla letters and signs (not its digits) and the zero-width joiners. A letter next to one of these is part of a
 // word: the ক of "কত", "একশো", "ক্ষতি" or "সঠিক" is not the option letter ক.
 const IN_WORD = '\\u0980-\\u09E5\\u09F0-\\u09FF\\u200C\\u200D';
 const LETTER_RE = LETTERS.map((l) => new RegExp(`(?<![${IN_WORD}])${l}(?![${IN_WORD}])`, 'u'));
+// The right letter said not to be the answer: "ঘ নয়", "ঘ না", "ঘ নহে" (য় written as one sign or as য + nukta).
+const NEGATED_RE = LETTERS.map((l) => new RegExp(`(?<![${IN_WORD}])${l}[\\s,]*(?:ন(?:য়|য়)|না|নহে)(?![${IN_WORD}])`, 'u'));
 // An option letter given as the answer: "উত্তর ঘ", "উত্তর হলো (ঘ)", "উত্তরঃ ঘ", "উত্তরটি হবে ঘ".
 const NAMES_ANSWER = `উত্তর(?:টি)?\\s*(?:হলো|হল|হচ্ছে|হবে)?\\s*[:ঃ]?\\s*\\(?\\s*[কখগঘ]\\s*\\)?(?![${IN_WORD}])`;
 const namesAnswer = (s) => (typeof s === 'string' ? s.match(new RegExp(NAMES_ANSWER, 'u')) : null);
 const TEX = /[$\\]/;
 
-// For comparing: no spaces, quotes or punctuation that never changes a value, no `$` or TeX braces, Latin digits.
-const flat = (s) =>
+// For comparing: Latin digits, no quotes, `$`, TeX braces or backslashes, one space between words, lower case.
+const norm = (s) =>
   String(s || '')
     .replace(/[০-৯]/g, (d) => String(BN_DIGITS.indexOf(d)))
-    .replace(/[\s${}(),;:।?!'"‘’“”]/g, '')
+    .replace(/[${}\\'"‘’“”]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
     .toLowerCase();
-const occurrences = (hay, needle) => hay.split(needle).length - 1;
-const numbers = (s) => flat(s).match(/\d+(?:\.\d+)?/g) || [];
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
- * True when text drawn on screen before the countdown (thumbnail, hook headline) gives q's answer away: it holds
- * the right option's text, or a number of the right option that the question itself does not state.
+ * Where an option's text is said or shown: starting where a word starts (Bangla adds endings, so "অনুস্বারের"
+ * counts, but the "তর" inside "উত্তর" does not) and not running on into a digit (50 is not 500). Spaces inside the
+ * option match any spacing, so "ক্ষতি৫০%" is "ক্ষতি 50%". null for an option shorter than 2 characters.
+ */
+function optionRe(option) {
+  const o = norm(option);
+  if (o.replace(/\s/g, '').length < 2) return null;
+  return new RegExp(`(?<![${IN_WORD}A-Za-z0-9])${o.split(' ').map(escapeRe).join('\\s*')}(?![0-9])`, 'gu');
+}
+const hits = (re, s) => (re ? (norm(s).match(re) || []).length : 0);
+const numbers = (s) => norm(s).replace(/(\d),(?=\d)/g, '$1').match(/\d+(?:\.\d+)?/g) || [];
+
+/**
+ * True when text drawn on screen before the countdown (thumbnail, kicker, hook headline) gives q's answer away: the
+ * right option's text, or a number of the right option that the question itself does not state.
  */
 function showsAnswer(value, q) {
-  const shown = flat(value);
-  if (!shown) return false;
-  const right = flat(q.options[q.answer]);
-  if (right.length >= 2 && shown.includes(right)) return true;
-  const inRight = numbers(q.options[q.answer]);
+  const right = q.options[q.answer];
+  if (hits(optionRe(right), value) > 0) return true;
+  const inRight = numbers(right);
   const inQuestion = numbers(q.text);
   return numbers(value).some((d) => inRight.includes(d) && !inQuestion.includes(d));
 }
 
 /**
- * True when a narration says the right option's text more often than reading the question needs (and, when it
- * reads all four options aloud as written, reading the options). Options with digits are spoken in words, so
- * they never match as written: for them only a digit slip is caught.
+ * True when a narration says the right option's text more often than reading the question and the pause sentence
+ * needs (and, when it reads all four options aloud as written, reading the options). Options with digits are
+ * spoken in words, so they never match as written: for them only a digit slip is caught.
  */
 function saysAnswer(narration, q, { readsOptions = false } = {}) {
-  const right = flat(q.options[q.answer]);
-  if (right.length < 2) return false;
-  const said = flat(narration);
-  let allowed = occurrences(flat(q.text), right);
-  const options = q.options.map(flat);
-  if (readsOptions && options.every((o) => o && said.includes(o))) allowed += options.reduce((n, o) => n + occurrences(o, right), 0);
-  return occurrences(said, right) > allowed;
+  const re = optionRe(q.options[q.answer]);
+  if (!re) return false;
+  let allowed = hits(re, q.text) + hits(re, PAUSE);
+  if (readsOptions && q.options.every((o) => hits(optionRe(o), narration) > 0)) allowed += q.options.reduce((n, o) => n + hits(re, o), 0);
+  return hits(re, narration) > allowed;
+}
+
+/** A wrong option's text in the reveal, outside the right option's own text, or null. */
+function wrongOptionSaid(reveal, q) {
+  const right = optionRe(q.options[q.answer]);
+  const said = right ? norm(reveal).replace(right, ' ') : norm(reveal);
+  return q.options.find((o, i) => i !== q.answer && hits(optionRe(o), said) > 0) || null;
 }
 
 const quote = (s) => `"${clip(String(s || ''), 80)}"`;
+const texWhy = (s) => `contains TeX or "$" (${quote(s)}): speak formulas in Bangla words`;
 
-/** Every leak found, as { fix, reason }: `fix` says what forceSafe replaces. */
-function findLeaks(script, info) {
-  const leaks = [];
-  const add = (fix, reason) => leaks.push({ fix, reason });
-  const scenes = (script && Array.isArray(script.scenes) && script.scenes) || [];
-  const thumb = (script && script.thumbnail) || {};
-  const hook = scenes[0] || {};
-  const at = questionScenes(scenes);
+// Each returns why that part of the script is not safe, or null.
 
-  info.questions.forEach((q, k) => {
-    const n = k + 1;
-    const letter = LETTERS[q.answer];
-    // The hook and the thumbnail come before every countdown.
-    if (showsAnswer(hook.headline, q)) add({ hook: 'headline' }, `The hook headline ${quote(hook.headline)} gives away the answer of question ${n}.`);
-    if (namesAnswer(hook.narration) || saysAnswer(hook.narration, q)) {
-      add({ hook: 'narration' }, `The hook narration gives away the answer of question ${n}; it is spoken before the question.`);
-    }
-    for (const f of THUMB_FIELDS) {
-      if (showsAnswer(thumb[f], q)) {
-        add({ thumbnail: true }, `The thumbnail ${f} ${quote(thumb[f])} gives away the answer of question ${n}; the thumbnail opens the video, before any countdown.`);
-      }
-    }
-
-    const sc = at[k];
-    if (!sc || sc.reveal === null) {
-      add({}, `Question ${n} has no question card or no reveal.`);
-      return;
-    }
-    const ask = scenes[sc.ask].narration;
-    const named = namesAnswer(ask);
-    if (!tidy(ask)) add({ ask: k }, `Question ${n}: the question is not read out.`);
-    else if (named) add({ ask: k }, `Question ${n}: the question narration names an answer letter (${quote(named[0])}) before the countdown.`);
-    else if (saysAnswer(ask, q, { readsOptions: true })) {
-      add({ ask: k }, `Question ${n}: the question narration says the right option ${quote(q.options[q.answer])} beyond reading the question and the four options.`);
-    }
-    const inWorking = sc.solution !== null && namesAnswer(scenes[sc.solution].narration);
-    if (inWorking) add({ working: k }, `Question ${n}: the working narration names an answer letter (${quote(inWorking[0])}); only the reveal may name it.`);
-
-    const reveal = scenes[sc.reveal].narration || '';
-    const others = LETTERS.filter((l, i) => i !== q.answer && LETTER_RE[i].test(reveal));
-    if (!LETTER_RE[q.answer].test(reveal)) add({ reveal: k }, `Question ${n}: the reveal must name the right letter ${letter}; it says ${quote(reveal)}.`);
-    else if (others.length) add({ reveal: k }, `Question ${n}: the reveal names ${others.join(', ')} besides the right letter ${letter}; name only ${letter}.`);
-  });
-
-  scenes.forEach((s, i) => {
-    if (s && TEX.test(s.narration || '')) add({ tex: i }, `The narration ${quote(s.narration)} contains TeX or "$": speak formulas in Bangla words.`);
-  });
-  return leaks;
+/** Text drawn before every countdown: the hook headline, the thumbnail, the kicker. */
+function screenProblem(value, qs) {
+  if (TEX.test(value || '')) return 'contains TeX or "$"';
+  const k = qs.findIndex((q) => showsAnswer(value, q));
+  return k >= 0 ? `gives away the answer of question ${k + 1}` : null;
 }
 
-/**
- * Plain-language reasons why the script gives an answer away or gets it wrong; [] when it is fine. Checks the
- * reveal (the right letter and no other), the question and working narration (no answer letter, no right option
- * beyond reading the question and options), the hook and the thumbnail (no right option, no number of it), and
- * TeX in any narration.
- */
-function answerProblems(script, topicInfo) {
-  return findLeaks(script, topicInfo).map((l) => l.reason);
+/** The hook narration, spoken before every countdown. */
+function hookProblem(narration, qs) {
+  if (!tidy(narration)) return 'is empty';
+  if (TEX.test(narration)) return texWhy(narration);
+  const named = namesAnswer(narration);
+  if (named) return `names an answer letter (${quote(named[0])}) before the question`;
+  const k = qs.findIndex((q) => saysAnswer(narration, q));
+  return k >= 0 ? `gives away the answer of question ${k + 1} before the question` : null;
+}
+
+function askProblem(narration, q) {
+  if (!tidy(narration)) return 'is empty: the question is not read out';
+  if (TEX.test(narration)) return texWhy(narration);
+  const named = namesAnswer(narration);
+  if (named) return `names an answer letter (${quote(named[0])}) before the countdown`;
+  if (saysAnswer(narration, q, { readsOptions: true })) return `says the right option ${quote(q.options[q.answer])} beyond reading the question and the four options`;
+  return null;
+}
+
+function workingProblem(narration) {
+  if (!tidy(narration)) return 'is empty';
+  if (TEX.test(narration)) return texWhy(narration);
+  const named = namesAnswer(narration);
+  return named ? `names an answer letter (${quote(named[0])}); only the reveal may name it` : null;
+}
+
+function revealProblem(narration, q) {
+  const letter = LETTERS[q.answer];
+  if (!tidy(narration)) return `is empty; it must name the right letter ${letter}`;
+  if (TEX.test(narration)) return texWhy(narration);
+  if (!LETTER_RE[q.answer].test(narration)) return `must name the right letter ${letter}; it says ${quote(narration)}`;
+  const others = LETTERS.filter((l, i) => i !== q.answer && LETTER_RE[i].test(narration));
+  if (others.length) return `names ${others.join(', ')} besides the right letter ${letter}; name only ${letter}`;
+  if (NEGATED_RE[q.answer].test(narration)) return `says the right letter ${letter} is not the answer (${quote(narration)})`;
+  const wrong = wrongOptionSaid(narration, q);
+  return wrong ? `says the option ${quote(wrong)}, but the right option is ${quote(q.options[q.answer])}` : null;
+}
+
+/** The tip and the closing, spoken after the answer. */
+function plainProblem(narration) {
+  if (!tidy(narration)) return 'is empty';
+  return TEX.test(narration) ? texWhy(narration) : null;
 }
 
 /* ---------- fixed sentences ---------- */
@@ -298,68 +314,149 @@ function answerProblems(script, topicInfo) {
 // Spoken as written only when the voice can read it: no digit, no Latin letter, no TeX.
 const speakable = (s) => Boolean(s) && !/[0-9০-৯A-Za-z$\\]/.test(s);
 
-function safeReveal(q) {
+/** The first text that passes `ok`; the last one when none does (each list's last one always passes). */
+const pick = (texts, ok) => texts.find(ok) || texts[texts.length - 1];
+
+/** Question narrations: the question when it can be read aloud, then the pause sentence alone (always allowed). */
+function askLines(q) {
+  const text = tidy(q.text);
+  const lead = speakable(text) ? [`${/[?।!]$/.test(text) ? text : `${text}।`} ${PAUSE}।`] : [];
+  return [...lead, `প্রশ্নটি দেখুন। ${PAUSE}।`, `${PAUSE}।`];
+}
+
+/** Reveals: with the option when it can be read aloud; last the letter alone (no option text fits in one letter). */
+function revealLines(q) {
   const letter = LETTERS[q.answer];
   const option = tidy(q.options[q.answer]).replace(/[।.]+$/, '');
-  const clean = speakable(option) && !LETTER_RE.some((re, i) => i !== q.answer && re.test(option));
-  return clean ? `সঠিক উত্তর ${letter}, ${option}।` : `সঠিক উত্তর ${letter}।`;
+  const withOption = speakable(option);
+  return [
+    ...(withOption ? [`সঠিক উত্তর ${letter}, ${option}।`] : []),
+    `সঠিক উত্তর ${letter}।`,
+    ...(withOption ? [`${letter}, ${option}।`] : []),
+    `উত্তর ${letter}।`,
+    letter,
+  ];
 }
-
-function safeAsk(q) {
-  const text = tidy(q.text);
-  const lead = speakable(text) ? (/[?।!]$/.test(text) ? text : `${text}।`) : 'প্রশ্নটি দেখুন।';
-  return `${lead} ${PAUSE}।`;
-}
-
-const safeHook = (info) => `${info.questions.length === 1 ? 'প্রশ্নটি' : 'প্রশ্নগুলো'} আগে নিজে চেষ্টা করুন, তারপর সমাধান দেখুন।`;
 
 function dropAnswerLetters(narration) {
   const re = new RegExp(NAMES_ANSWER, 'gu');
   let s = narration;
-  for (let i = 0; i < 5 && namesAnswer(s); i++) s = tidy(s.replace(re, ' '));
+  while (namesAnswer(s)) s = tidy(s.replace(re, ' ')); // each pass removes at least "উত্তর" and a letter
   return s;
 }
 
 const dropTex = (narration) => tidy(narration.replace(/\\[A-Za-z]+/g, ' ').replace(/[$\\{}^_]/g, ' '));
 
-/**
- * The script with every leaking part replaced by a fixed sentence from the source: the reveal says only the right
- * letter (and its option when it can be read aloud as written), the question narration only the question (when
- * it can be read aloud) and the pause, a working narration loses the answer letter, a hook gets a neutral line and
- * a thumbnail becomes a `question` card of the hook headline. Repeated while one fix uncovers another leak (TeX
- * dropped from "উত্তর $ঘ$" names the letter). The script given is not changed.
- */
-function forceSafe(script, topicInfo) {
-  let out = script;
-  for (let round = 0; round < 3; round++) {
-    const leaks = findLeaks(out, topicInfo);
-    if (!leaks.length) break;
-    out = applyFixes(out, topicInfo, leaks);
+/** Words of `total` shared over the lines (at least one each), so every line still appears with the voice. */
+const spreadWords = (lines, total) =>
+  lines.map((l, i) => ({ ...l, words: Math.max(1, Math.floor(total / lines.length) + (i < total % lines.length ? 1 : 0)) }));
+
+/** A working narration without its TeX and answer letters; when nothing usable is left, one fixed line. */
+function fixWorking(scene) {
+  const cleaned = dropAnswerLetters(dropTex(scene.narration || ''));
+  if (!workingProblem(cleaned)) {
+    scene.narration = cleaned;
+    return;
   }
+  scene.narration = SOLUTION_LINE;
+  scene.visual = { ...scene.visual, lines: spreadWords(scene.visual.lines, wordCount(SOLUTION_LINE)) };
+}
+
+/** Index of each question's card, solution, reveal and tip scene (null when it has none), in question order. */
+function questionScenes(scenes) {
+  const out = [];
+  scenes.forEach((s, i) => {
+    const type = s && s.visual && s.visual.type;
+    if (type === 'question') out.push({ ask: i, solution: null, reveal: null, tip: null });
+    else if (out.length && (type === 'solution' || type === 'reveal' || type === 'tip')) out[out.length - 1][type] = i;
+  });
   return out;
 }
 
-function applyFixes(script, topicInfo, leaks) {
-  const scenes = script.scenes.map((s) => ({ ...s }));
+/** Every part of the script that fails its check, as { reason, fix }: fix(draft) puts a safe text in its place. */
+function findLeaks(script, info) {
+  const qs = info.questions;
+  const scenes = (script && Array.isArray(script.scenes) && script.scenes) || [];
+  const thumb = (script && script.thumbnail) || {};
+  const leaks = [];
+  const check = (why, what, fix) => {
+    if (why) leaks.push({ reason: `${what} ${why}.`, fix });
+  };
+  const headlineOk = (t) => Boolean(tidy(t)) && !screenProblem(t, qs);
+
+  // Before every countdown: the hook, the thumbnail and the kicker (the thumbnail's tag when it has none). The fixed
+  // thumbnail is made from the hook headline, which is fixed first.
+  const hook = scenes[0] || {};
+  check(screenProblem(hook.headline, qs), `The hook headline ${quote(hook.headline)}`, (d) => {
+    d.scenes[0].headline = pick(HEADLINES, headlineOk);
+  });
+  check(hookProblem(hook.narration, qs), 'The hook narration', (d) => {
+    d.scenes[0].narration = pick(hookLines(qs.length), (t) => !hookProblem(t, qs));
+  });
+  for (const f of THUMB_FIELDS) {
+    check(screenProblem(thumb[f], qs), `The thumbnail ${f} ${quote(thumb[f])} opens the video and`, (d) => {
+      const text = headlineOk(d.scenes[0].headline) ? d.scenes[0].headline : pick(HEADLINES, headlineOk);
+      d.thumbnail = { style: 'question', text, highlight: text.split(' ').pop(), color: 'red' };
+    });
+  }
+  check(screenProblem(script && script.kicker, qs), `The kicker ${quote(script && script.kicker)} (the thumbnail's tag when it has none)`, (d) => {
+    d.kicker = '';
+  });
+
   const at = questionScenes(scenes);
-  const qs = topicInfo.questions;
-  for (const { fix } of leaks) {
-    if (fix.reveal !== undefined) scenes[at[fix.reveal].reveal].narration = safeReveal(qs[fix.reveal]);
-    if (fix.ask !== undefined) scenes[at[fix.ask].ask].narration = safeAsk(qs[fix.ask]);
-    if (fix.working !== undefined) {
-      const s = scenes[at[fix.working].solution];
-      s.narration = dropAnswerLetters(s.narration);
+  qs.forEach((q, k) => {
+    const n = k + 1;
+    const sc = at[k];
+    if (!sc || sc.reveal === null) {
+      leaks.push({ reason: `Question ${n} has no question card or no reveal.`, fix: () => {} });
+      return;
     }
-    if (fix.hook === 'headline') scenes[0].headline = SAFE_HEADLINE;
-    if (fix.hook === 'narration') scenes[0].narration = safeHook(topicInfo);
-    if (fix.tex !== undefined) scenes[fix.tex].narration = dropTex(scenes[fix.tex].narration);
+    check(askProblem(scenes[sc.ask].narration, q), `Question ${n}: the question narration`, (d) => {
+      d.scenes[sc.ask].narration = pick(askLines(q), (t) => !askProblem(t, q));
+    });
+    if (sc.solution !== null) {
+      check(workingProblem(scenes[sc.solution].narration), `Question ${n}: the working narration`, (d) => fixWorking(d.scenes[sc.solution]));
+    }
+    check(revealProblem(scenes[sc.reveal].narration, q), `Question ${n}: the reveal`, (d) => {
+      d.scenes[sc.reveal].narration = pick(revealLines(q), (t) => !revealProblem(t, q));
+    });
+    if (sc.tip !== null) {
+      check(plainProblem(scenes[sc.tip].narration), `Question ${n}: the tip narration`, (d) => {
+        const own = tidy(q.tip);
+        d.scenes[sc.tip].narration = pick([...(speakable(own) ? [own] : []), TIP_LINE], (t) => !plainProblem(t));
+      });
+    }
+  });
+
+  const last = scenes.length - 1;
+  if (last > 0 && scenes[last].visual && scenes[last].visual.type === 'icon') {
+    check(plainProblem(scenes[last].narration), 'The closing narration', (d) => {
+      d.scenes[last].narration = OUTRO_LINE;
+    });
   }
-  const out = { ...script, scenes };
-  if (leaks.some((l) => l.fix.thumbnail)) {
-    const text = scenes[0].headline;
-    out.thumbnail = { style: 'question', text, highlight: text.split(' ').pop(), color: 'red' };
-  }
-  return out;
+  return leaks;
+}
+
+/**
+ * Plain-language reasons why the script gives an answer away, gets it wrong or cannot be voiced; [] when it is
+ * fine. Checks the reveal (the right letter, no other letter, not negated, no wrong option's text), the question and
+ * working narration (no answer letter, no right option beyond reading the question and options), the hook, kicker
+ * and thumbnail (no right option, no number of it), TeX anywhere, and empty narration.
+ */
+function answerProblems(script, topicInfo) {
+  return findLeaks(script, topicInfo).map((l) => l.reason);
+}
+
+/**
+ * The script with every failing part replaced by a fixed text that passes the same check: the reveal says the right
+ * letter (with its option when it can be read aloud), the question narration the question (when it can be read
+ * aloud) and the pause, a working narration loses TeX and answer letters, a leaking kicker is dropped, a thumbnail
+ * becomes a `question` card of the hook headline, and empty parts get a fixed line. The script given is not changed.
+ */
+function forceSafe(script, topicInfo) {
+  const draft = { ...script, scenes: script.scenes.map((s) => ({ ...s })) };
+  for (const { fix } of findLeaks(script, topicInfo)) fix(draft);
+  return draft;
 }
 
 /* ---------- the script ---------- */
@@ -395,8 +492,9 @@ function build(info, parts) {
 
 /**
  * The script of a question video (topicInfo from src/questions findQuestions). One Claude call; a script that
- * gives an answer away is asked for once more with the reasons, and what still leaks gets fixed sentences.
- * deps: { askJson, log } (tests pass fakes). Returns { title, kicker, description, tags, style, thumbnail, scenes }.
+ * fails a check is asked for once more with the reasons, and what still fails gets fixed texts.
+ * deps: { askJson, log } (tests pass fakes; the pipeline passes its log so the retry and the fixed texts show in
+ * the video's log; log may return a promise). Returns { title, kicker, description, tags, style, thumbnail, scenes }.
  */
 async function writeQuestionScript(topicInfo, deps = {}) {
   const d = { askJson, log, ...deps };
@@ -413,19 +511,19 @@ async function writeQuestionScript(topicInfo, deps = {}) {
   let script = build(topicInfo, await ask(prompt));
   let problems = answerProblems(script, topicInfo);
   if (problems.length) {
-    d.log(`Question script: asking again (${problems.join(' | ')})`);
+    await d.log(`Question script: asking Claude again (${problems.join(' | ')})`);
     script = build(topicInfo, await ask(`${prompt}\n\n${retryNote(problems)}`));
     problems = answerProblems(script, topicInfo);
   }
   if (problems.length) {
-    d.log(`Question script: fixed sentences replace what still leaks (${problems.join(' | ')})`);
+    await d.log(`Question script: fixed texts replace what still fails (${problems.join(' | ')})`);
     script = forceSafe(script, topicInfo);
     const left = answerProblems(script, topicInfo);
-    // Never reached by the fixes above; a video fails rather than give an answer away.
+    // Unreachable: every fixed text passes its own check (each list ends with one that always does). Kept so a
+    // future change fails the video rather than publish an answer early.
     if (left.length) throw new Error(`Question script still gives an answer away: ${left.join(' ')}`);
   }
   script.description = withSourceLink(script.description, topicInfo.sourceUrl);
-  d.log(`Script: "${script.title}" - ${script.scenes.length} scenes, ${n} question${n === 1 ? '' : 's'}`);
   return script;
 }
 

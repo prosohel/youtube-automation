@@ -340,7 +340,10 @@ test('writeQuestionScript: one call to Claude, with every source fact verbatim a
   assert.doesNotMatch(prompt, /- neon:/, 'only the exam looks are offered');
   assert.equal(schema.properties.questions.minItems, 2);
   assert.equal(schema.properties.questions.maxItems, 2);
-  for (const k of ['ask', 'working', 'reveal', 'tip']) assert.ok(schema.properties.questions.items.required.includes(k), k);
+  for (const k of ['ask', 'working', 'reveal']) assert.ok(schema.properties.questions.items.required.includes(k), k);
+  // A question without a tip gets no tip scene; Claude is never taught an empty tip.
+  assert.ok(!schema.properties.questions.items.required.includes('tip'));
+  assert.doesNotMatch(prompt, /"tip": ""/);
   assert.equal(script.title, GOOD.title);
   assert.equal(script.kicker, GOOD.kicker);
   assert.deepEqual(script.style, GOOD.style);
@@ -382,4 +385,198 @@ test('writeQuestionScript: a script that still leaks after the second try gets t
   assert.equal(script.thumbnail.style, 'question');
   assert.equal(script.thumbnail.text, GOOD.hook.headline);
   assert.match(script.description, /সম্পূর্ণ সমাধান: https:\/\/mathsuggestion\.com\/44th-/);
+});
+
+/* ---------- fix round 1: fixed texts that collide with answers, empty narration, reveal, kicker, log ---------- */
+
+const PAUSE = 'ভিডিও থামিয়ে চেষ্টা করুন';
+
+/** A word question from recentjobsolution: quiz format, no tip, the first option right. */
+const wordQ = (n, options, text = 'কোনটি সঠিক?') => ({
+  id: `recentjobsolution.com/exam/w#${n}`,
+  site: 'recentjobsolution.com',
+  url: 'https://recentjobsolution.com/exam/w',
+  page: 'শব্দের প্রশ্ন',
+  n,
+  text,
+  options,
+  answer: 0,
+  working: [],
+  tip: null,
+  subject: null,
+});
+
+/** Claude's reply for `info` that leaks everywhere it can. */
+const leakyFor = (info, { headline, narration, thumb }) => ({
+  ...copy(GOOD),
+  thumbnail: { style: 'question', text: thumb, highlight: thumb.split(' ').pop(), color: 'red' },
+  hook: { narration, headline },
+  questions: info.questions.map((q) => ({ ask: `${q.text} উত্তর ক। ${PAUSE}।`, working: [], reveal: 'সঠিক উত্তর খ।' })),
+});
+
+test('fixed texts that hold a word answer (আপনি, তার, নিজে) are passed over: the script is safe, nothing is thrown', async () => {
+  const info = {
+    ...INFO,
+    questions: [
+      wordQ(1, ['আপনি', 'তুমি', 'সে', 'আমি']),
+      wordQ(2, ['তার', 'তাদের', 'তোমার', 'আমার']),
+      wordQ(3, ['নিজে', 'অন্যে', 'সবাই', 'কেউ']),
+    ],
+  };
+  const leaky = leakyFor(info, { headline: 'আপনি কি পারবেন?', narration: 'তার আগে নিজে চেষ্টা করুন।', thumb: 'আপনি পারবেন?' });
+  const claude = fakeClaude(leaky, leaky);
+  const script = await writeQuestionScript(info, { ...quiet, askJson: claude.askJson });
+  assert.equal(claude.asked.length, 2);
+  assert.deepEqual(answerProblems(script, info), []);
+  assert.equal(script.scenes[0].headline, 'চেষ্টা করে দেখুন', '"আপনি পারবেন?" holds the answer আপনি');
+  assert.equal(script.scenes[0].narration, 'চলুন, আজকের প্রশ্নগুলোর সমাধান দেখি।', 'the first hook line holds নিজে and তার(পর)');
+  assert.deepEqual(script.thumbnail, { style: 'question', text: 'চেষ্টা করে দেখুন', highlight: 'দেখুন', color: 'red' });
+  const reveals = script.scenes.filter((s) => s.visual.type === 'reveal').map((s) => s.narration);
+  assert.deepEqual(reveals, ['সঠিক উত্তর ক, আপনি।', 'সঠিক উত্তর ক, তার।', 'সঠিক উত্তর ক, নিজে।']);
+});
+
+test('when every other fixed text holds an answer, the last ones are used and always pass', async () => {
+  const info = {
+    ...INFO,
+    questions: [
+      wordQ(1, ['নিজে', 'অন্যে', 'সবাই', 'কেউ']),
+      wordQ(2, ['সমাধান', 'সমস্যা', 'প্রশ্ন', 'উপায়']),
+      wordQ(3, ['আপনি', 'তুমি', 'সে', 'আমি']),
+      wordQ(4, ['দেখুন', 'শুনুন', 'বলুন', 'লিখুন'], 'নিচের ৪টি শব্দের কোনটি অনুজ্ঞা?'),
+      wordQ(5, ['মাথা', 'হাত', 'পা', 'চোখ']),
+    ],
+  };
+  const leaky = leakyFor(info, { headline: 'মাথা খাটান', narration: 'নিজে করুন।', thumb: 'আপনি পারবেন?' });
+  const script = await writeQuestionScript(info, { ...quiet, askJson: fakeClaude(leaky, leaky).askJson });
+  assert.deepEqual(answerProblems(script, info), []);
+  assert.equal(script.scenes[0].headline, '?');
+  assert.equal(script.thumbnail.text, '?');
+  assert.equal(script.scenes[0].narration, `${PAUSE}।`);
+  // Question 4 cannot be read aloud (a digit) and "প্রশ্নটি দেখুন" holds its answer: the pause sentence alone.
+  const asks = script.scenes.filter((s) => s.visual.type === 'question').map((s) => s.narration);
+  assert.equal(asks[3], `${PAUSE}।`);
+  assert.equal(asks[0], `কোনটি সঠিক? ${PAUSE}।`);
+});
+
+test('forceSafe: when every reveal sentence holds a wrong option, the letter alone is said', () => {
+  const info = { ...INFO, questions: [wordQ(1, ['Go', 'সঠিক', 'উত্তর', 'ভুল'])] };
+  const parts = partsWith((p) => (p.questions = [{ ask: `কোনটি সঠিক? ${PAUSE}।`, working: [], reveal: 'সঠিক উত্তর খ।' }]));
+  const safe = forceSafe(scriptOf(parts, info), info);
+  assert.deepEqual(answerProblems(safe, info), []);
+  assert.equal(safe.scenes.find((s) => s.visual.type === 'reveal').narration, 'ক');
+});
+
+test('answer check: a word inside another word is not the option ("মান" in "সমান")', () => {
+  const info = { ...INFO, questions: [wordQ(1, ['মান', 'দাম', 'ওজন', 'আকার'])] };
+  const withThumb = (text) =>
+    partsWith((p) => {
+      p.questions = [{ ask: `কোনটি সঠিক? ${PAUSE}।`, working: [], reveal: 'সঠিক উত্তর ক, মান।' }];
+      p.thumbnail = { style: 'question', text, highlight: text.split(' ').pop(), color: 'red' };
+    });
+  assert.deepEqual(answerProblems(scriptOf(withThumb('দুটো কি সমান?'), info), info), []);
+  assert.equal(answerProblems(scriptOf(withThumb('মানের প্রশ্ন'), info), info).length, 1, 'the word with an ending still counts');
+});
+
+test('empty narration is a problem, and the fixed script never has a silent scene', async () => {
+  const empty = partsWith((p) => {
+    p.hook.narration = '';
+    p.outro.narration = '';
+    p.questions[0].working = [];
+    p.questions[0].tip = '';
+    delete p.questions[1].tip;
+  });
+  const problems = answerProblems(scriptOf(empty), INFO);
+  assert.equal(problems.filter((r) => /empty/.test(r)).length, 5, problems.join('\n'));
+  const script = await writeQuestionScript(INFO, { ...quiet, askJson: fakeClaude(empty, empty).askJson });
+  assert.deepEqual(answerProblems(script, INFO), []);
+  for (const s of script.scenes) assert.ok(s.narration.trim(), JSON.stringify(s.visual));
+  assert.equal(script.scenes[0].narration, 'প্রশ্নগুলো আগে নিজে চেষ্টা করুন, তারপর সমাধান দেখুন।');
+  const sol = script.scenes[2];
+  assert.equal(sol.narration, 'এবার ধাপে ধাপে সমাধান দেখি।');
+  assert.deepEqual(sol.visual.lines.map((l) => l.words), [2, 1, 1, 1], 'the five words shared over the four lines');
+  assert.deepEqual(sol.visual.lines.map((l) => l.text), Q1.working);
+  assert.equal(script.scenes[4].narration, Q1.tip, 'a tip that can be read aloud is the source tip');
+  assert.equal(script.scenes[7].narration, 'এই কথাটি মনে রাখুন।', 'the rjs tip has a digit');
+  assert.equal(script.scenes[8].narration, 'এমন আরও প্রশ্নের সমাধান পেতে চ্যানেলটি সাবস্ক্রাইব করুন।');
+});
+
+test('a question without a tip gets no tip scene, whatever Claude writes for it', () => {
+  const info = { ...INFO, questions: [Q1, { ...RJS, tip: null }] };
+  const parts = partsWith((p) => (p.questions[1].tip = 'একটি বাড়তি কথা।'));
+  const types = assembleScenes(info, parts).map((s) => s.visual.type);
+  assert.deepEqual(types, ['icon', 'question', 'solution', 'reveal', 'tip', 'question', 'reveal', 'icon']);
+});
+
+test('solution lines Claude left out at the end still appear: they start at the last spoken word', () => {
+  const { wordStarts } = require('../src/remotion/timeline.js');
+  const { lineStarts, newestLine } = require('../src/remotion/exam/timing.js');
+  const parts = partsWith((p) => (p.questions[0].working = p.questions[0].working.slice(0, 2)));
+  const sol = assembleScenes(INFO, parts)[2];
+  const voiceFrames = 300;
+  const words = wordStarts(sol.narration, voiceFrames);
+  const starts = lineStarts(sol.visual.lines, words);
+  assert.equal(starts.length, 4);
+  for (const s of starts) assert.ok(Number.isFinite(s) && s <= words[words.length - 1], String(s));
+  assert.equal(starts[3], words[words.length - 1]);
+  assert.equal(newestLine(starts, voiceFrames), 3, 'every line is on screen by the end of the voice');
+});
+
+test('answer check: a reveal that negates the right letter, or names a wrong option, is a problem', () => {
+  const negated = scriptOf(partsWith((p) => (p.questions[0].reveal = 'সঠিক উত্তর ঘ নয়।')));
+  assert.equal(answerProblems(negated, INFO).length, 1);
+  const na = scriptOf(partsWith((p) => (p.questions[0].reveal = 'উত্তর ঘ না।')));
+  assert.equal(answerProblems(na, INFO).length, 1);
+  const read = 'কোনটি পরাশ্রয়ী বর্ণ? ক, অনুস্বার; খ, হসন্ত; গ, য-ফলা; ঘ, র-ফলা। ভিডিও থামিয়ে চেষ্টা করুন।';
+  const wrongText = wordsParts(read);
+  wrongText.questions[0].reveal = 'সঠিক উত্তর ক, হসন্ত।';
+  assert.equal(answerProblems(scriptOf(wrongText, WORDS_INFO), WORDS_INFO).length, 1);
+  // The right option's text holding a wrong option's text is fine.
+  const both = { ...WORDS_INFO, questions: [{ ...WORDS_Q, options: ['অনুস্বার ও বিসর্গ', 'অনুস্বার', 'য-ফলা', 'র-ফলা'] }] };
+  const right = wordsParts(`কোনটি পরাশ্রয়ী বর্ণ? ${PAUSE}।`);
+  right.questions[0].reveal = 'সঠিক উত্তর ক, অনুস্বার ও বিসর্গ।';
+  assert.deepEqual(answerProblems(scriptOf(right, both), both), []);
+});
+
+test('answer check: an answer that is a word of the pause sentence ("করুন") may still be said by the pause sentence', () => {
+  const info = { ...INFO, questions: [wordQ(1, ['করুন', 'করেন', 'করো', 'করিস'], 'কোনটি অনুজ্ঞা?')] };
+  const ask = (text) => partsWith((p) => (p.questions = [{ ask: text, working: [], reveal: 'সঠিক উত্তর ক, করুন।' }]));
+  assert.deepEqual(answerProblems(scriptOf(ask(`কোনটি অনুজ্ঞা? ${PAUSE}।`), info), info), []);
+  const read = `কোনটি অনুজ্ঞা? ক, করুন; খ, করেন; গ, করো; ঘ, করিস। ${PAUSE}।`;
+  assert.deepEqual(answerProblems(scriptOf(ask(read), info), info), []);
+  assert.equal(answerProblems(scriptOf(ask(`কোনটি অনুজ্ঞা? করুন। ${PAUSE}।`), info), info).length, 1);
+});
+
+test('answer check: a wrong letter named after "উত্তর" in the question narration is a problem too', () => {
+  const parts = partsWith((p) => (p.questions[0].ask = 'শতকরা ক্ষতি কত? উত্তর হলো গ। ভিডিও থামিয়ে চেষ্টা করুন।'));
+  const problems = answerProblems(scriptOf(parts), INFO);
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /Question 1/);
+});
+
+test('answer check: the kicker shows before the pause; TeX on the hook headline or thumbnail is a problem', () => {
+  const kicker = { ...scriptOf(GOOD), kicker: 'ক্ষতি ৫০%' };
+  assert.equal(answerProblems(kicker, INFO).length, 1);
+  const safe = forceSafe(kicker, INFO);
+  assert.equal(safe.kicker, '');
+  assert.deepEqual(answerProblems(safe, INFO), []);
+  const tex = scriptOf(
+    partsWith((p) => {
+      p.hook.headline = '$\\dfrac{1}{2}$ কত?';
+      p.thumbnail = { style: 'bigText', text: '$x^2$ এর মান', highlight: 'মান', color: 'red' };
+    })
+  );
+  assert.equal(answerProblems(tex, INFO).length, 2);
+  const fixed = forceSafe(tex, INFO);
+  assert.deepEqual(answerProblems(fixed, INFO), []);
+  assert.equal(fixed.scenes[0].headline, 'আপনি পারবেন?');
+  assert.equal(fixed.thumbnail.text, 'আপনি পারবেন?');
+});
+
+test('writeQuestionScript: the retry and the fixed texts go to the log it is given', async () => {
+  const leaky = partsWith((p) => (p.questions[0].reveal = 'সঠিক উত্তর গ'));
+  const lines = [];
+  await writeQuestionScript(INFO, { log: async (l) => lines.push(l), askJson: fakeClaude(leaky, leaky).askJson });
+  assert.equal(lines.length, 2);
+  assert.match(lines[0], /^Question script: asking Claude again \(Question 1: the reveal must name the right letter ঘ/);
+  assert.match(lines[1], /^Question script: fixed texts replace what still fails/);
 });

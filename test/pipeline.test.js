@@ -396,10 +396,17 @@ test('question mode: a video with questions is scripted by writeQuestionScript, 
     const renders = [];
     const deps = fakeDeps(calls, { outDir, onRender: (args) => renders.push(args) });
     deps.resolveStyle = (style, opts) => resolveStyle(style, opts);
+    // The script writer's notes (a retry, fixed texts) land in the video's log.
+    const write = deps.writeQuestionScript;
+    deps.writeQuestionScript = async (info, opts) => {
+      await opts.log('Question script: asking Claude again (Question 1: the reveal must name the right letter ঘ)');
+      return write(info, opts);
+    };
     const topicInfo = { topic: 't', questions: [{ id: 'mathsuggestion.com/44th-bcs#1' }], sourceUrl: 'https://mathsuggestion.com/44th-bcs', siteName: 'mathsuggestion.com' };
     const v = await store.createVideo(r, {});
     await store.updateVideo(r, v.id, { done: { topic: true }, topic: 't', topicInfo });
     const done = await runVideoJob(v.id, { redis: r, deps, outDir });
+    assert.ok(done.log.some((l) => l.endsWith('Question script: asking Claude again (Question 1: the reveal must name the right letter ঘ)')), done.log.join('\n'));
     assert.deepEqual(calls.filter((c) => c === 'script' || c.startsWith('questionScript')), ['questionScript:1']);
     assert.deepEqual(done.script.scenes.map((s) => s.visual.type), ['icon', 'question', 'reveal', 'icon']);
     assert.ok(Array.isArray(done.script.scenes[1].visual.parts), 'checked as an exam card, not turned into an icon');
