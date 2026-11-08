@@ -67,6 +67,8 @@ services:
       <<: *env
       # Keeps one render's Chrome inside this many threads so the dashboard stays responsive.
       REMOTION_CONCURRENCY: ${REMOTION_CONCURRENCY:-3}
+      # Footage frame cache (MB): Remotion's default is half the machine's free memory, which blows the limit below.
+      REMOTION_VIDEO_CACHE_MB: ${REMOTION_VIDEO_CACHE_MB:-512}
     volumes:
       - ./output:/app/output
       - ./footage:/app/footage
@@ -78,7 +80,7 @@ services:
       resources:
         limits:
           cpus: "4"
-          memory: 5G
+          memory: 6G # Chrome (3 tabs) + ffmpeg + the compositor's 512 MB cache stay around 3.5 GB; the machine has 12 GB and no swap
     depends_on:
       - redis
       - web

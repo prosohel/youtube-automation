@@ -10,6 +10,7 @@ const { enqueueVideo, addUnique } = require('./queues');
 const { validateRule, nextRuns, syncSchedulers } = require('./scheduler');
 const { computeOverview, workerState, slim } = require('./overview');
 const { pendingRecord } = require('./publishFlow');
+const redo = require('./redo');
 const youtubeAuth = require('./youtubeAuth');
 const tiktokAuth = require('./tiktokAuth');
 const { createAuth, MIN_LENGTH } = require('./auth');
@@ -161,6 +162,25 @@ function createApp({ redis, queues, password = '', secureCookies = false }) {
     const v = await getVideoOr404(req.params.id);
     if (v.status === 'working') throw new HttpError(409, 'This video is being made right now');
     const next = await store.updateVideo(redis, v.id, { status: 'queued', error: null });
+    await enqueueVideo(queues, v.id);
+    res.json(next);
+  });
+
+  // Redo one part of a video: script (then voice and video), voice (then video), video, or the thumbnail only.
+  app.post('/api/videos/:id/redo', async (req, res) => {
+    const v = await getVideoOr404(req.params.id);
+    const { stage, style } = req.body || {};
+    if (v.status === 'working') throw new HttpError(409, 'This video is being made right now');
+    const posted = redo.postedOn(v);
+    if (posted) throw new HttpError(409, `Already posted (or posting) on ${posted}: the copy there would not change. Make a new video instead.`);
+    let patch;
+    try {
+      patch = redo.redoPatch(v, stage, { style });
+    } catch (e) {
+      throw bad(e.message);
+    }
+    const next = await store.updateVideo(redis, v.id, (o) => ({ ...o, ...patch, status: 'queued', stage: 'queued', error: null }));
+    await store.appendLog(redis, v.id, `Redo requested: ${stage}${stage === 'thumbnail' ? ` (${patch.redo.thumbnail.style})` : ''}`);
     await enqueueVideo(queues, v.id);
     res.json(next);
   });

@@ -31,7 +31,8 @@ async function renderAny({ scenes, workDir, slug, title, theme, direction, thumb
     throw refuse('Remotion is switched off (USE_REMOTION=false)');
   }
   const { makeVideo } = require('./video');
-  return makeVideo(scenes, workDir, slug);
+  // plain: the dashboard shows that this video has captions only (no graphics) and offers a redo.
+  return { ...(await makeVideo(scenes, workDir, slug)), plain: true };
 }
 
 module.exports = { renderAny };

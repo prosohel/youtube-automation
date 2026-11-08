@@ -72,7 +72,13 @@ async function makeVideo(scenes, workDir, slug) {
   fs.writeFileSync(srtFile, buildSrt(scenes));
   const finalFile = path.join(cfg.OUT_DIR, `${slug}.mp4`);
   const fontSize = cfg.format === 'shorts' ? 14 : 12;
-  const style = `FontName=${cfg.captionFont},FontSize=${fontSize},Bold=1,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Alignment=2,MarginV=${cfg.format === 'shorts' ? 220 : 50}`;
+  // The default DejaVu Sans has no Bengali glyphs: Bangla captions come out as broken boxes. Noto Sans Bengali is in
+  // the Docker image (fonts-noto-core); on Windows Nirmala UI ships with the OS.
+  let font = cfg.captionFont;
+  if (/^dejavu/i.test(font || '') && /[\u0980-\u09FF]/.test(scenes.map((s) => s.narration || '').join(''))) {
+    font = process.platform === 'win32' ? 'Nirmala UI' : 'Noto Sans Bengali';
+  }
+  const style = `FontName=${font},FontSize=${fontSize},Bold=1,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Alignment=2,MarginV=${cfg.format === 'shorts' ? 220 : 50}`;
   try {
     await run('ffmpeg', ['-y', '-i', joined, '-vf', `subtitles=captions.srt:force_style='${style}'`,
       '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-c:a', 'copy', '-movflags', '+faststart', finalFile],

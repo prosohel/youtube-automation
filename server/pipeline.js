@@ -27,6 +27,8 @@ function realDeps() {
     synthScene: (...a) => require('../src/voice').synthScene(...a),
     audioDuration: (file) => require('../src/voice').audioDuration(file),
     renderAny: (args) => require('../src/renderAny').renderAny(args),
+    // "Redo thumbnail": only the still, for a video that is already rendered.
+    renderThumbnail: (args) => require('../src/render').renderThumbnail(args),
   };
 }
 
@@ -172,10 +174,36 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
       files: { video: res.videoFile, thumb: res.thumbFile || null, ...(r2 ? { r2 } : {}) },
       coverMs: res.coverMs ?? null, // where the thumbnail shows in the video: TikTok's cover frame
       review: res.review || null, // the critic's scores (src/critique.js)
+      renderer: res.plain ? 'plain' : 'remotion', // plain = the ffmpeg fallback: captions only, no graphics
+      redo: null,
       description: credits.length ? `${v.description}\n\n${credits.join('\n')}` : v.description,
     });
     if (res.review) await say(`Critique: min ${res.review.min}/10, avg ${res.review.avg}${res.review.rerendered ? ` - re-rendered with ${res.review.applied.join(', ')}` : ''}: ${res.review.verdict}`);
+    if (res.plain) await say('Note: plain render (captions only, no graphics) because the animated render failed; see the lines above. Redo > Video tries again.');
     await say(`Video ready: ${path.basename(res.videoFile)}`);
+  }
+
+  // "Redo thumbnail" (server/redo.js): a new design for the still only; the video and its opening stay.
+  if (v.redo && v.redo.thumbnail) {
+    const style = v.redo.thumbnail.style;
+    await startStage('thumbnail', `Making a new thumbnail (${style})...`);
+    const thumbnail = resolveThumbnail(v.script, { ...cfg, thumbStyle: style });
+    const res = await deps.renderThumbnail({ scenes: v.scenes, workDir, slug: v.slug, title: v.title, theme: v.theme, direction: v.direction, thumbnail, sourceLabel: sourceLabel(v.topicInfo && v.topicInfo.siteName), extraLabel: extraLabel(cfg.extraLink) });
+    let r2 = null;
+    if (storage.enabled()) {
+      try {
+        r2 = await storage.uploadVideoFiles(v, { thumb: res.thumbFile });
+        await say(`Stored in R2: ${r2.thumb}`);
+      } catch (e) {
+        await say(`R2 upload failed (${e.message}); keeping the local file`);
+      }
+    }
+    v = await save((o) => {
+      const files = { ...(o.files || {}), thumb: res.thumbFile };
+      if (r2 && r2.thumb) files.r2 = { ...(files.r2 || {}), thumb: r2.thumb };
+      return { ...o, thumbnail, files, redo: null };
+    });
+    await say(`Thumbnail ready: ${path.basename(res.thumbFile)} (${thumbnail.style})`);
   }
 
   return save({ status: 'ready', stage: 'ready', error: null });

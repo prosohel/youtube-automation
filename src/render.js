@@ -210,10 +210,94 @@ const subscribeLabel = () => (/bangla|bengali|bn\b/i.test(cfg.language) ? 'рж╕рж
  * Render the animated Remotion composition.
  * scenes: output of makeVoice. Returns { videoFile, thumbFile, credits[], coverMs }.
  */
-async function renderWithRemotion({ scenes, workDir, slug, title, theme, direction, thumbnail, sourceLabel = null, extraLabel = null }) {
+async function renderWithRemotion(args) {
   // Required lazily so the ffmpeg-only fallback works even if Remotion is not installed.
+  const { renderMedia, selectComposition } = require('@remotion/renderer');
+  const { fps } = cfg;
+  const { serveUrl, inputProps, credits, thumb, theme } = await prepareRender(args);
+  const composition = await selectComposition({ serveUrl, id: 'Main', inputProps });
+  const videoFile = path.join(cfg.OUT_DIR, `${args.slug}.mp4`);
+
+  let lastPct = -10;
+  log(`Remotion: rendering ${composition.durationInFrames} frames (${(composition.durationInFrames / fps).toFixed(1)}s)...`);
+  await renderMedia({
+    composition,
+    serveUrl,
+    chromiumOptions: { gl: cfg.remotionGl }, // WebGL for the 3D hero objects
+    ...(cfg.remotionConcurrency ? { concurrency: cfg.remotionConcurrency } : {}),
+    offthreadVideoCacheSizeInBytes: cfg.remotionVideoCacheMb * 1024 * 1024,
+    codec: 'h264',
+    crf: 18,
+    outputLocation: videoFile,
+    inputProps,
+    onProgress: ({ progress }) => {
+      const pct = Math.floor(progress * 100);
+      if (pct >= lastPct + 10) {
+        lastPct = pct;
+        log(`Remotion: ${pct}%`);
+      }
+    },
+  });
+
+  const thumbFile = path.join(cfg.OUT_DIR, `${args.slug}.jpg`);
+  try {
+    await renderThumbStill({ serveUrl, composition, inputProps, thumb, thumbFile });
+  } catch (e) {
+    log(`Thumbnail render failed: ${e.message}`);
+  }
+
+  return {
+    videoFile,
+    thumbFile: fs.existsSync(thumbFile) ? thumbFile : null,
+    credits,
+    coverMs: thumb && thumb.intro && theme.thumbIntro !== false ? COVER_MS : null, // the video opens with the thumbnail: TikTok's cover frame
+  };
+}
+
+/**
+ * Only the thumbnail of a video that is already rendered ("redo thumbnail" in the dashboard): the same
+ * preparation, then one still. No music or sound effects are prepared. Returns { thumbFile }.
+ */
+async function renderThumbnail(args) {
+  const { selectComposition } = require('@remotion/renderer');
+  const { serveUrl, inputProps, thumb } = await prepareRender(args, { thumbOnly: true });
+  const composition = await selectComposition({ serveUrl, id: 'Main', inputProps });
+  const thumbFile = path.join(cfg.OUT_DIR, `${args.slug}.jpg`);
+  fs.rmSync(thumbFile, { force: true });
+  await renderThumbStill({ serveUrl, composition, inputProps, thumb, thumbFile });
+  if (!fs.existsSync(thumbFile)) throw new Error('The thumbnail did not render');
+  return { thumbFile };
+}
+
+/** The designed thumbnail (its own composition), or for a video without one the title card once its words have landed. */
+async function renderThumbStill({ serveUrl, composition, inputProps, thumb, thumbFile }) {
+  const { renderStill, selectComposition } = require('@remotion/renderer');
+  const { fps } = cfg;
+  if (thumb) {
+    const still = await selectComposition({ serveUrl, id: THUMB_COMPOSITION, inputProps });
+    await renderStill({ composition: still, serveUrl, output: thumbFile, frame: 0, imageFormat: 'jpeg', jpegQuality: 90, inputProps });
+    await fitThumbLimit(thumbFile);
+  } else {
+    await renderStill({
+      composition,
+      serveUrl,
+      output: thumbFile,
+      frame: Math.round(INTRO_SECONDS * fps * 0.85),
+      imageFormat: 'jpeg',
+      jpegQuality: 92,
+      inputProps,
+    });
+  }
+}
+
+/**
+ * Everything a render needs before Chrome starts: scene clips, emoji, thumbnail photos, sound, music, the
+ * bundled composition and its input props. opts.thumbOnly skips sound and music (only the still is wanted).
+ * Returns { serveUrl, inputProps, credits, thumb, theme }.
+ */
+async function prepareRender({ scenes, workDir, title, theme, direction, thumbnail, sourceLabel = null, extraLabel = null }, { thumbOnly = false } = {}) {
   const { bundle } = require('@remotion/bundler');
-  const { renderMedia, renderStill, selectComposition, ensureBrowser } = require('@remotion/renderer');
+  const { ensureBrowser } = require('@remotion/renderer');
 
   const { fps } = cfg;
   const publicDir = path.join(workDir, 'public');
@@ -241,13 +325,14 @@ async function renderWithRemotion({ scenes, workDir, slug, title, theme, directi
   }
 
   const thumb = await prepThumbnail(thumbnail, sceneProps, publicDir);
-  const sfx = await prepSfx(publicDir);
-  const music = plan ? prepSynthMusic(plan, grid, sceneProps, introSeconds, outroSeconds, fps, publicDir) : cfg.music === 'folder' ? prepMusic(publicDir) : null;
+  const sfx = thumbOnly ? false : await prepSfx(publicDir);
+  const music = thumbOnly ? null : plan ? prepSynthMusic(plan, grid, sceneProps, introSeconds, outroSeconds, fps, publicDir) : cfg.music === 'folder' ? prepMusic(publicDir) : null;
   const credits = [];
   if (sceneProps.some((s) => s.emoji)) {
     credits.push('Animated emoji: Google Noto Emoji Animation, CC BY 4.0 (https://googlefonts.github.io/noto-emoji-animation/)');
   }
 
+  theme = theme || require('./style').resolveStyle({}).theme;
   const inputProps = {
     title,
     kicker: (direction && direction.kicker) || null, // never the NICHE sentence: that is only for picking topics
@@ -266,7 +351,7 @@ async function renderWithRemotion({ scenes, workDir, slug, title, theme, directi
     scenes: sceneProps,
     sfx,
     music,
-    theme: theme || require('./style').resolveStyle({}).theme,
+    theme,
     thumb, // the designed thumbnail; with thumb.intro it also opens the video
   };
 
@@ -279,58 +364,7 @@ async function renderWithRemotion({ scenes, workDir, slug, title, theme, directi
     publicDir,
   });
 
-  const composition = await selectComposition({ serveUrl, id: 'Main', inputProps });
-  const videoFile = path.join(cfg.OUT_DIR, `${slug}.mp4`);
-
-  let lastPct = -10;
-  log(`Remotion: rendering ${composition.durationInFrames} frames (${(composition.durationInFrames / fps).toFixed(1)}s)...`);
-  await renderMedia({
-    composition,
-    serveUrl,
-    chromiumOptions: { gl: cfg.remotionGl }, // WebGL for the 3D hero objects
-    ...(cfg.remotionConcurrency ? { concurrency: cfg.remotionConcurrency } : {}),
-    codec: 'h264',
-    crf: 18,
-    outputLocation: videoFile,
-    inputProps,
-    onProgress: ({ progress }) => {
-      const pct = Math.floor(progress * 100);
-      if (pct >= lastPct + 10) {
-        lastPct = pct;
-        log(`Remotion: ${pct}%`);
-      }
-    },
-  });
-
-  // Thumbnail: the designed one (its own composition), or for a video without one the title card once its
-  // words have all landed.
-  const thumbFile = path.join(cfg.OUT_DIR, `${slug}.jpg`);
-  try {
-    if (thumb) {
-      const still = await selectComposition({ serveUrl, id: THUMB_COMPOSITION, inputProps });
-      await renderStill({ composition: still, serveUrl, output: thumbFile, frame: 0, imageFormat: 'jpeg', jpegQuality: 90, inputProps });
-      await fitThumbLimit(thumbFile);
-    } else {
-      await renderStill({
-        composition,
-        serveUrl,
-        output: thumbFile,
-        frame: Math.round(INTRO_SECONDS * fps * 0.85),
-        imageFormat: 'jpeg',
-        jpegQuality: 92,
-        inputProps,
-      });
-    }
-  } catch (e) {
-    log(`Thumbnail render failed: ${e.message}`);
-  }
-
-  return {
-    videoFile,
-    thumbFile: fs.existsSync(thumbFile) ? thumbFile : null,
-    credits,
-    coverMs: thumb && thumb.intro && theme.thumbIntro !== false ? COVER_MS : null, // the video opens with the thumbnail: TikTok's cover frame
-  };
+  return { serveUrl, inputProps, credits, thumb, theme };
 }
 
-module.exports = { renderWithRemotion, brandLabel, sceneFrames, wantsFootage, prepThumbnail, cachedEmojiPng, COVER_MS, THUMB_COMPOSITION };
+module.exports = { renderWithRemotion, renderThumbnail, brandLabel, sceneFrames, wantsFootage, prepThumbnail, cachedEmojiPng, COVER_MS, THUMB_COMPOSITION };

@@ -79,6 +79,7 @@ test('a video without exam scenes still falls back to the plain render', async (
   await withStubs({ remotion: async () => { throw new Error('chrome crashed'); } }, async (renderAny, calls) => {
     const res = await renderAny(args(icons));
     assert.equal(res.videoFile, 'plain.mp4');
+    assert.equal(res.plain, true, 'the pipeline records that the plain renderer was used');
     assert.deepEqual(calls.map((c) => c[0]), ['remotion', 'ffmpeg']);
   });
   await withStubs({ remotion: async () => ({}), useRemotion: false }, async (renderAny, calls) => {

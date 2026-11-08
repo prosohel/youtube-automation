@@ -75,6 +75,13 @@ function fakeDeps(calls, opts = {}) {
       fs.writeFileSync(mp4, 'mp4');
       return { videoFile: mp4, thumbFile: null, credits: ['Emoji: CC BY'], ...(opts.renderResult || {}) };
     },
+    renderThumbnail: async (args) => {
+      const jpg = path.join(opts.outDir, `${args.slug}.jpg`);
+      calls.push(`thumb:${args.thumbnail ? args.thumbnail.style : 'none'}`);
+      await wait();
+      fs.writeFileSync(jpg, 'jpg');
+      return { thumbFile: jpg };
+    },
   };
 }
 
