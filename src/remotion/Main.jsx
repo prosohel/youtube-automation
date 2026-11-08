@@ -408,30 +408,34 @@ const cueFrames = (scene, start, at) => {
 };
 
 /** Sound effects timed to the animation (only when the renderer cached the files). */
-const SceneSfx = ({ scene, start, index }) => {
+/** Nearest half-beat of the music grid (sound effects sit on the grid like the kit's hits); no grid: unchanged. */
+const onGrid = (grid) => (at) => (grid ? Math.round(Math.round(at / grid.half) * grid.half) : Math.round(at));
+
+const SceneSfx = ({ scene, start, index, grid }) => {
+  const q = onGrid(grid);
   if (Array.isArray(scene.sfx)) {
     // Claude's cues for this scene ([] = a deliberately quiet scene).
     return (
       <>
         {scene.sfx.flatMap((c, n) =>
-          cueFrames(scene, start, c.at).map((at, k) => <Sfx key={`${n}-${k}`} name={c.sound} at={at} volume={SFX_VOLUME[c.sound] ?? 0.35} />)
+          cueFrames(scene, start, c.at).map((at, k) => <Sfx key={`${n}-${k}`} name={c.sound} at={q(at)} volume={SFX_VOLUME[c.sound] ?? 0.35} />)
         )}
       </>
     );
   }
   const v = scene.visual || {};
-  const out = [<Sfx key="w" name={index % 2 ? 'whip' : 'whoosh'} at={start} volume={0.35} />];
+  const out = [<Sfx key="w" name={index % 2 ? 'whip' : 'whoosh'} at={q(start)} volume={0.35} />];
   if (!scene.bg && v.type === 'list') {
-    (v.items || []).slice(0, 4).forEach((_, i) => out.push(<Sfx key={`c${i}`} name="mouse-click" at={start + VISUAL_START + i * 7} volume={0.45} />));
+    (v.items || []).slice(0, 4).forEach((_, i) => out.push(<Sfx key={`c${i}`} name="mouse-click" at={q(start + VISUAL_START + i * 7)} volume={0.45} />));
   }
-  if (!scene.bg && v.type === 'stat') out.push(<Sfx key="d" name="ding" at={start + VISUAL_START + 38} volume={0.3} />);
-  if (!scene.bg && v.type === 'compare') out.push(<Sfx key="s" name="switch" at={start + VISUAL_START + 10} volume={0.4} />);
-  if (scene.emoji) out.push(<Sfx key="e" name="switch" at={start + VISUAL_START + 10} volume={0.25} />);
+  if (!scene.bg && v.type === 'stat') out.push(<Sfx key="d" name="ding" at={q(start + VISUAL_START + 38)} volume={0.3} />);
+  if (!scene.bg && v.type === 'compare') out.push(<Sfx key="s" name="switch" at={q(start + VISUAL_START + 10)} volume={0.4} />);
+  if (scene.emoji) out.push(<Sfx key="e" name="switch" at={q(start + VISUAL_START + 10)} volume={0.25} />);
   return <>{out}</>;
 };
 
 export const Main = (props) => {
-  const { title, kicker, brandLabel, sourceLabel, extraLabel, subscribeText, scenes, isShort, sfx, music, thumb } = props;
+  const { title, kicker, brandLabel, sourceLabel, extraLabel, subscribeText, scenes, isShort, sfx, music, thumb, beat, musicVolume = 0.12 } = props;
   // The video opens with its thumbnail (TikTok's cover frame) unless it was switched off for this brand.
   setTheme(props.theme);
   const T = theme();
@@ -482,12 +486,19 @@ export const Main = (props) => {
         ) : null
       )}
 
-      {/* Background music, quiet under the voice, fading in and out */}
+      {/* Background music: fuller on the title and the outro, ducked under the voice, fading out at the end */}
       {music ? (
         <Audio
           src={staticFile(music)}
           loop
-          volume={(f) => interpolate(f, [0, 20, t.total - 45, t.total - 1], [0, 0.1, 0.1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' })}
+          volume={(f) =>
+            interpolate(
+              f,
+              [0, 12, t.introFrames, t.introFrames + 20, t.outroStart - 10, t.outroStart + 6, t.total - 40, t.total - 1],
+              [0, musicVolume * 1.8, musicVolume * 1.8, musicVolume, musicVolume, musicVolume * 1.8, musicVolume * 1.8, 0],
+              { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+            )
+          }
         />
       ) : null}
 
@@ -496,7 +507,7 @@ export const Main = (props) => {
         <>
           <Sfx name="whoosh" at={4} volume={0.35} />
           {scenes.map((s, i) => (
-            <SceneSfx key={`s${i}`} scene={s} start={t.items[i].start} index={i} />
+            <SceneSfx key={`s${i}`} scene={s} start={t.items[i].start} index={i} grid={beat} />
           ))}
           <Sfx name="whoosh" at={t.outroStart} volume={0.35} />
           <Sfx name="ding" at={t.outroStart + OVERLAP + 4} volume={0.35} />

@@ -32,6 +32,10 @@ const cfg = (module.exports = {
   theme: (process.env.THEME || '').toLowerCase(),
   // Sound effects on transitions/cards (whoosh, click, ding). SFX=false to turn off.
   sfx: (process.env.SFX || 'true').toLowerCase() !== 'false',
+  // Music: 'synth' = an original track synthesized per video, cuts and SFX snapped to its beat (default);
+  // 'folder' = a random file from ./music; 'none'
+  music: (process.env.MUSIC || 'synth').toLowerCase(),
+  musicVolume: Number(process.env.MUSIC_VOLUME || 0.12),
   // Claude picks each scene's transition / sound cues / camera move (false = the theme's fixed behaviour)
   directTransitions: (process.env.DIRECT_TRANSITIONS || 'true').toLowerCase() !== 'false',
   directSfx: (process.env.DIRECT_SFX || 'true').toLowerCase() !== 'false',
