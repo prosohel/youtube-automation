@@ -9,7 +9,9 @@ import { EXAM_FULL_CARD, EXAM_RENDERED, ExamVisual } from './exam';
 import { STORY_RENDERED, StoryVisual } from './Cast';
 import { ReelVisual } from './Reel';
 
-export const VISUAL_START = OVERLAP + 2; // visuals begin as the scene transition finishes
+// Visuals start while the transition is still revealing the scene, so no frame is ever a bare background
+// (the kit's rule: the incoming scene takes over at once; nothing holds empty).
+export const VISUAL_START = 6;
 const START = VISUAL_START;
 
 /**

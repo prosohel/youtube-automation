@@ -47,6 +47,8 @@ const BlurWhileMoving = ({ moving, children }) =>
     <AbsoluteFill>{children}</AbsoluteFill>
   );
 
+const clamp01 = (v) => Math.min(1, Math.max(0, v));
+
 const SceneBadge = ({ index, total, accent, frames, isShort }) => {
   if (theme().badge === false) return null; // story theme: nothing in the corners
   const f = useCurrentFrame();
@@ -157,7 +159,7 @@ const Scene = ({ scene, index, total, isShort, kicker }) => {
             )}
             {/* A question, solution or reveal card is the content itself: no headline over it. */}
             {scene.headline && scene.frames > 60 && !EXAM_FULL_CARD.includes(scene.visual?.type) && !STORY_RENDERED.includes(scene.visual?.type) ? (
-              <HeadlineCard text={scene.headline} accent={accent} frames={scene.frames} isShort={isShort} kicker={kicker} seed={index} />
+              <HeadlineCard text={scene.headline} accent={accent} frames={scene.frames} isShort={isShort} kicker={kicker} seed={index} onFootage={Boolean(scene.bg) && !vox} />
             ) : null}
           </AbsoluteFill>
         </BlurWhileMoving>
@@ -284,19 +286,39 @@ const Intro = ({ title, kicker, brandLabel, isShort }) => {
   );
 };
 
-const Outro = ({ subscribeText, brandLabel, sourceLabel, extraLabel, isShort }) => {
+const Outro = ({ subscribeText, brandLabel, sourceLabel, extraLabel, title, isShort }) => {
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
   const T = theme();
-  const btn = pop(f, fps, OVERLAP + 2, 10);
-  const text = pop(f, fps, OVERLAP + 10);
-  const ringP = ((f - OVERLAP) % 40) / 40;
-  const wiggle = Math.sin(f / 2.2) * 18 * Math.exp(-Math.max(0, f - OVERLAP - 14) / 22);
+  // Everything lands within the first half second: an end card is never an empty background.
+  const btn = pop(f, fps, 2, 10);
+  const text = pop(f, fps, 8);
+  const titleIn = clamp01(pop(f, fps, 0, 16));
+  const ringP = (f % 40) / 40;
+  const wiggle = Math.sin(f / 2.2) * 18 * Math.exp(-Math.max(0, f - 12) / 22);
+  const push = interpolate(f, [0, 90], [1, 1.05], { extrapolateRight: 'clamp' });
   return (
     <AbsoluteFill>
       <MotionBg index={2} accent={accentFor(2)} />
       <Particles count={26} seed={11} />
-      <AbsoluteFill style={{ alignItems: 'center', justifyContent: 'center' }}>
+      <AbsoluteFill style={{ alignItems: 'center', justifyContent: 'center', transform: `scale(${push})` }}>
+        {title ? (
+          <div
+            style={{
+              marginBottom: isShort ? 60 : 40,
+              maxWidth: '84%',
+              textAlign: 'center',
+              fontFamily: headFont(),
+              fontSize: (isShort ? 74 : 52) * (title.length > 40 ? 0.8 : 1),
+              lineHeight: 1.3,
+              color: T.text,
+              opacity: titleIn,
+              transform: `translateY(${(1 - titleIn) * 30}px)`,
+            }}
+          >
+            {title}
+          </div>
+        ) : null}
         {/* Button sizes itself to the text (fonts differ in width per theme) and never wraps. */}
         <div style={{ position: 'relative', display: 'inline-flex', height: isShort ? 200 : 160, whiteSpace: 'nowrap', maxWidth: '94%' }}>
           <div
@@ -473,7 +495,7 @@ export const Main = (props) => {
         ))}
         <TransitionSeries.Transition presentation={makePresentation(cutOr(trans[scenes.length % trans.length]), width, height)} timing={timingFor(cutOr(trans[scenes.length % trans.length]))} />
         <TransitionSeries.Sequence durationInFrames={t.outroFrames}>
-          <Outro subscribeText={subscribeText} brandLabel={brandLabel} sourceLabel={sourceLabel} extraLabel={extraLabel} isShort={isShort} />
+          <Outro subscribeText={subscribeText} brandLabel={brandLabel} sourceLabel={sourceLabel} extraLabel={extraLabel} title={title} isShort={isShort} />
         </TransitionSeries.Sequence>
       </TransitionSeries>
 
