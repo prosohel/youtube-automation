@@ -3,6 +3,7 @@ import { interpolate, random, useCurrentFrame, useVideoConfig } from 'remotion';
 import { GRAIN, bodyFont, cardStyle, headFont, pop, theme, tornClip } from './shared';
 import { OVERLAP, wordStarts } from './timeline';
 import { VISUAL_START } from './Visuals';
+import { ReelCaptions, ReelEyebrow } from './Reel';
 import { Highlighter, MarkerUnderline, Tape, draw } from './Vox';
 
 // The word timing lives in timeline.js (pure, so Node tests and the exam scenes share it without an import cycle).
@@ -28,6 +29,7 @@ export const HeadlineCard = ({ text, accent, frames, isShort, kicker, seed = 0 }
   const { fps } = useVideoConfig();
   const T = theme();
   const style = T.headline;
+  if (style === 'eyebrow') return <ReelEyebrow text={text} accent={accent} isShort={isShort} start={VISUAL_START} />;
   const words = String(text).split(/\s+/).filter(Boolean);
   const out = interpolate(f, [frames - 12, frames], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
   const fontSize = isShort ? 70 : 54;
@@ -188,6 +190,7 @@ export const Captions = ({ narration, frames, accent, isShort, onFootage = false
   const T = theme();
   const style = T.caption;
   if (style === 'none') return null; // story theme: the scene's own line is the text
+  if (style === 'reel') return <ReelCaptions narration={narration} frames={frames} accent={accent} isShort={isShort} onFootage={onFootage} />;
   const words = narration.split(/\s+/).filter(Boolean);
   if (!words.length) return null;
   const perChunk = isShort ? 3 : 6;

@@ -721,5 +721,97 @@
       "dark": "#1c1612"
     },
     "thumbIntro": false
+  },
+  "reel-light": {
+    "label": "Reel: Light",
+    "mood": "product and tool explainers, app walkthroughs, clean modern tips; launch-video feel",
+    "family": "reel",
+    "bgStyles": [
+      "plain"
+    ],
+    "card": "flat",
+    "radius": 18,
+    "caption": "reel",
+    "headline": "eyebrow",
+    "badge": false,
+    "thumbIntro": false,
+    "transitions": [
+      "cut"
+    ],
+    "motion": "snappy",
+    "particles": false,
+    "leaks": false,
+    "leakHue": 0,
+    "glitch": false,
+    "overlays": [],
+    "headingFont": "AnekBangla",
+    "headingWeight": "700",
+    "bodyFont": "AnekBangla",
+    "bodyWeight": "500",
+    "dark": false,
+    "bg": [
+      "#f3f2ee",
+      "#f3f2ee"
+    ],
+    "surface": "#ffffff",
+    "text": "#111111",
+    "muted": "rgba(17,17,17,0.55)",
+    "onAccent": "#ffffff",
+    "accents": [
+      "#ff5c1f",
+      "#ff5c1f",
+      "#ff5c1f",
+      "#ff5c1f"
+    ],
+    "track": "rgba(17,17,17,0.1)",
+    "captionBg": "transparent",
+    "captionText": "#111111",
+    "shadow": "0 14px 40px rgba(20,20,20,0.10)"
+  },
+  "reel-dark": {
+    "label": "Reel: Dark",
+    "mood": "AI tools, software, launches, serious tech; cinematic launch-video feel",
+    "family": "reel",
+    "bgStyles": [
+      "plain"
+    ],
+    "card": "flat",
+    "radius": 18,
+    "caption": "reel",
+    "headline": "eyebrow",
+    "badge": false,
+    "thumbIntro": false,
+    "transitions": [
+      "cut"
+    ],
+    "motion": "snappy",
+    "particles": false,
+    "leaks": false,
+    "leakHue": 0,
+    "glitch": false,
+    "overlays": [],
+    "headingFont": "AnekBangla",
+    "headingWeight": "700",
+    "bodyFont": "AnekBangla",
+    "bodyWeight": "500",
+    "dark": true,
+    "bg": [
+      "#0a0a0a",
+      "#0a0a0a"
+    ],
+    "surface": "#161616",
+    "text": "#fafafa",
+    "muted": "rgba(250,250,250,0.55)",
+    "onAccent": "#0a0a0a",
+    "accents": [
+      "#4f7bff",
+      "#4f7bff",
+      "#4f7bff",
+      "#4f7bff"
+    ],
+    "track": "rgba(250,250,250,0.12)",
+    "captionBg": "transparent",
+    "captionText": "#fafafa",
+    "shadow": "0 14px 40px rgba(0,0,0,0.5)"
   }
 }

@@ -163,11 +163,11 @@ ${story ? `- STORY MODE. This video is a short parable told in cartoon scenes, l
 - The narration tells the story in short spoken sentences; it may quote the character ("সে বলল, ..."). The lesson is stated once, plainly, in the last two scenes.
 ${storyPrompt(cfg.language)}
 ` : `- For each scene give a "visual", the animated graphic shown on screen. Vary the types across scenes:
-  - {"type":"icon","icon":"<name>"}: default. icon must be one of: \${ICON_NAMES}.
+  - {"type":"icon","icon":"<name>"}: default. icon must be one of: ${ICON_NAMES}.
   - {"type":"stat","value":"70%","label":"short caption"}: ONLY when that scene's narration itself states a number or percentage. Never invent figures.
   - {"type":"list","items":["...","...","..."]}: 2-4 short points (max 4 words each) the narration lists.
   - {"type":"compare","left":{"title":"...","points":["..."]},"right":{"title":"...","points":["..."]}}: when the scene contrasts two things (max 3 short points each).
-\${graphics ? \`\${graphics}\\n\` : ''}  All visual text must be in \${cfg.language}. The final call-to-action scene uses the icon "Bell".
+${graphics ? `${graphics}\n` : ''}  All visual text must be in ${cfg.language}. The final call-to-action scene uses the icon "Bell".
 `}${story ? '' : `- Optionally give an "emoji": an animated sticker that pops in to add emotion. Use it on about 60% of scenes (the hook, surprises, warnings, wins), never the same emoji on two scenes in a row. It must be exactly one of: ${EMOJI_NAMES}. Omit it when nothing fits.
 `}${cfg.visuals === 'mixed' && !story ? `- B-roll: stock video clips are mixed in with the animated graphics. Set "broll": true on about 40% of scenes: the ones about real-world things a camera can show (people, work, phones, cities, devices). Use "broll": false for scenes that rely on a ${cfg.directGraphics ? 'stat, list, comparison or data graphic (bigNumber, bars, line, donut, timeline)' : 'stat, list or comparison graphic'}, and for the first and last scene. Never put two B-roll scenes in a row. On B-roll scenes give 2-3 "keywords": concrete, visual, English stock-footage search terms (e.g. "person typing laptop", "city traffic aerial"); avoid abstract words. The "visual" is still required (it is the fallback if no clip is found).
 ` : cfg.visuals === 'footage' && !story ? '- For each scene set "broll": true and give 2-3 "keywords": concrete, visual, English stock-footage search terms (e.g. "person typing laptop"). Avoid abstract words.\n' : ''}${library.length ? `- Our own B-roll library (looks better than stock footage, so prefer it whenever it fits). One clip per line:

@@ -1,12 +1,13 @@
 import React from 'react';
 import { interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
 import { icons } from 'lucide-react';
-import { accentFor, bodyFont, cardStyle, headFont, isVox, parseStat, pop, theme } from './shared';
+import { accentFor, bodyFont, cardStyle, headFont, isReel, isVox, parseStat, pop, theme } from './shared';
 import { OVERLAP } from './timeline';
 import { VoxVisual } from './Vox';
 import { LibraryVisual, LIBRARY_RENDERED } from './library';
 import { EXAM_FULL_CARD, EXAM_RENDERED, ExamVisual } from './exam';
 import { STORY_RENDERED, StoryVisual } from './Cast';
+import { ReelVisual } from './Reel';
 
 export const VISUAL_START = OVERLAP + 2; // visuals begin as the scene transition finishes
 const START = VISUAL_START;
@@ -299,6 +300,7 @@ export const SceneVisual = ({ visual, accent, isShort, voiceFrames, frames, narr
       </Stage>
     );
   }
+  if (isReel()) return <ReelVisual visual={v} accent={accent} isShort={isShort} start={START} />; // positions itself
   if (isVox()) {
     return (
       <Stage isShort={isShort}>

@@ -18,10 +18,12 @@ import { iris } from '@remotion/transitions/iris';
 import { clockWipe } from '@remotion/transitions/clock-wipe';
 import { pushCut } from '@remotion/transitions/push-cut';
 import { fade } from '@remotion/transitions/fade';
+import { none } from '@remotion/transitions/none';
+import { ReelIntro } from './Reel';
 import { CameraMotionBlur } from '@remotion/motion-blur';
 import { Bell } from 'lucide-react';
 import { OVERLAP, buildTimeline } from './timeline';
-import { accentFor, bodyFont, cardStyle, energy, headFont, isVox, pop, setTheme, theme } from './shared';
+import { accentFor, bodyFont, cardStyle, energy, headFont, isReel, isVox, pop, setTheme, theme } from './shared';
 import { MarkerUnderline, Tape, draw } from './Vox';
 import { SceneVisual, VISUAL_START } from './Visuals';
 import { STORY_RENDERED } from './Cast';
@@ -37,7 +39,7 @@ import { ThumbCard } from './Thumbnail';
  * are actually flying in or out. The rest of the time the layer renders once (5x cheaper).
  */
 const BlurWhileMoving = ({ moving, children }) =>
-  moving && !isVox() ? ( // paper cutouts have no motion blur
+  moving && !isVox() && !isReel() ? ( // paper cutouts and reels have no motion blur
     <CameraMotionBlur shutterAngle={200} samples={5}>
       {children}
     </CameraMotionBlur>
@@ -95,7 +97,9 @@ const Scene = ({ scene, index, total, isShort, kicker }) => {
   // Camera: Claude's pick for this scene, or (none picked) a zoom punch + short decaying shake as the
   // scene lands, scaled by the video's energy. Vox keeps the camera locked whatever was picked.
   const vox = isVox();
-  const cam = vox ? null : scene.camera;
+  const reel = isReel();
+  // Reel: every held shot keeps moving with a micro push, never a shake.
+  const cam = vox ? null : reel ? 'push' : scene.camera;
   const e = vox ? 0 : cam === 'punch' ? Math.max(1, energy()) : energy();
   const punch = Math.min(1, pop(f, fps, OVERLAP, 12));
   const shakeT = f - OVERLAP;
@@ -132,7 +136,10 @@ const Scene = ({ scene, index, total, isShort, kicker }) => {
         ) : (
           <MotionBg index={index} accent={accent} />
         )}
-        {scene.bg && !vox ? (
+        {scene.bg && reel ? (
+          // Reel: footage sits behind a dark bottom scrim so the left-aligned type reads on anything.
+          <AbsoluteFill style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0.78) 70%, rgba(0,0,0,0.85) 100%)' }} />
+        ) : scene.bg && !vox ? (
           <AbsoluteFill style={{ background: 'linear-gradient(180deg, rgba(5,8,20,0.55) 0%, rgba(5,8,20,0.12) 38%, rgba(5,8,20,0.7) 100%)' }} />
         ) : null}
         <Particles count={isShort ? 14 : 18} seed={index + 7} />
@@ -154,7 +161,7 @@ const Scene = ({ scene, index, total, isShort, kicker }) => {
             ) : null}
           </AbsoluteFill>
         </BlurWhileMoving>
-        {scene.emoji ? <EmojiPop name={scene.emoji} frames={dur} delay={VISUAL_START + 10} isShort={isShort} /> : null}
+        {scene.emoji && !reel ? <EmojiPop name={scene.emoji} frames={dur} delay={VISUAL_START + 10} isShort={isShort} /> : null}
       </AbsoluteFill>
       <SceneBadge index={index} total={total} accent={accent} frames={scene.frames} isShort={isShort} />
       {/* Timed to the voice only, so the captions never stretch over a question's silent countdown. */}
@@ -372,6 +379,8 @@ const makePresentation = (name, width, height) => {
       return clockWipe({ width, height });
     case 'wipe':
       return wipe({ direction: 'from-top-left' });
+    case 'cut':
+      return none();
     case 'fade':
       return fade();
     case 'slideBottom':
@@ -385,6 +394,11 @@ const makePresentation = (name, width, height) => {
 };
 
 const timing = linearTiming({ durationInFrames: OVERLAP, easing: Easing.inOut(Easing.cubic) });
+// A hard cut still has to span OVERLAP frames (the timeline is built on it), so the incoming scene covers the outgoing one at once.
+const cutTiming = linearTiming({ durationInFrames: OVERLAP, easing: () => 1 });
+/** The reel family only ever cuts, whatever the direction picked. */
+const cutOr = (name) => (isReel() ? 'cut' : name);
+const timingFor = (name) => (name === 'cut' ? cutTiming : timing);
 
 const SFX_VOLUME = { whoosh: 0.35, whip: 0.35, ding: 0.3, 'mouse-click': 0.45, switch: 0.4 };
 
@@ -447,17 +461,17 @@ export const Main = (props) => {
     <AbsoluteFill style={{ background: T.bg[0] }}>
       <TransitionSeries>
         <TransitionSeries.Sequence durationInFrames={t.introFrames + OVERLAP}>
-          {thumbIntro ? <ThumbCard thumb={thumb} isShort={isShort} /> : <Intro title={title} kicker={kicker} brandLabel={brandLabel} isShort={isShort} />}
+          {thumbIntro ? <ThumbCard thumb={thumb} isShort={isShort} /> : isReel() ? <ReelIntro title={title} kicker={kicker} brandLabel={brandLabel} isShort={isShort} /> : <Intro title={title} kicker={kicker} brandLabel={brandLabel} isShort={isShort} />}
         </TransitionSeries.Sequence>
         {scenes.map((s, i) => (
           <React.Fragment key={i}>
-            <TransitionSeries.Transition presentation={makePresentation(s.transition || trans[i % trans.length], width, height)} timing={timing} />
+            <TransitionSeries.Transition presentation={makePresentation(cutOr(s.transition || trans[i % trans.length]), width, height)} timing={timingFor(cutOr(s.transition || trans[i % trans.length]))} />
             <TransitionSeries.Sequence durationInFrames={s.frames + OVERLAP}>
               <Scene scene={s} index={i} total={scenes.length} isShort={isShort} kicker={kicker} />
             </TransitionSeries.Sequence>
           </React.Fragment>
         ))}
-        <TransitionSeries.Transition presentation={makePresentation(trans[scenes.length % trans.length], width, height)} timing={timing} />
+        <TransitionSeries.Transition presentation={makePresentation(cutOr(trans[scenes.length % trans.length]), width, height)} timing={timingFor(cutOr(trans[scenes.length % trans.length]))} />
         <TransitionSeries.Sequence durationInFrames={t.outroFrames}>
           <Outro subscribeText={subscribeText} brandLabel={brandLabel} sourceLabel={sourceLabel} extraLabel={extraLabel} isShort={isShort} />
         </TransitionSeries.Sequence>
