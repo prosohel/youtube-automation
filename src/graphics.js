@@ -8,7 +8,8 @@ const { EXAM_TYPES, checkExamVisual } = require('./examVisuals');
 const { STORY_TYPES, checkStoryVisual } = require('./storyVisuals');
 
 const BASIC_TYPES = ['icon', 'stat', 'list', 'compare'];
-const LIBRARY_TYPES = ['bigNumber', 'bars', 'line', 'donut', 'timeline'];
+const LIBRARY_TYPES = ['bigNumber', 'bars', 'line', 'donut', 'timeline', 'hero3d'];
+const HERO_OBJECTS = ['phone', 'coin', 'laptop', 'rocket', 'shield', 'lock', 'chip', 'cube'];
 
 const BN_DIGITS = '০১২৩৪৫৬৭৮৯';
 const DIGIT = /[0-9০-৯]/;
@@ -108,6 +109,12 @@ const CHECK = {
     return { type: 'donut', slices };
   },
 
+  hero3d(v) {
+    if (!HERO_OBJECTS.includes(v.object)) return null;
+    const label = clip(v.label, 30);
+    return { type: 'hero3d', object: v.object, ...(label ? { label } : {}) };
+  },
+
   timeline(v) {
     if (!inRange(v.events, 3, 5)) return null;
     const events = v.events.map((e) => {
@@ -176,6 +183,7 @@ function graphicsPrompt(opts, recent = []) {
     `  - {"type":"bars","bars":[{"label":"ঢাকা","value":70},{"label":"চট্টগ্রাম","value":30}],"unit":"%","highlight":0}: 2-6 bars comparing amounts. labels: 1-3 short words (max 18 characters); values 0 or more; unit: 1-2 short words such as %, লাখ, কোটি টাকা (max 14); highlight = index of the bar to stress, omit for none. ${REAL}`,
     `  - {"type":"line","points":[{"label":"২০২২","value":10},{"label":"২০২৪","value":25},{"label":"২০২৬","value":60}],"unit":"লাখ"}: 3-8 points of a change over time. labels: a year or a short month and year (max 16 characters); unit: 1-2 short words (max 14). ${REAL}`,
     `  - {"type":"donut","slices":[{"label":"হ্যাঁ","share":60},{"label":"না","share":40}]}: 2-5 shares of a whole, adding up to 100. labels: 1-3 short words (max 18 characters). ${REAL}`,
+    '  - {"type":"hero3d","object":"phone","label":"আপনার ফোন"}: a lit, slowly turning 3D object for a scene about one real thing. object: one of phone, coin, laptop, rocket, shield, lock, chip, cube (phone = apps/devices, coin = money, laptop = work/software, rocket = launches/growth, shield = safety, lock = privacy/passwords, chip = AI/hardware, cube = abstract). label: optional, 1-3 words (max 30). At most one hero3d scene per video.',
     '  - {"type":"timeline","events":[{"when":"২০১৯","text":"প্রথম সংস্করণ"},{"when":"২০২১","text":"বড় আপডেট"},{"when":"২০২৪","text":"সবার জন্য খোলা"}]}: 3-5 dated events. when: a year or a short date (max 12 characters); text: a short phrase of up to 6 words (max 32). Only dates the narration itself gives.',
     '  Never use the same graphic type on two scenes in a row (icon is exempt; a B-roll scene in between is fine).' +
       (recent.length ? ` The last videos relied most on ${recent.join(', ')}: use them less this time.` : ''),
@@ -186,6 +194,7 @@ function graphicsPrompt(opts, recent = []) {
 module.exports = {
   BASIC_TYPES,
   LIBRARY_TYPES,
+  HERO_OBJECTS,
   isBangla,
   parseNumber,
   formatNumber,

@@ -83,6 +83,7 @@ const SCRIPT_SCHEMA = {
               right: { type: 'object', properties: { title: { type: 'string' }, points: { type: 'array', items: { type: 'string' } } } },
               // Library graphics (checked by src/graphics.js; described only when switched on).
               pre: { type: 'string' },
+              object: { type: 'string' },
               unit: { type: 'string' },
               highlight: { type: 'integer' },
               bars: { type: 'array', items: { type: 'object', properties: { label: { type: 'string' }, value: { type: 'number' } }, required: ['label', 'value'] } },
