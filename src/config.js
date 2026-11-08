@@ -53,6 +53,8 @@ const cfg = (module.exports = {
   elevenKey: process.env.ELEVENLABS_API_KEY,
   elevenVoiceId: process.env.ELEVENLABS_VOICE_ID,
   elevenModel: process.env.ELEVENLABS_MODEL || 'eleven_v3',
+  // v3 stability: 0 creative, 0.5 natural, 1 robust (steadiest pronunciation). Raise it if Bangla words slip.
+  elevenStability: Number(process.env.ELEVENLABS_STABILITY ?? 0.5),
   // Delivery tags sent before each scene (v3/v4 audio tags, not spoken). Set ELEVENLABS_STYLE_TAGS= (empty) to turn off.
   elevenStyleTags: process.env.ELEVENLABS_STYLE_TAGS ?? '[confident] [authoritative]',
   // "written = spoken" lines from the dashboard (Voice card): how the voice should read a word.

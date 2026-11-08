@@ -2,6 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const cfg = require('./config');
 const { run, log } = require('./util');
+const { forSpeech } = require('./pronunciation');
 
 async function audioDuration(file) {
   const out = await run('ffprobe', [
@@ -59,7 +60,13 @@ async function elevenTts(text, file) {
     {
       method: 'POST',
       headers: { 'xi-api-key': cfg.elevenKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: tagged, model_id: cfg.elevenModel, voice_settings: { stability: 0.5 } }),
+      body: JSON.stringify({
+        text: tagged,
+        model_id: cfg.elevenModel,
+        // v3: 0 creative, 0.5 natural, 1 robust (most consistent pronunciation, least expressive)
+        voice_settings: { stability: cfg.elevenStability, use_speaker_boost: true },
+        apply_text_normalization: 'on',
+      }),
     }
   );
   if (!res.ok) throw new Error(`ElevenLabs ${res.status}: ${(await res.text()).slice(0, 300)}`);
@@ -105,11 +112,12 @@ function applyPronunciation(text, fixes) {
 /** One scene's narration to one MP3 with the given provider. */
 const synthScene = (provider, text, file, workDir, i) => provider.fn(applyPronunciation(text, cfg.pronunciationFixes), file, workDir, i);
 
-async function synthAll(provider, scenes, workDir) {
+async function synthAll(provider, scenes, workDir, { respell = true } = {}) {
   const out = [];
   for (let i = 0; i < scenes.length; i++) {
     const file = path.join(workDir, `scene-${String(i).padStart(2, '0')}.mp3`);
-    await synthScene(provider, scenes[i].narration, file, workDir, i);
+    // The voice reads the respelled text (acronyms letter by letter, loanwords split); captions keep the original.
+    await synthScene(provider, respell ? forSpeech(scenes[i].narration) : scenes[i].narration, file, workDir, i);
     const duration = await audioDuration(file);
     out.push({ ...scenes[i], audioFile: file, duration });
     log(`Voice ${i + 1}/${scenes.length}: ${duration.toFixed(1)}s`);
@@ -123,16 +131,16 @@ async function synthAll(provider, scenes, workDir) {
  * If a paid provider fails, the whole video is redone with free Edge voices
  * (never mix two voices inside one video).
  */
-async function makeVoice(scenes, workDir) {
+async function makeVoice(scenes, workDir, opts = {}) {
   const provider = pickProvider();
   log(`Voice provider: ${provider.name}`);
   try {
-    return await synthAll(provider, scenes, workDir);
+    return await synthAll(provider, scenes, workDir, opts);
   } catch (e) {
     if (provider.edge) throw e;
     log(`${provider.name} failed: ${e.message}`);
     log('Falling back to the free Edge voice for the whole video...');
-    return synthAll(edgeProvider(), scenes, workDir);
+    return synthAll(edgeProvider(), scenes, workDir, opts);
   }
 }
 

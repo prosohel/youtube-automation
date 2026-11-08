@@ -143,6 +143,7 @@ Rules:
 - Only state facts you are confident are true. Do not invent statistics, quotes or studies.
 - Split into ${sceneCount} scenes. Each scene is 1-3 sentences of narration.
 ${isBangla ? `- Narration is read by a text-to-speech voice, so write it for the ear. Use natural, conversational Bangla (not stiff bookish কথ্য-সাধু mixing), proper punctuation (comma for a short pause, দাঁড়ি । for a full stop, ? for questions).
+- Write acronyms letter by letter with spaces as they are said (এ আই, ও টি পি, এস এম এস, বি সি এস), split long English loanwords into their spoken parts (স্মার্ট ফোন, পাস ওয়ার্ড), and prefer everyday spoken words over rare literary ones: the voice mispronounces glued acronyms and bookish words.
 - Write every number in words (e.g. "সত্তর শতাংশ", not "70%") and write English names/terms in Bangla letters (e.g. চ্যাটজিপিটি, গুগল, এআই) so the voice pronounces them correctly. No digits and no Latin letters inside "narration".
 ` : ''}- For each scene give a "headline": a punchy on-screen title card of 2-4 words in ${cfg.language} (the key idea of that scene, no punctuation at the end).
 - For each scene give a "visual", the animated graphic shown on screen. Vary the types across scenes:

@@ -1,0 +1,4 @@
+{
+  "_": "Words the voice mispronounces -> how to write them for the voice. Captions keep the original spelling. Built-in list: src/pronunciation.js. Test a line: npm run voice:test -- \"বাক্য\"",
+  "ইলেভেনল্যাবস": "ইলেভেন ল্যাবস"
+}
