@@ -160,8 +160,10 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
     v = await markDone('render', {
       files: { video: res.videoFile, thumb: res.thumbFile || null },
       coverMs: res.coverMs ?? null, // where the thumbnail shows in the video: TikTok's cover frame
+      review: res.review || null, // the critic's scores (src/critique.js)
       description: credits.length ? `${v.description}\n\n${credits.join('\n')}` : v.description,
     });
+    if (res.review) await say(`Critique: min ${res.review.min}/10, avg ${res.review.avg}${res.review.rerendered ? ` - re-rendered with ${res.review.applied.join(', ')}` : ''}: ${res.review.verdict}`);
     await say(`Video ready: ${path.basename(res.videoFile)}`);
   }
 

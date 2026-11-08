@@ -528,7 +528,7 @@ export const Particles = ({ count = 16, seed = 0 }) => {
 
 /* ---------- full-frame overlays ---------- */
 
-export const Overlays = ({ kicker, title, isShort }) => {
+export const Overlays = ({ kicker, title, brandLabel, isShort }) => {
   const frame = useCurrentFrame();
   const { width } = useVideoConfig();
   const T = theme();
@@ -555,6 +555,14 @@ export const Overlays = ({ kicker, title, isShort }) => {
           <AbsoluteFill style={{ pointerEvents: 'none', background: 'radial-gradient(ellipse at center, transparent 62%, rgba(60,40,10,0.22) 100%)' }} />
         </>
       )}
+      {list.includes('channelPill') && (brandLabel || kicker) ? (
+        // The small channel name at the top of every frame, like a stamp on the paper.
+        <div style={{ position: 'absolute', top: isShort ? 54 : 28, left: 0, right: 0, display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
+          <div style={{ fontFamily: bodyFont(), fontSize: isShort ? 30 : 24, color: T.text, background: T.surface, border: `2px solid ${T.track}`, borderRadius: 999, padding: '6px 26px', opacity: 0.9, letterSpacing: 0.5 }}>
+            {brandLabel || kicker}
+          </div>
+        </div>
+      ) : null}
       {list.includes('scanlines') && (
         <AbsoluteFill
           style={{

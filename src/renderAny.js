@@ -16,7 +16,12 @@ async function renderAny({ scenes, workDir, slug, title, theme, direction, thumb
   if (cfg.useRemotion) {
     try {
       const { renderWithRemotion } = require('./render');
-      return await renderWithRemotion({ scenes, workDir, slug, title, theme, direction, thumbnail, sourceLabel, extraLabel });
+      const args = { scenes, workDir, slug, title, theme, direction, thumbnail, sourceLabel, extraLabel };
+      const first = await renderWithRemotion(args);
+      // The critique loop: score the contact sheet, re-render once with the critic's adjustments if it is weak.
+      const { reviewAndFix } = require('./critique');
+      const { result, review } = await reviewAndFix(renderWithRemotion, args, first);
+      return { ...result, review };
     } catch (e) {
       if (exam) throw refuse(e.message);
       log(`Remotion render failed: ${e.message}`);

@@ -3,6 +3,7 @@ const path = require('path');
 const cfg = require('./config');
 const { run, log, ensureDir } = require('./util');
 const { fetchClip } = require('./footage');
+const { synthMusic, musicPlan, beatGrid, snapUp } = require('./music');
 const { SOUNDS, sceneDirection } = require('./direction');
 const { COLORS, pickPhotoScenes } = require('./thumbnail');
 const { EXAM_TYPES } = require('./examVisuals');
@@ -127,6 +128,18 @@ async function fitThumbLimit(file) {
   log(`Thumbnail re-encoded to ${Math.round(fs.statSync(file).size / 1024)} KB (YouTube allows 2 MB)`);
 }
 
+/** The synthesized score for this video, exactly as long as the video, its final hit on the outro. */
+function prepSynthMusic(plan, grid, sceneProps, introSeconds, outroSeconds, fps, publicDir) {
+  const sceneFramesTotal = sceneProps.reduce((n, s) => n + s.frames, 0);
+  const total = Math.round(introSeconds * fps) + sceneFramesTotal + Math.round(outroSeconds * fps);
+  const hitAt = (Math.round(introSeconds * fps) + sceneFramesTotal) / fps;
+  const seconds = total / fps + 0.5;
+  const t0 = Date.now();
+  synthMusic({ ...plan, seconds, seed: (plan.seed || 1) * 31 + 7, outPath: path.join(publicDir, 'music.wav'), hitAt });
+  log(`Music: synthesized ${plan.bpm} bpm ${plan.chords.join('-')} (${plan.energy}), ${seconds.toFixed(1)}s in ${Date.now() - t0} ms`);
+  return 'music.wav';
+}
+
 /** Random track from ./music (drop royalty-free mp3/wav/m4a files there). */
 function prepMusic(publicDir) {
   if (!fs.existsSync(MUSIC_DIR)) return null;
@@ -207,10 +220,18 @@ async function renderWithRemotion({ scenes, workDir, slug, title, theme, directi
   ensureDir(publicDir);
   ensureDir(cfg.OUT_DIR);
 
+  // The beat grid: chosen before the scenes are timed, so cuts, intro and outro can snap to it.
+  const plan = cfg.music === 'synth' ? musicPlan({ energy: (theme && theme.energy) || 'normal', dark: Boolean(theme && theme.dark), seed: (theme && theme.seed) || 1 }) : null;
+  const grid = plan ? beatGrid(plan.bpm, fps) : null;
+  const introSeconds = grid ? snapUp(Math.round(INTRO_SECONDS * fps), grid.beat) / fps : INTRO_SECONDS;
+  const outroSeconds = grid ? snapUp(Math.round(OUTRO_SECONDS * fps), grid.beat) / fps : OUTRO_SECONDS;
+
   const sceneProps = [];
   for (let i = 0; i < scenes.length; i++) {
     const sc = scenes[i];
-    const { voiceFrames, frames } = sceneFrames(sc, fps);
+    const timing = sceneFrames(sc, fps);
+    const voiceFrames = timing.voiceFrames;
+    const frames = grid ? snapUp(timing.frames, grid.beat) : timing.frames;
     const audio = `audio-${String(i).padStart(2, '0')}.mp3`;
     fs.copyFileSync(sc.audioFile, path.join(publicDir, audio));
     // If no clip is found the scene just shows its animated graphic.
@@ -221,7 +242,7 @@ async function renderWithRemotion({ scenes, workDir, slug, title, theme, directi
 
   const thumb = await prepThumbnail(thumbnail, sceneProps, publicDir);
   const sfx = await prepSfx(publicDir);
-  const music = prepMusic(publicDir);
+  const music = plan ? prepSynthMusic(plan, grid, sceneProps, introSeconds, outroSeconds, fps, publicDir) : cfg.music === 'folder' ? prepMusic(publicDir) : null;
   const credits = [];
   if (sceneProps.some((s) => s.emoji)) {
     credits.push('Animated emoji: Google Noto Emoji Animation, CC BY 4.0 (https://googlefonts.github.io/noto-emoji-animation/)');
@@ -238,8 +259,10 @@ async function renderWithRemotion({ scenes, workDir, slug, title, theme, directi
     height: cfg.height,
     fps,
     isShort: cfg.format === 'shorts',
-    introSeconds: INTRO_SECONDS,
-    outroSeconds: OUTRO_SECONDS,
+    introSeconds,
+    outroSeconds,
+    beat: grid ? { bpm: grid.bpm, beat: grid.beat, half: grid.half, bar: grid.bar } : null, // SFX snap to this
+    musicVolume: cfg.musicVolume,
     scenes: sceneProps,
     sfx,
     music,
@@ -264,6 +287,7 @@ async function renderWithRemotion({ scenes, workDir, slug, title, theme, directi
   await renderMedia({
     composition,
     serveUrl,
+    chromiumOptions: { gl: cfg.remotionGl }, // WebGL for the 3D hero objects
     codec: 'h264',
     crf: 18,
     outputLocation: videoFile,
@@ -304,7 +328,7 @@ async function renderWithRemotion({ scenes, workDir, slug, title, theme, directi
     videoFile,
     thumbFile: fs.existsSync(thumbFile) ? thumbFile : null,
     credits,
-    coverMs: thumb && thumb.intro ? COVER_MS : null, // the video opens with the thumbnail: TikTok's cover frame
+    coverMs: thumb && thumb.intro && theme.thumbIntro !== false ? COVER_MS : null, // the video opens with the thumbnail: TikTok's cover frame
   };
 }
 

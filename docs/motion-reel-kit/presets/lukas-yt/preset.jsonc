@@ -1,0 +1,60 @@
+// WORKED EXAMPLE: the preset Lukas uses for YouTube motion reels.
+// Every field is filled so you can see what a finished preset looks like. presets/blank explains each field.
+//   sh .claude/skills/motion-reel/scripts/init.sh videos/my-first-reel --preset presets/lukas-yt
+{
+  "name": "Lukas — YouTube reels",
+
+  "brand": {
+    "product": "Weekly 10x",
+    "url": "https://www.weekly10x.com",
+    "promise": "The latest AI workflows, every week, so you ship 10x faster.",
+    "hook": "Made in code.",
+    "cta": "Get it free at weekly10x.com",
+    "audience": "YouTube (16:9) and Shorts (9:16), sound on",
+    "reference": "",
+    "must_show": "the real tool on screen, the prompt that made it, the finished render",
+    "must_avoid": "other brands' logos or UI without permission; reading on-screen gag words aloud"
+  },
+
+  // Monochrome dark palette from Lukas's site (Geist, #000 / #101010 / #fafafa / #a1a1a1).
+  // The site has no accent colour, so this one was chosen for the example. Swap in your own.
+  "colors": {
+    "bg": "#000000",
+    "ink": "#fafafa",
+    "ink2": "#a1a1a1",
+    "accent": "#ff5c1f",
+    "card": "#101010"
+  },
+
+  // Geist (SIL Open Font License, see fonts/OFL-Geist.txt): one variable file for both roles.
+  "fonts": {
+    "display": { "file": "fonts/geist.woff2", "family": "Geist", "weight": 600, "tracking": "-0.045em" },
+    "ui": { "file": "fonts/geist.woff2", "family": "Geist" }
+  },
+
+  "timeline": {
+    "duration": 20,
+    "fps": 60,
+    "bpm": 120,
+    "formats": ["16x9", "9x16"],
+    "music": { "source": "synth", "chords": ["Am", "F", "C", "G"], "seed": 4242 }
+  },
+
+  // Lukas narrates with his own Fish Audio voice clone. Find yours with the Fish Audio MCP:
+  // search_voices with self=true. Put its name or id here (ids are private to your account).
+  "voiceover": {
+    "provider": "fish",
+    "voice": "your own clone (search_voices self=true)",
+    "style": "natural spoken sentences, about 3 s per short line, confident and conversational"
+  },
+
+  // Rules learned while making the chapter films. They go into brief.md.
+  "notes": [
+    "VO says sentences a person would actually say. Punchy on-screen words (\"One chat. Slow.\") stay type-only and are never read aloud.",
+    "Stock voice needed? Test the tightest line on 2–3 voices first. Most narrators read too slowly for 2–3 s beats.",
+    "Cut the VO into phrases at silences and place each on a beat. Never speed up a whole take.",
+    "Review from the rendered MP4: blank-frame scan, caption-swap stills, sync measured at visual onset (visuals lead audio by about 3 frames).",
+    "Everything that must be read passes the 360 px-wide phone check, in both 16:9 and 9:16.",
+    "Parallel sessions: always scaffold into a new, distinctive videos/<slug>."
+  ]
+}

@@ -1,0 +1,6 @@
+# Python side of the pipeline: music.py, beats.py, mix.py, vo.py, review.py
+numpy
+scipy
+soundfile
+librosa
+pillow

@@ -18,12 +18,15 @@ import { iris } from '@remotion/transitions/iris';
 import { clockWipe } from '@remotion/transitions/clock-wipe';
 import { pushCut } from '@remotion/transitions/push-cut';
 import { fade } from '@remotion/transitions/fade';
+import { none } from '@remotion/transitions/none';
+import { ReelIntro } from './Reel';
 import { CameraMotionBlur } from '@remotion/motion-blur';
 import { Bell } from 'lucide-react';
 import { OVERLAP, buildTimeline } from './timeline';
-import { accentFor, bodyFont, cardStyle, energy, headFont, isVox, pop, setTheme, theme } from './shared';
+import { accentFor, bodyFont, cardStyle, energy, headFont, isReel, isVox, pop, setTheme, theme } from './shared';
 import { MarkerUnderline, Tape, draw } from './Vox';
 import { SceneVisual, VISUAL_START } from './Visuals';
+import { STORY_RENDERED } from './Cast';
 import { EXAM_FULL_CARD } from './exam';
 import { COUNT_FRAMES, ITEM_STAGGER } from './library/timing';
 import { MotionBg, Overlays, Particles } from './Backgrounds';
@@ -36,7 +39,7 @@ import { ThumbCard } from './Thumbnail';
  * are actually flying in or out. The rest of the time the layer renders once (5x cheaper).
  */
 const BlurWhileMoving = ({ moving, children }) =>
-  moving && !isVox() ? ( // paper cutouts have no motion blur
+  moving && !isVox() && !isReel() ? ( // paper cutouts and reels have no motion blur
     <CameraMotionBlur shutterAngle={200} samples={5}>
       {children}
     </CameraMotionBlur>
@@ -44,7 +47,10 @@ const BlurWhileMoving = ({ moving, children }) =>
     <AbsoluteFill>{children}</AbsoluteFill>
   );
 
+const clamp01 = (v) => Math.min(1, Math.max(0, v));
+
 const SceneBadge = ({ index, total, accent, frames, isShort }) => {
+  if (theme().badge === false) return null; // story theme: nothing in the corners
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
   const T = theme();
@@ -93,7 +99,9 @@ const Scene = ({ scene, index, total, isShort, kicker }) => {
   // Camera: Claude's pick for this scene, or (none picked) a zoom punch + short decaying shake as the
   // scene lands, scaled by the video's energy. Vox keeps the camera locked whatever was picked.
   const vox = isVox();
-  const cam = vox ? null : scene.camera;
+  const reel = isReel();
+  // Reel: every held shot keeps moving with a micro push, never a shake.
+  const cam = vox ? null : reel ? 'push' : scene.camera;
   const e = vox ? 0 : cam === 'punch' ? Math.max(1, energy()) : energy();
   const punch = Math.min(1, pop(f, fps, OVERLAP, 12));
   const shakeT = f - OVERLAP;
@@ -130,7 +138,10 @@ const Scene = ({ scene, index, total, isShort, kicker }) => {
         ) : (
           <MotionBg index={index} accent={accent} />
         )}
-        {scene.bg && !vox ? (
+        {scene.bg && reel ? (
+          // Reel: footage sits behind a dark bottom scrim so the left-aligned type reads on anything.
+          <AbsoluteFill style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0.78) 70%, rgba(0,0,0,0.85) 100%)' }} />
+        ) : scene.bg && !vox ? (
           <AbsoluteFill style={{ background: 'linear-gradient(180deg, rgba(5,8,20,0.55) 0%, rgba(5,8,20,0.12) 38%, rgba(5,8,20,0.7) 100%)' }} />
         ) : null}
         <Particles count={isShort ? 14 : 18} seed={index + 7} />
@@ -147,12 +158,12 @@ const Scene = ({ scene, index, total, isShort, kicker }) => {
               />
             )}
             {/* A question, solution or reveal card is the content itself: no headline over it. */}
-            {scene.headline && scene.frames > 60 && !EXAM_FULL_CARD.includes(scene.visual?.type) ? (
-              <HeadlineCard text={scene.headline} accent={accent} frames={scene.frames} isShort={isShort} kicker={kicker} seed={index} />
+            {scene.headline && scene.frames > 60 && !EXAM_FULL_CARD.includes(scene.visual?.type) && !STORY_RENDERED.includes(scene.visual?.type) ? (
+              <HeadlineCard text={scene.headline} accent={accent} frames={scene.frames} isShort={isShort} kicker={kicker} seed={index} onFootage={Boolean(scene.bg) && !vox} />
             ) : null}
           </AbsoluteFill>
         </BlurWhileMoving>
-        {scene.emoji ? <EmojiPop name={scene.emoji} frames={dur} delay={VISUAL_START + 10} isShort={isShort} /> : null}
+        {scene.emoji && !reel ? <EmojiPop name={scene.emoji} frames={dur} delay={VISUAL_START + 10} isShort={isShort} /> : null}
       </AbsoluteFill>
       <SceneBadge index={index} total={total} accent={accent} frames={scene.frames} isShort={isShort} />
       {/* Timed to the voice only, so the captions never stretch over a question's silent countdown. */}
@@ -275,19 +286,39 @@ const Intro = ({ title, kicker, brandLabel, isShort }) => {
   );
 };
 
-const Outro = ({ subscribeText, brandLabel, sourceLabel, extraLabel, isShort }) => {
+const Outro = ({ subscribeText, brandLabel, sourceLabel, extraLabel, title, isShort }) => {
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
   const T = theme();
-  const btn = pop(f, fps, OVERLAP + 2, 10);
-  const text = pop(f, fps, OVERLAP + 10);
-  const ringP = ((f - OVERLAP) % 40) / 40;
-  const wiggle = Math.sin(f / 2.2) * 18 * Math.exp(-Math.max(0, f - OVERLAP - 14) / 22);
+  // Everything lands within the first half second: an end card is never an empty background.
+  const btn = pop(f, fps, 2, 10);
+  const text = pop(f, fps, 8);
+  const titleIn = clamp01(pop(f, fps, 0, 16));
+  const ringP = (f % 40) / 40;
+  const wiggle = Math.sin(f / 2.2) * 18 * Math.exp(-Math.max(0, f - 12) / 22);
+  const push = interpolate(f, [0, 90], [1, 1.05], { extrapolateRight: 'clamp' });
   return (
     <AbsoluteFill>
       <MotionBg index={2} accent={accentFor(2)} />
       <Particles count={26} seed={11} />
-      <AbsoluteFill style={{ alignItems: 'center', justifyContent: 'center' }}>
+      <AbsoluteFill style={{ alignItems: 'center', justifyContent: 'center', transform: `scale(${push})` }}>
+        {title ? (
+          <div
+            style={{
+              marginBottom: isShort ? 60 : 40,
+              maxWidth: '84%',
+              textAlign: 'center',
+              fontFamily: headFont(),
+              fontSize: (isShort ? 74 : 52) * (title.length > 40 ? 0.8 : 1),
+              lineHeight: 1.3,
+              color: T.text,
+              opacity: titleIn,
+              transform: `translateY(${(1 - titleIn) * 30}px)`,
+            }}
+          >
+            {title}
+          </div>
+        ) : null}
         {/* Button sizes itself to the text (fonts differ in width per theme) and never wraps. */}
         <div style={{ position: 'relative', display: 'inline-flex', height: isShort ? 200 : 160, whiteSpace: 'nowrap', maxWidth: '94%' }}>
           <div
@@ -370,6 +401,8 @@ const makePresentation = (name, width, height) => {
       return clockWipe({ width, height });
     case 'wipe':
       return wipe({ direction: 'from-top-left' });
+    case 'cut':
+      return none();
     case 'fade':
       return fade();
     case 'slideBottom':
@@ -383,6 +416,11 @@ const makePresentation = (name, width, height) => {
 };
 
 const timing = linearTiming({ durationInFrames: OVERLAP, easing: Easing.inOut(Easing.cubic) });
+// A hard cut still has to span OVERLAP frames (the timeline is built on it), so the incoming scene covers the outgoing one at once.
+const cutTiming = linearTiming({ durationInFrames: OVERLAP, easing: () => 1 });
+/** The reel family only ever cuts, whatever the direction picked. */
+const cutOr = (name) => (isReel() ? 'cut' : name);
+const timingFor = (name) => (name === 'cut' ? cutTiming : timing);
 
 const SFX_VOLUME = { whoosh: 0.35, whip: 0.35, ding: 0.3, 'mouse-click': 0.45, switch: 0.4 };
 
@@ -406,34 +444,38 @@ const cueFrames = (scene, start, at) => {
 };
 
 /** Sound effects timed to the animation (only when the renderer cached the files). */
-const SceneSfx = ({ scene, start, index }) => {
+/** Nearest half-beat of the music grid (sound effects sit on the grid like the kit's hits); no grid: unchanged. */
+const onGrid = (grid) => (at) => (grid ? Math.round(Math.round(at / grid.half) * grid.half) : Math.round(at));
+
+const SceneSfx = ({ scene, start, index, grid }) => {
+  const q = onGrid(grid);
   if (Array.isArray(scene.sfx)) {
     // Claude's cues for this scene ([] = a deliberately quiet scene).
     return (
       <>
         {scene.sfx.flatMap((c, n) =>
-          cueFrames(scene, start, c.at).map((at, k) => <Sfx key={`${n}-${k}`} name={c.sound} at={at} volume={SFX_VOLUME[c.sound] ?? 0.35} />)
+          cueFrames(scene, start, c.at).map((at, k) => <Sfx key={`${n}-${k}`} name={c.sound} at={q(at)} volume={SFX_VOLUME[c.sound] ?? 0.35} />)
         )}
       </>
     );
   }
   const v = scene.visual || {};
-  const out = [<Sfx key="w" name={index % 2 ? 'whip' : 'whoosh'} at={start} volume={0.35} />];
+  const out = [<Sfx key="w" name={index % 2 ? 'whip' : 'whoosh'} at={q(start)} volume={0.35} />];
   if (!scene.bg && v.type === 'list') {
-    (v.items || []).slice(0, 4).forEach((_, i) => out.push(<Sfx key={`c${i}`} name="mouse-click" at={start + VISUAL_START + i * 7} volume={0.45} />));
+    (v.items || []).slice(0, 4).forEach((_, i) => out.push(<Sfx key={`c${i}`} name="mouse-click" at={q(start + VISUAL_START + i * 7)} volume={0.45} />));
   }
-  if (!scene.bg && v.type === 'stat') out.push(<Sfx key="d" name="ding" at={start + VISUAL_START + 38} volume={0.3} />);
-  if (!scene.bg && v.type === 'compare') out.push(<Sfx key="s" name="switch" at={start + VISUAL_START + 10} volume={0.4} />);
-  if (scene.emoji) out.push(<Sfx key="e" name="switch" at={start + VISUAL_START + 10} volume={0.25} />);
+  if (!scene.bg && v.type === 'stat') out.push(<Sfx key="d" name="ding" at={q(start + VISUAL_START + 38)} volume={0.3} />);
+  if (!scene.bg && v.type === 'compare') out.push(<Sfx key="s" name="switch" at={q(start + VISUAL_START + 10)} volume={0.4} />);
+  if (scene.emoji) out.push(<Sfx key="e" name="switch" at={q(start + VISUAL_START + 10)} volume={0.25} />);
   return <>{out}</>;
 };
 
 export const Main = (props) => {
-  const { title, kicker, brandLabel, sourceLabel, extraLabel, subscribeText, scenes, isShort, sfx, music, thumb } = props;
+  const { title, kicker, brandLabel, sourceLabel, extraLabel, subscribeText, scenes, isShort, sfx, music, thumb, beat, musicVolume = 0.12 } = props;
   // The video opens with its thumbnail (TikTok's cover frame) unless it was switched off for this brand.
-  const thumbIntro = Boolean(thumb && thumb.intro);
   setTheme(props.theme);
   const T = theme();
+  const thumbIntro = Boolean(thumb && thumb.intro) && T.thumbIntro !== false; // story theme: its own plain title card
   const { width, height } = useVideoConfig();
   const t = buildTimeline(props);
   const trans = T.transitions && T.transitions.length ? T.transitions : ['slideRight'];
@@ -441,25 +483,25 @@ export const Main = (props) => {
     <AbsoluteFill style={{ background: T.bg[0] }}>
       <TransitionSeries>
         <TransitionSeries.Sequence durationInFrames={t.introFrames + OVERLAP}>
-          {thumbIntro ? <ThumbCard thumb={thumb} isShort={isShort} /> : <Intro title={title} kicker={kicker} brandLabel={brandLabel} isShort={isShort} />}
+          {thumbIntro ? <ThumbCard thumb={thumb} isShort={isShort} /> : isReel() ? <ReelIntro title={title} kicker={kicker} brandLabel={brandLabel} isShort={isShort} /> : <Intro title={title} kicker={kicker} brandLabel={brandLabel} isShort={isShort} />}
         </TransitionSeries.Sequence>
         {scenes.map((s, i) => (
           <React.Fragment key={i}>
-            <TransitionSeries.Transition presentation={makePresentation(s.transition || trans[i % trans.length], width, height)} timing={timing} />
+            <TransitionSeries.Transition presentation={makePresentation(cutOr(s.transition || trans[i % trans.length]), width, height)} timing={timingFor(cutOr(s.transition || trans[i % trans.length]))} />
             <TransitionSeries.Sequence durationInFrames={s.frames + OVERLAP}>
               <Scene scene={s} index={i} total={scenes.length} isShort={isShort} kicker={kicker} />
             </TransitionSeries.Sequence>
           </React.Fragment>
         ))}
-        <TransitionSeries.Transition presentation={makePresentation(trans[scenes.length % trans.length], width, height)} timing={timing} />
+        <TransitionSeries.Transition presentation={makePresentation(cutOr(trans[scenes.length % trans.length]), width, height)} timing={timingFor(cutOr(trans[scenes.length % trans.length]))} />
         <TransitionSeries.Sequence durationInFrames={t.outroFrames}>
-          <Outro subscribeText={subscribeText} brandLabel={brandLabel} sourceLabel={sourceLabel} extraLabel={extraLabel} isShort={isShort} />
+          <Outro subscribeText={subscribeText} brandLabel={brandLabel} sourceLabel={sourceLabel} extraLabel={extraLabel} title={title} isShort={isShort} />
         </TransitionSeries.Sequence>
       </TransitionSeries>
 
       {/* Theme overlays (news ticker, grain) start after a thumbnail intro, so they never cover it. */}
       <Sequence from={thumbIntro ? t.introFrames : 0} layout="none">
-        <Overlays kicker={kicker} title={title} isShort={isShort} />
+        <Overlays kicker={kicker} title={title} brandLabel={brandLabel} isShort={isShort} />
       </Sequence>
 
       {/* Light-leak flashes (dark themes only): opening, every other cut, and into the outro. */}
@@ -480,12 +522,19 @@ export const Main = (props) => {
         ) : null
       )}
 
-      {/* Background music, quiet under the voice, fading in and out */}
+      {/* Background music: fuller on the title and the outro, ducked under the voice, fading out at the end */}
       {music ? (
         <Audio
           src={staticFile(music)}
           loop
-          volume={(f) => interpolate(f, [0, 20, t.total - 45, t.total - 1], [0, 0.1, 0.1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' })}
+          volume={(f) =>
+            interpolate(
+              f,
+              [0, 12, t.introFrames, t.introFrames + 20, t.outroStart - 10, t.outroStart + 6, t.total - 40, t.total - 1],
+              [0, musicVolume * 1.8, musicVolume * 1.8, musicVolume, musicVolume, musicVolume * 1.8, musicVolume * 1.8, 0],
+              { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+            )
+          }
         />
       ) : null}
 
@@ -494,7 +543,7 @@ export const Main = (props) => {
         <>
           <Sfx name="whoosh" at={4} volume={0.35} />
           {scenes.map((s, i) => (
-            <SceneSfx key={`s${i}`} scene={s} start={t.items[i].start} index={i} />
+            <SceneSfx key={`s${i}`} scene={s} start={t.items[i].start} index={i} grid={beat} />
           ))}
           <Sfx name="whoosh" at={t.outroStart} volume={0.35} />
           <Sfx name="ding" at={t.outroStart + OVERLAP + 4} volume={0.35} />
