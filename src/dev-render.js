@@ -27,7 +27,15 @@ const { validateVisuals } = require('./graphics');
 
   const scenes = await makeVoice(script.scenes, workDir);
   const direction = resolveDirection(script, cfg);
-  const { videoFile, thumbFile } = await renderWithRemotion({ scenes, workDir, slug, title: script.title, theme, direction, thumbnail: resolveThumbnail(script, cfg) });
+  const renderArgs = { scenes, workDir, slug, title: script.title, theme, direction, thumbnail: resolveThumbnail(script, cfg) };
+  let out = await renderWithRemotion(renderArgs);
+  if (process.argv.includes('--critique')) {
+    const { reviewAndFix } = require('./critique');
+    const { result, review } = await reviewAndFix(renderWithRemotion, renderArgs, out, { rounds: 1 });
+    out = result;
+    if (review) log(`Review: ${JSON.stringify(review.scores)}`);
+  }
+  const { videoFile, thumbFile } = out;
   log(`Done: ${videoFile}${thumbFile ? `\nThumbnail: ${thumbFile}` : ''}`);
 })().catch((e) => {
   console.error('\nFailed:', e.stack || e.message);

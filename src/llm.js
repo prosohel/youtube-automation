@@ -14,10 +14,15 @@ const SYSTEM =
  *   LLM_PROVIDER=claude-code (default): runs the local `claude` CLI headless, billed to your Claude plan.
  *   LLM_PROVIDER=api: Anthropic API with ANTHROPIC_API_KEY.
  */
-async function askJson({ prompt, schema, name, description, maxTokens = 8000 }) {
+/**
+ * Ask the model for JSON matching `schema`.
+ * tools: built-in Claude Code tools to allow (default none); cwd: the folder the CLI runs in (default an empty
+ * temp folder, so it never reads this project); images: files the API path attaches (the CLI reads them with Read).
+ */
+async function askJson({ prompt, schema, name, description, maxTokens = 8000, tools = [], cwd = null, images = [] }) {
   return cfg.llmProvider === 'api'
-    ? viaApi({ prompt, schema, name, description, maxTokens })
-    : viaClaudeCode({ prompt, schema });
+    ? viaApi({ prompt, schema, name, description, maxTokens, images })
+    : viaClaudeCode({ prompt, schema, tools, cwd });
 }
 
 /* ---------- Claude Code headless (your Claude plan, no API key) ---------- */
@@ -34,9 +39,10 @@ function claudeEnv(base = process.env) {
   return env;
 }
 
-function viaClaudeCode({ prompt, schema }) {
-  // Run in an empty folder so it never reads this project's files or a CLAUDE.md.
-  const cwd = path.join(os.tmpdir(), 'yt-automation-claude');
+function viaClaudeCode({ prompt, schema, tools = [], cwd: dir = null }) {
+  // Run in an empty folder so it never reads this project's files or a CLAUDE.md (or in the folder given,
+  // e.g. a review folder holding one contact sheet).
+  const cwd = dir || path.join(os.tmpdir(), 'yt-automation-claude');
   fs.mkdirSync(cwd, { recursive: true });
 
   const env = claudeEnv();
@@ -47,7 +53,7 @@ function viaClaudeCode({ prompt, schema }) {
     '--model', cfg.model,
     '--json-schema', JSON.stringify(schema), // CLI validates the answer against the schema
     '--system-prompt', SYSTEM,
-    '--tools', '', // no file/shell/web tools: it only writes text
+    '--tools', tools.join(','), // default none: it only writes text (the critic gets Read for its sheet)
     '--strict-mcp-config', // no MCP servers
     '--setting-sources', '', // no user/project settings, hooks or plugins
     '--disable-slash-commands',
@@ -101,7 +107,7 @@ function viaClaudeCode({ prompt, schema }) {
 
 /* ---------- Anthropic API ---------- */
 
-async function viaApi({ prompt, schema, name, description, maxTokens }) {
+async function viaApi({ prompt, schema, name, description, maxTokens, images = [] }) {
   if (!cfg.anthropicKey) throw new Error('LLM_PROVIDER=api but ANTHROPIC_API_KEY is not set');
   const Anthropic = require('@anthropic-ai/sdk');
   const client = new Anthropic({ apiKey: cfg.anthropicKey });
@@ -114,7 +120,13 @@ async function viaApi({ prompt, schema, name, description, maxTokens }) {
     system: SYSTEM,
     tools: [{ name, description, input_schema: schema }],
     messages: [
-      { role: 'user', content: `${prompt}\n\nDeliver the result by calling the ${name} tool. Do not reply with plain text.` },
+      {
+        role: 'user',
+        content: [
+          ...images.map((f) => ({ type: 'image', source: { type: 'base64', media_type: f.endsWith('.png') ? 'image/png' : 'image/jpeg', data: fs.readFileSync(f).toString('base64') } })),
+          { type: 'text', text: `${prompt}\n\nDeliver the result by calling the ${name} tool. Do not reply with plain text.` },
+        ],
+      },
     ],
   });
   if (msg.stop_reason === 'max_tokens') throw new Error(`${name}: reply was cut off (max_tokens)`);

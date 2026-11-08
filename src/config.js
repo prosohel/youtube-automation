@@ -32,6 +32,11 @@ const cfg = (module.exports = {
   theme: (process.env.THEME || '').toLowerCase(),
   // Sound effects on transitions/cards (whoosh, click, ding). SFX=false to turn off.
   sfx: (process.env.SFX || 'true').toLowerCase() !== 'false',
+  // Critique loop: after a render Claude scores a contact sheet; under CRITIQUE_MIN it re-renders once with
+  // the critic's adjustments (energy, camera, emoji, transitions). CRITIQUE=false turns it off.
+  critique: (process.env.CRITIQUE || 'true').toLowerCase() !== 'false',
+  critiqueMin: Number(process.env.CRITIQUE_MIN || 7),
+  critiqueRounds: Number(process.env.CRITIQUE_ROUNDS || 1),
   // Music: 'synth' = an original track synthesized per video, cuts and SFX snapped to its beat (default);
   // 'folder' = a random file from ./music; 'none'
   music: (process.env.MUSIC || 'synth').toLowerCase(),
