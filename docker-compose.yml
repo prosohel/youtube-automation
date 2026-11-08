@@ -1,11 +1,22 @@
-# docker compose up -d --build     -> dashboard on http://localhost:7000 (this PC only)
-# Every service restarts by itself, so everything comes back when Docker Desktop starts with Windows.
+# Automation Studio: one compose file for this server.
+#   docker compose up -d --build   -> dashboard on 127.0.0.1:7000
+# nginx on the host serves https://studio.prosohel.com and proxies to 127.0.0.1:7000
+# (/etc/nginx/sites-available/studio.prosohel.com). Settings come from .env (PUBLIC_URL, DASHBOARD_PASSWORD, ...).
+# Memory limits keep a render from starving the other sites on this machine; logs are rotated.
 name: automation-studio
 
 x-env: &env
   REDIS_URL: redis://redis:6379
   PUBLIC_URL: ${PUBLIC_URL:-http://localhost:7000}
+  REMOTION_GL: ${REMOTION_GL:-swangle} # software WebGL; the server has no GPU
   TZ: Asia/Dhaka
+
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "20m"
+      max-file: "5"
 
 services:
   redis:
@@ -14,47 +25,65 @@ services:
     command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
     volumes:
       - redis-data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     restart: unless-stopped
+    <<: *logging
 
   web:
     build: .
     image: automation-studio:latest
     command: ["node", "server/api.js"]
     ports:
-      - "127.0.0.1:7000:7000"
+      - "127.0.0.1:7000:7000" # only nginx on this machine reaches it
     environment:
       <<: *env
       PORT: 7000
       # One shared password for the dashboard (8+ characters). Required when PUBLIC_URL is not localhost.
       DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:-}
       TRUST_PROXY: ${TRUST_PROXY:-}
-      HOST: 0.0.0.0 # inside the container only; the port mapping above keeps the dashboard on this PC
+      HOST: 0.0.0.0 # inside the container only; the port mapping above keeps it on 127.0.0.1
       IMPORT_DIR: /app/import
     volumes:
       - ./output:/app/output
       - ./footage:/app/footage
-      # The project folder, read-only: .env, client_secret.json and token.json are read once on first start
-      # (missing files are simply skipped; single-file mounts would create empty folders on the PC instead).
+      # The project folder, read-only: .env, client_secret.json and token.json are read once on first start.
       - ./:/app/import:ro
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     depends_on:
       - redis
     restart: unless-stopped
+    <<: *logging
 
   worker:
     image: automation-studio:latest
     command: ["node", "server/worker.js"]
-    environment: *env
+    environment:
+      <<: *env
+      # Keeps one render's Chrome inside this many threads so the dashboard stays responsive.
+      REMOTION_CONCURRENCY: ${REMOTION_CONCURRENCY:-3}
     volumes:
       - ./output:/app/output
       - ./footage:/app/footage
       - ./music:/app/music
       - ./assets:/app/assets
-    shm_size: "1gb" # headless Chrome (Remotion) needs more than Docker's 64 MB default
+    shm_size: "2gb" # headless Chrome (Remotion) needs more than Docker's 64 MB default
     init: true # reaps Chrome/ffmpeg child processes
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 5G
     depends_on:
       - redis
       - web
     restart: unless-stopped
+    <<: *logging
 
 volumes:
   redis-data:
