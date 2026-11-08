@@ -32,8 +32,8 @@ const cfg = (module.exports = {
   theme: (process.env.THEME || '').toLowerCase(),
   // Sound effects on transitions/cards (whoosh, click, ding). SFX=false to turn off.
   sfx: (process.env.SFX || 'true').toLowerCase() !== 'false',
-  // Chrome's GL backend for Remotion (3D scenes): 'angle' on Windows/Mac, 'angle-egl' or 'swiftshader' on Linux/Docker
-  remotionGl: process.env.REMOTION_GL || (process.platform === 'win32' || process.platform === 'darwin' ? 'angle' : 'swiftshader'),
+  // Chrome's GL backend for Remotion (3D scenes): 'angle' on Windows/Mac, 'swangle' (software ANGLE, WebGL2) on Linux/Docker; plain swiftshader has no WebGL2 and breaks the light leaks
+  remotionGl: process.env.REMOTION_GL || (process.platform === 'win32' || process.platform === 'darwin' ? 'angle' : 'swangle'),
   // Critique loop: after a render Claude scores a contact sheet; under CRITIQUE_MIN it re-renders once with
   // the critic's adjustments (energy, camera, emoji, transitions). CRITIQUE=false turns it off.
   critique: (process.env.CRITIQUE || 'true').toLowerCase() !== 'false',
