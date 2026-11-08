@@ -32,6 +32,17 @@ const cfg = (module.exports = {
   theme: (process.env.THEME || '').toLowerCase(),
   // Sound effects on transitions/cards (whoosh, click, ding). SFX=false to turn off.
   sfx: (process.env.SFX || 'true').toLowerCase() !== 'false',
+  // Chrome's GL backend for Remotion (3D scenes): 'angle' on Windows/Mac, 'swangle' (software ANGLE, WebGL2) on Linux/Docker; plain swiftshader has no WebGL2 and breaks the light leaks
+  remotionGl: process.env.REMOTION_GL || (process.platform === 'win32' || process.platform === 'darwin' ? 'angle' : 'swangle'),
+  // Critique loop: after a render Claude scores a contact sheet; under CRITIQUE_MIN it re-renders once with
+  // the critic's adjustments (energy, camera, emoji, transitions). CRITIQUE=false turns it off.
+  critique: (process.env.CRITIQUE || 'true').toLowerCase() !== 'false',
+  critiqueMin: Number(process.env.CRITIQUE_MIN || 7),
+  critiqueRounds: Number(process.env.CRITIQUE_ROUNDS || 1),
+  // Music: 'synth' = an original track synthesized per video, cuts and SFX snapped to its beat (default);
+  // 'folder' = a random file from ./music; 'none'
+  music: (process.env.MUSIC || 'synth').toLowerCase(),
+  musicVolume: Number(process.env.MUSIC_VOLUME || 0.12),
   // Claude picks each scene's transition / sound cues / camera move (false = the theme's fixed behaviour)
   directTransitions: (process.env.DIRECT_TRANSITIONS || 'true').toLowerCase() !== 'false',
   directSfx: (process.env.DIRECT_SFX || 'true').toLowerCase() !== 'false',
@@ -59,6 +70,8 @@ const cfg = (module.exports = {
   pronunciationFixes: [],
   captionFont: process.env.CAPTION_FONT || 'DejaVu Sans',
   targetMinutes: Number(process.env.TARGET_MINUTES || 3),
+  // 'idea' (default) = tips/explainer scripts; 'story' = a cartoon parable with a lesson (theme vox-story)
+  scriptMode: (process.env.SCRIPT_MODE || 'idea').toLowerCase(),
   // Question mode: videos made from real exam questions on the owner's sites (src/questions).
   // '' = off (Claude finds topics), 'mathsuggestion.com', 'recentjobsolution.com' or 'both'.
   questionSource: (process.env.QUESTION_SOURCE || '').trim(),

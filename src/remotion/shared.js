@@ -61,6 +61,8 @@ export const energy = () => ({ calm: 0.5, normal: 1, high: 1.5 })[T.energy] || 1
 
 /** Vox family: paper-collage look, locked camera, stepped motion, no blur or glow. */
 export const isVox = () => T.family === 'vox';
+/** Reel family: one accent, left-aligned masked type, hard cuts, micro push; no fades or effects. */
+export const isReel = () => T.family === 'reel';
 
 /** Hold every other frame (stop-motion "on twos"). */
 export const twos = (frame) => Math.floor(frame / 2) * 2;
@@ -107,6 +109,8 @@ export const tornClip = (seed, rough = 1.6) => {
 export const cardStyle = (accent, opts = {}) => {
   const r = T.radius;
   switch (T.card) {
+    case 'flat':
+      return { background: T.surface, borderRadius: r, boxShadow: T.shadow };
     case 'shadow':
       return { background: T.surface, borderRadius: r, boxShadow: T.shadow, borderTop: `8px solid ${accent}` };
     case 'solid':

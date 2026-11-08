@@ -3,6 +3,7 @@ import { interpolate, random, useCurrentFrame, useVideoConfig } from 'remotion';
 import { GRAIN, bodyFont, cardStyle, headFont, pop, theme, tornClip } from './shared';
 import { OVERLAP, wordStarts } from './timeline';
 import { VISUAL_START } from './Visuals';
+import { ReelCaptions, ReelEyebrow } from './Reel';
 import { Highlighter, MarkerUnderline, Tape, draw } from './Vox';
 
 // The word timing lives in timeline.js (pure, so Node tests and the exam scenes share it without an import cycle).
@@ -23,20 +24,23 @@ const glitchShadow = (f, seed, base = '') => {
 
 /* ---------- headline card: one look per theme ---------- */
 
-export const HeadlineCard = ({ text, accent, frames, isShort, kicker, seed = 0 }) => {
+export const HeadlineCard = ({ text, accent, frames, isShort, kicker, seed = 0, onFootage = false }) => {
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
   const T = theme();
   const style = T.headline;
+  if (style === 'eyebrow') return <ReelEyebrow text={text} accent={accent} isShort={isShort} start={VISUAL_START} />;
   const words = String(text).split(/\s+/).filter(Boolean);
-  const out = interpolate(f, [frames - 12, frames], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  // Exit: lifts up and out over the last 8 frames (a pure fade is never an exit).
+  const out = interpolate(f, [frames - 8, frames], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const lift = (1 - out) * -40;
   const fontSize = isShort ? 70 : 54;
   const top = T.overlays?.includes('ticker') ? (isShort ? 200 : 90) : isShort ? 190 : 70;
   const shadow = glitchShadow(f, seed);
 
-  const wordSpans = (delayEach = 3, rise = 45) =>
+  const wordSpans = (delayEach = 3, rise = 45, from = VISUAL_START + 6) =>
     words.map((w, i) => {
-      const s = clamp01(pop(f, fps, VISUAL_START + 6 + i * delayEach, 12));
+      const s = clamp01(pop(f, fps, from + i * delayEach, 12));
       return (
         <span key={i} style={{ display: 'inline-block', marginRight: '0.25em', opacity: s, transform: `translateY(${(1 - s) * rise}px)` }}>
           {w}
@@ -45,9 +49,12 @@ export const HeadlineCard = ({ text, accent, frames, isShort, kicker, seed = 0 }
     });
 
   const wrap = (inner, extra = {}) => (
-    <div style={{ position: 'absolute', top, left: isShort ? 56 : 80, maxWidth: isShort ? 760 : 1100, opacity: out, ...extra }}>{inner}</div>
+    <div style={{ position: 'absolute', top, left: isShort ? 56 : 80, maxWidth: isShort ? 760 : 1100, opacity: out, transform: `translateY(${lift}px)`, ...extra }}>{inner}</div>
   );
-  const textStyle = { fontFamily: headFont(), fontSize, color: T.text, lineHeight: 1.25, textShadow: shadow };
+  // Over footage every theme's card becomes a solid dark plate with white type, so it reads on any clip.
+  const ink = onFootage ? '#ffffff' : T.text;
+  const plate = (card) => (onFootage ? { ...card, background: 'rgba(8,12,28,0.86)', backgroundImage: 'none', boxShadow: '0 10px 40px rgba(0,0,0,0.45)' } : card);
+  const textStyle = { fontFamily: headFont(), fontSize, color: ink, lineHeight: 1.25, textShadow: shadow };
 
   if (style === 'ticker') {
     // News lower-third: accent label block + white bar sliding in from the right.
@@ -98,7 +105,7 @@ export const HeadlineCard = ({ text, accent, frames, isShort, kicker, seed = 0 }
     const s = pop(f, fps, VISUAL_START, 9);
     const scale = interpolate(s, [0, 1], [2.2, 1]);
     return wrap(
-      <div style={{ ...cardStyle(accent), display: 'inline-block', padding: isShort ? '20px 34px' : '14px 28px', transform: `scale(${scale}) rotate(${interpolate(s, [0, 1], [-14, -2.5])}deg)`, opacity: clamp01(s * 3) }}>
+      <div style={{ ...plate(cardStyle(accent)), display: 'inline-block', padding: isShort ? '20px 34px' : '14px 28px', transform: `scale(${scale}) rotate(${interpolate(s, [0, 1], [-14, -2.5])}deg)`, opacity: clamp01(s * 3) }}>
         <div style={textStyle}>{text}</div>
       </div>
     );
@@ -110,7 +117,7 @@ export const HeadlineCard = ({ text, accent, frames, isShort, kicker, seed = 0 }
     const cursorOn = Math.floor(f / 8) % 2 === 0;
     const open = clamp01(pop(f, fps, VISUAL_START - 4, 16)); // window pops open just before typing starts
     return wrap(
-      <div style={{ ...cardStyle(accent), overflow: 'hidden', display: 'inline-block', opacity: open, transform: `scale(${0.85 + 0.15 * open})`, transformOrigin: 'left top' }}>
+      <div style={{ ...plate(cardStyle(accent)), overflow: 'hidden', display: 'inline-block', opacity: open, transform: `scale(${0.85 + 0.15 * open})`, transformOrigin: 'left top' }}>
         <div style={{ display: 'flex', gap: 10, padding: '10px 16px', borderBottom: `2px solid ${accent}55` }}>
           {['#ff5f57', '#febc2e', '#28c840'].map((c) => (
             <div key={c} style={{ width: 16, height: 16, borderRadius: 8, background: c }} />
@@ -130,7 +137,7 @@ export const HeadlineCard = ({ text, accent, frames, isShort, kicker, seed = 0 }
     const s = clamp01(pop(f, fps, VISUAL_START, 16));
     const bar = clamp01(pop(f, fps, VISUAL_START + 8, 18));
     return wrap(
-      <div style={{ ...cardStyle(accent), display: 'inline-block', padding: isShort ? '22px 36px' : '16px 30px', transform: `translateX(${(1 - s) * -220}px)`, opacity: s }}>
+      <div style={{ ...plate(cardStyle(accent)), display: 'inline-block', padding: isShort ? '22px 36px' : '16px 30px', transform: `translateX(${(1 - s) * -220}px)`, opacity: s }}>
         <div style={textStyle}>{text}</div>
         <div style={{ height: 6, marginTop: 10, borderRadius: 3, background: accent, width: `${bar * 100}%` }} />
       </div>
@@ -142,7 +149,7 @@ export const HeadlineCard = ({ text, accent, frames, isShort, kicker, seed = 0 }
     const card = clamp01(pop(f, fps, VISUAL_START, 18));
     const line = clamp01(pop(f, fps, VISUAL_START + 10, 22));
     return wrap(
-      <div style={{ ...cardStyle(accent), display: 'inline-block', padding: isShort ? '22px 36px' : '16px 30px', opacity: card, transform: `translateY(${(1 - card) * 30}px)` }}>
+      <div style={{ ...plate(cardStyle(accent)), display: 'inline-block', padding: isShort ? '22px 36px' : '16px 30px', opacity: card, transform: `translateY(${(1 - card) * 30}px)` }}>
         <div style={textStyle}>{wordSpans(4, 30)}</div>
         <div style={{ height: 3, marginTop: 12, background: accent, width: `${line * 100}%` }} />
       </div>
@@ -151,9 +158,9 @@ export const HeadlineCard = ({ text, accent, frames, isShort, kicker, seed = 0 }
 
   // 'swipe' (default): accent bar swipes across, card revealed, words rise in.
   const a = pop(f, fps, VISUAL_START, 18);
-  const b = pop(f, fps, VISUAL_START + 7, 18);
-  const shown = a > 0.5;
-  const card = cardStyle(accent);
+  const b = pop(f, fps, VISUAL_START + 5, 18);
+  const shown = a > 0.08;
+  const card = plate(cardStyle(accent));
   return wrap(
     <div
       style={{
@@ -164,7 +171,7 @@ export const HeadlineCard = ({ text, accent, frames, isShort, kicker, seed = 0 }
         ...(shown ? card : { borderRadius: card.borderRadius }),
       }}
     >
-      <div style={textStyle}>{wordSpans()}</div>
+      <div style={textStyle}>{wordSpans(2, 30, VISUAL_START + 3)}</div>
       <div
         style={{
           position: 'absolute',
@@ -187,6 +194,8 @@ export const Captions = ({ narration, frames, accent, isShort, onFootage = false
   const { fps } = useVideoConfig();
   const T = theme();
   const style = T.caption;
+  if (style === 'none') return null; // story theme: the scene's own line is the text
+  if (style === 'reel') return <ReelCaptions narration={narration} frames={frames} accent={accent} isShort={isShort} onFootage={onFootage} />;
   const words = narration.split(/\s+/).filter(Boolean);
   if (!words.length) return null;
   const perChunk = isShort ? 3 : 6;
