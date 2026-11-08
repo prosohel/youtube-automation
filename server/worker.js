@@ -1,5 +1,6 @@
 const { Worker, DelayedError } = require('bullmq');
 const cfg = require('../src/config');
+const storage = require('../src/storage');
 const { setHistoryBackend } = require('../src/history');
 const { summarizeDirection } = require('../src/direction');
 const { summarizeGraphics } = require('../src/graphics');
@@ -89,6 +90,12 @@ const defaultProcessors = () => ({
     return rec.status;
   },
   [QUEUE.maintenance]: async (job, ctx) => {
+    if (job.name === 'storage-clean') {
+      if (!storage.enabled()) return 'storage local';
+      let n = 0;
+      for (const v of await store.listVideos(ctx.redis, { limit: 2000 })) n += storage.cleanLocal(v).length;
+      return `removed ${n} local files`;
+    }
     if (job.name === 'publish-recheck') return `settled ${await recheckProcessing({ redis: ctx.redis, log: ctx.log })}`;
     if (job.name !== 'youtube-sync') return 'unknown';
     const clientFor = (brandId) => clientForBrand(ctx.redis, brandId);
@@ -222,6 +229,7 @@ function startWorker({ redis, deps, outDir, workerOpts = {}, processors = {}, on
     await recoverPublishRecords(redis, queues);
     await queues.maintenance.upsertJobScheduler('youtube-sync', { every: YOUTUBE_SYNC_EVERY_MS }, { name: 'youtube-sync' });
     await queues.maintenance.upsertJobScheduler('publish-recheck', { every: PUBLISH_RECHECK_EVERY_MS }, { name: 'publish-recheck' });
+    await queues.maintenance.upsertJobScheduler('storage-clean', { every: 6 * 3600 * 1000 }, { name: 'storage-clean' });
     for (const v of await store.listVideos(redis, { limit: 1000 })) {
       if ((v.status === 'queued' || v.status === 'working') && !(await queues.videos.getJob(v.id))) {
         log(`Re-queueing ${v.id} (no job found)`);

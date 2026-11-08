@@ -33,6 +33,18 @@ async function testService(service, redis, { fetch = globalThis.fetch, brandId }
       const b = await getJson('https://api.elevenlabs.io/v1/user/subscription', { 'xi-api-key': s.ELEVENLABS_API_KEY });
       return { ok: true, detail: `${b.tier} plan · ${n(b.character_count)} / ${n(b.character_limit)} credits used` };
     }
+    case 'r2': {
+      const need = ['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET'].filter((k) => !s[k]);
+      if (need.length) return { ok: false, detail: `Missing ${need.join(', ')}` };
+      // Write, read back and delete one tiny object: proves the token has Object Read & Write on this bucket.
+      const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+      const c = new S3Client({ region: 'auto', endpoint: `https://${s.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`, credentials: { accessKeyId: s.R2_ACCESS_KEY_ID, secretAccessKey: s.R2_SECRET_ACCESS_KEY } });
+      const Key = `_connection-test/${Date.now()}.txt`;
+      await c.send(new PutObjectCommand({ Bucket: s.R2_BUCKET, Key, Body: 'ok', ContentType: 'text/plain' }));
+      await c.send(new GetObjectCommand({ Bucket: s.R2_BUCKET, Key }));
+      await c.send(new DeleteObjectCommand({ Bucket: s.R2_BUCKET, Key }));
+      return { ok: true, detail: `Bucket "${s.R2_BUCKET}" · read, write and delete work` };
+    }
     case 'pixabay': {
       if (!s.PIXABAY_API_KEY) return { ok: false, detail: 'No Pixabay API key saved' };
       const b = await getJson(`https://pixabay.com/api/videos/?key=${encodeURIComponent(s.PIXABAY_API_KEY)}&q=laptop&per_page=3`);

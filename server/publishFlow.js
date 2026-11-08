@@ -1,3 +1,5 @@
+const fs = require('fs');
+const storage = require('../src/storage');
 const store = require('./store');
 const settings = require('./settings');
 const brands = require('./brands');
@@ -184,6 +186,12 @@ async function runPublish({ redis, videoId, platform, rule, getPublisher = requi
     throw e;
   }
 
+  // The local mp4 may have expired after the R2 upload: bring it back before posting.
+  if (video.files && video.files.r2 && video.files.r2.video && !fs.existsSync(video.files.video) && storage.enabled()) {
+    await say('Fetching the video from R2...');
+    await storage.download(video.files.r2.video, video.files.video);
+    if (video.files.r2.thumb && video.files.thumb && !fs.existsSync(video.files.thumb)) await storage.download(video.files.r2.thumb, video.files.thumb);
+  }
   const pub = getPublisher(platform);
   const ctx = {
     video,

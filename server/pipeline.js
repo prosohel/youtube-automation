@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const cfg = require('../src/config');
+const storage = require('../src/storage');
 const store = require('./store');
 const { resolveDirection } = require('../src/direction');
 const { validateVisuals } = require('../src/graphics');
@@ -157,8 +158,18 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
     const thumbnail = v.thumbnail || resolveThumbnail(v.script, cfg);
     const res = await deps.renderAny({ scenes: v.scenes, workDir, slug: v.slug, title: v.title, theme: v.theme, direction: v.direction, thumbnail, sourceLabel: sourceLabel(v.topicInfo && v.topicInfo.siteName), extraLabel: extraLabel(cfg.extraLink) });
     const credits = res.credits || [];
+    // Cloudflare R2: the finished files go to the bucket; the dashboard streams from there, local copies expire.
+    let r2 = null;
+    if (storage.enabled()) {
+      try {
+        r2 = await storage.uploadVideoFiles(v, { video: res.videoFile, thumb: res.thumbFile || null, script: path.join(outDir, `${v.slug}.script.json`) });
+        await say(`Stored in R2: ${r2.video}`);
+      } catch (e) {
+        await say(`R2 upload failed (${e.message}); keeping the local file`);
+      }
+    }
     v = await markDone('render', {
-      files: { video: res.videoFile, thumb: res.thumbFile || null },
+      files: { video: res.videoFile, thumb: res.thumbFile || null, ...(r2 ? { r2 } : {}) },
       coverMs: res.coverMs ?? null, // where the thumbnail shows in the video: TikTok's cover frame
       review: res.review || null, // the critic's scores (src/critique.js)
       description: credits.length ? `${v.description}\n\n${credits.join('\n')}` : v.description,

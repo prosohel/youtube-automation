@@ -1,0 +1,9 @@
+# HTTPS for the dashboard (docker-compose.prod.yml). Set DOMAIN in .env; certificates come from Let's Encrypt.
+{$DOMAIN} {
+	encode zstd gzip
+	# Videos stream from R2 through signed links, so the proxy only carries the dashboard and small API calls.
+	request_body {
+		max_size 64MB
+	}
+	reverse_proxy web:7000
+}

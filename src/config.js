@@ -32,6 +32,18 @@ const cfg = (module.exports = {
   theme: (process.env.THEME || '').toLowerCase(),
   // Sound effects on transitions/cards (whoosh, click, ding). SFX=false to turn off.
   sfx: (process.env.SFX || 'true').toLowerCase() !== 'false',
+  // Where finished videos live: 'local' (./output) or 'r2' (Cloudflare R2, see docs/deploy.md)
+  storage: (process.env.STORAGE || 'local').toLowerCase(),
+  r2: {
+    accountId: process.env.R2_ACCOUNT_ID || '',
+    accessKey: process.env.R2_ACCESS_KEY_ID || '',
+    secret: process.env.R2_SECRET_ACCESS_KEY || '',
+    bucket: process.env.R2_BUCKET || '',
+    prefix: process.env.R2_PREFIX || '',
+    keepDays: Number(process.env.R2_KEEP_DAYS || 3), // local copies removed this long after publishing
+  },
+  // Threads one render may use (Remotion's concurrency); 3 on a 4-vCPU VM keeps the dashboard responsive
+  remotionConcurrency: process.env.REMOTION_CONCURRENCY ? Number(process.env.REMOTION_CONCURRENCY) : null,
   // Chrome's GL backend for Remotion (3D scenes): 'angle' on Windows/Mac, 'swangle' (software ANGLE, WebGL2) on Linux/Docker; plain swiftshader has no WebGL2 and breaks the light leaks
   remotionGl: process.env.REMOTION_GL || (process.platform === 'win32' || process.platform === 'darwin' ? 'angle' : 'swangle'),
   // Critique loop: after a render Claude scores a contact sheet; under CRITIQUE_MIN it re-renders once with
@@ -109,6 +121,15 @@ const FIXED = new Set(['ROOT', 'OUT_DIR', 'CREDS_FILE', 'TOKEN_FILE', 'HISTORY_F
 /** Overwrite known fields (unknown keys are ignored) and recompute the ones derived from them. */
 cfg.applySettings = function applySettings(values = {}) {
   for (const [k, v] of Object.entries(values)) {
+    if (k.includes('.')) {
+      // nested settings such as r2.bucket
+      const [head, ...rest] = k.split('.');
+      if (!Object.prototype.hasOwnProperty.call(cfg, head) || FIXED.has(head) || typeof cfg[head] !== 'object' || !cfg[head]) continue;
+      let o = cfg[head];
+      for (const part of rest.slice(0, -1)) o = o[part] = o[part] && typeof o[part] === 'object' ? o[part] : {};
+      o[rest[rest.length - 1]] = v;
+      continue;
+    }
     if (Object.prototype.hasOwnProperty.call(cfg, k) && !FIXED.has(k) && typeof cfg[k] !== 'function') cfg[k] = v;
   }
   cfg.format = String(cfg.format || 'landscape').toLowerCase();

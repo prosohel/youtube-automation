@@ -288,6 +288,7 @@ async function renderWithRemotion({ scenes, workDir, slug, title, theme, directi
     composition,
     serveUrl,
     chromiumOptions: { gl: cfg.remotionGl }, // WebGL for the 3D hero objects
+    ...(cfg.remotionConcurrency ? { concurrency: cfg.remotionConcurrency } : {}),
     codec: 'h264',
     crf: 18,
     outputLocation: videoFile,

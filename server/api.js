@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const cfg = require('../src/config');
+const storage = require('../src/storage');
 const store = require('./store');
 const settings = require('./settings');
 const brands = require('./brands');
@@ -192,9 +193,17 @@ function createApp({ redis, queues, password = '', secureCookies = false }) {
 
   app.get('/api/media/:id/:kind', async (req, res) => {
     const v = await store.getVideo(redis, req.params.id);
-    const file = v && v.files && v.files[req.params.kind === 'thumb' ? 'thumb' : 'video'];
+    const kind = req.params.kind === 'thumb' ? 'thumb' : 'video';
+    const file = v && v.files && v.files[kind];
+    const key = v && v.files && v.files.r2 && v.files.r2[kind];
     const outDir = path.resolve(cfg.OUT_DIR);
-    if (!file || !path.resolve(file).startsWith(outDir + path.sep) || !fs.existsSync(file)) throw new HttpError(404, 'No file');
+    const local = file && path.resolve(file).startsWith(outDir + path.sep) && fs.existsSync(file);
+    // R2 first when it is the store (no load on the VM), local otherwise; local as the fallback if R2 is off.
+    if (key && storage.enabled() && (!local || cfg.storage === 'r2')) {
+      res.set('Cache-Control', 'private, max-age=600');
+      return res.redirect(302, await storage.signedUrl(key, 3600));
+    }
+    if (!local) throw new HttpError(404, 'No file');
     res.sendFile(path.resolve(file));
   });
 

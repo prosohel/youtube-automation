@@ -10,6 +10,12 @@ const { STYLES: THUMB_STYLES } = require('../src/thumbnail');
  */
 const SETTINGS_SCHEMA = [
   // AI models
+  { key: 'STORAGE', cfg: 'storage', group: 'storage', type: 'enum', options: ['local', 'r2'], default: 'local', label: 'Video storage', hint: 'r2 = upload finished videos to Cloudflare R2 and stream them from there' },
+  { key: 'R2_ACCOUNT_ID', cfg: 'r2.accountId', group: 'storage', type: 'string', default: '', label: 'R2 account ID' },
+  { key: 'R2_ACCESS_KEY_ID', cfg: 'r2.accessKey', group: 'storage', type: 'string', secret: true, default: '', label: 'R2 access key ID' },
+  { key: 'R2_SECRET_ACCESS_KEY', cfg: 'r2.secret', group: 'storage', type: 'string', secret: true, default: '', label: 'R2 secret access key' },
+  { key: 'R2_BUCKET', cfg: 'r2.bucket', group: 'storage', type: 'string', default: '', label: 'R2 bucket' },
+  { key: 'R2_KEEP_DAYS', cfg: 'r2.keepDays', group: 'storage', type: 'number', default: 3, label: 'Keep local copies (days after publishing)' },
   { key: 'LLM_PROVIDER', cfg: 'llmProvider', group: 'ai', type: 'enum', options: ['claude-code', 'api'], default: 'claude-code', label: 'Script writer' },
   { key: 'CLAUDE_MODEL', cfg: 'model', group: 'ai', type: 'string', default: 'claude-sonnet-5-5', label: 'Claude model' },
   { key: 'CLAUDE_BIN', cfg: 'claudeBin', group: 'ai', type: 'string', default: 'claude', label: 'Claude CLI path' },

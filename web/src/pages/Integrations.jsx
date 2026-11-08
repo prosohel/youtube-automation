@@ -10,6 +10,7 @@ const GROUPS = [
     note: 'Inside Docker, Claude Code has no browser login: run "claude setup-token" in a terminal on this PC and paste the token here. Or switch to the Anthropic API.' },
   { id: 'voice', title: 'Voice', sub: 'Narration for every scene. If the main voice fails, the whole video is redone with the free Edge voice.', tests: [['elevenlabs', 'Test ElevenLabs']] },
   { id: 'visuals', title: 'B-roll and visuals', sub: 'Your clips in the footage folder are used first, then stock sites.', tests: [['pixabay', 'Test Pixabay'], ['pexels', 'Test Pexels']] },
+  { id: 'storage', title: 'Video storage', sub: 'Where finished videos are kept. Cloudflare R2: 10 GB free, no download fees; the dashboard streams from it and local copies expire after publishing.', tests: [['r2', 'Test R2']] },
   // The apps below are shared by every brand; each brand signs in to its own accounts on its card under Brands.
   { id: 'youtube', title: 'YouTube app', platform: 'youtube', sub: 'The Google project every brand signs in through. Uploads stay private until Google approves it (YouTube API audit).', tests: [] },
   { id: 'tiktok', title: 'TikTok app', platform: 'tiktok', sub: 'Content Posting API. Until TikTok audits your app, posts can only be private (SELF_ONLY).', tests: [] },
