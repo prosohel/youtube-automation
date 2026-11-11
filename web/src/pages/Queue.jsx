@@ -87,6 +87,57 @@ function AddVideo({ brands, picked, onAdded, setToast }) {
   );
 }
 
+// "Redo a part" of a finished video (POST /api/videos/:id/redo). Order: cheapest first.
+const REDO = [
+  ['render', 'Video', 'Renders the video again from the finished script and voice. No AI call, no voice credits.'],
+  ['thumbnail', 'Thumbnail', 'A new thumbnail design only. The video keeps its opening frame.'],
+  ['voice', 'Voice + video', 'Records every scene again (voice credits), then renders the video.'],
+  ['script', 'Script + voice + video', 'Writes a new script for the same topic (AI call), records it, renders it.'],
+];
+const THUMB_STYLES = [['', 'Next style'], ['bigText', 'Big text'], ['question', 'Question'], ['number', 'Number'], ['versus', 'Versus']];
+/** Posted or posting somewhere: a remade file would no longer match the copy there, so no redo. */
+const postedSomewhere = (v) => Object.values(v.platforms || {}).some((p) => ['pending', 'uploading', 'processing', 'published'].includes(p.status));
+
+function Redo({ v, act }) {
+  const [stage, setStage] = useState('render');
+  const [style, setStyle] = useState('');
+  const info = REDO.find(([id]) => id === stage);
+  const go = () => {
+    const costly = stage === 'script' ? 'an AI call and voice credits' : stage === 'voice' ? 'voice credits' : null;
+    if (costly && !window.confirm(`${info[1]}: this uses ${costly}. Continue?`)) return;
+    act('POST', `/api/videos/${v.id}/redo`, { stage, ...(stage === 'thumbnail' ? { style } : {}) }, `Queued: ${info[1].toLowerCase()} again`);
+  };
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <h3>Redo a part</h3>
+      <div className="inline" style={{ alignItems: 'flex-end' }}>
+        <label className="field" style={{ flex: '1 1 200px' }}>
+          What
+          <select value={stage} onChange={(e) => setStage(e.target.value)}>
+            {REDO.map(([id, name]) => (
+              <option key={id} value={id}>{name}</option>
+            ))}
+          </select>
+        </label>
+        {stage === 'thumbnail' && (
+          <label className="field" style={{ flex: '1 1 160px' }}>
+            Style
+            <select value={style} onChange={(e) => setStyle(e.target.value)}>
+              {THUMB_STYLES.map(([id, name]) => (
+                <option key={id} value={id}>{name}</option>
+              ))}
+            </select>
+          </label>
+        )}
+        <button type="button" className="btn" onClick={go}>
+          <Icon d={ICONS.retry} size={16} /> Redo
+        </button>
+      </div>
+      <p className="faint" style={{ margin: 0 }}>{info[2]}</p>
+    </div>
+  );
+}
+
 function Detail({ id, onChanged, setToast }) {
   const { data: v, error, reload } = usePoll(id ? `/api/videos/${id}` : null, 3000);
   if (!id) return <section className="card grow-1"><p className="empty">Select a video to see its script, log and file.</p></section>;
@@ -115,8 +166,17 @@ function Detail({ id, onChanged, setToast }) {
         {v.error && <div className="banner tone-danger">{v.error}</div>}
       </div>
       <StageBar video={v} />
+      {v.renderer === 'plain' && v.status === 'ready' && (
+        <div className="banner tone-warn">Plain render: captions only, no graphics (the animated render failed; the log says why). Redo a part → Video tries again.</div>
+      )}
       {v.files && v.files.video && v.status === 'ready' && (
-        <video className="preview" controls preload="metadata" src={`/api/media/${v.id}/video`} poster={v.files.thumb ? `/api/media/${v.id}/thumb` : undefined} />
+        <video className="preview" controls preload="metadata" src={`/api/media/${v.id}/video?v=${encodeURIComponent(v.updatedAt || '')}`} poster={v.files.thumb ? `/api/media/${v.id}/thumb?v=${encodeURIComponent(v.updatedAt || '')}` : undefined} />
+      )}
+      {v.files && v.files.thumb && v.status === 'ready' && (
+        <div className="inline" style={{ alignItems: 'flex-start' }}>
+          <img alt="Thumbnail" src={`/api/media/${v.id}/thumb?v=${encodeURIComponent(v.updatedAt || '')}`} style={{ width: 150, borderRadius: 10, border: '1px solid var(--border-soft)' }} />
+          <span className="faint">Thumbnail{v.thumbnail && v.thumbnail.style ? ` · ${v.thumbnail.style}` : ''}</span>
+        </div>
       )}
       {v.status === 'ready' && (
         <div className="stack" style={{ gap: 8 }}>
@@ -135,6 +195,7 @@ function Detail({ id, onChanged, setToast }) {
           ))}
         </div>
       )}
+      {(v.status === 'ready' || v.status === 'failed') && !postedSomewhere(v) && <Redo v={v} act={act} />}
       {scenes.length > 0 && (
         <details>
           <summary style={{ cursor: 'pointer', fontWeight: 600, minHeight: 36 }}>Script · {scenes.length} scenes</summary>

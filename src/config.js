@@ -44,6 +44,9 @@ const cfg = (module.exports = {
   },
   // Threads one render may use (Remotion's concurrency); 3 on a 4-vCPU VM keeps the dashboard responsive
   remotionConcurrency: process.env.REMOTION_CONCURRENCY ? Number(process.env.REMOTION_CONCURRENCY) : null,
+  // MB of decoded stock footage frames Remotion's compositor may keep in memory (OffthreadVideo). Its default is half
+  // the machine's free memory, which inside a Docker memory limit means the OOM killer stops the render mid-way.
+  remotionVideoCacheMb: Number(process.env.REMOTION_VIDEO_CACHE_MB || 512),
   // Chrome's GL backend for Remotion (3D scenes): 'angle' on Windows/Mac, 'swangle' (software ANGLE, WebGL2) on Linux/Docker; plain swiftshader has no WebGL2 and breaks the light leaks
   remotionGl: process.env.REMOTION_GL || (process.platform === 'win32' || process.platform === 'darwin' ? 'angle' : 'swangle'),
   // Critique loop: after a render Claude scores a contact sheet; under CRITIQUE_MIN it re-renders once with
