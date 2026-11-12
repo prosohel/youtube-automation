@@ -8,7 +8,8 @@ const { EXAM_TYPES, checkExamVisual } = require('./examVisuals');
 const { STORY_TYPES, checkStoryVisual } = require('./storyVisuals');
 
 const BASIC_TYPES = ['icon', 'stat', 'list', 'compare'];
-const LIBRARY_TYPES = ['bigNumber', 'bars', 'line', 'donut', 'timeline', 'hero3d'];
+const LIBRARY_TYPES = ['bigNumber', 'bars', 'line', 'donut', 'timeline', 'hero3d', 'phoneApps', 'wireframe', 'orgTree', 'priceTag', 'iconGrid'];
+const LUCIDE = require('lucide-react').icons;
 const HERO_OBJECTS = ['phone', 'coin', 'laptop', 'rocket', 'shield', 'lock', 'chip', 'cube'];
 
 const BN_DIGITS = '০১২৩৪৫৬৭৮৯';
@@ -109,6 +110,41 @@ const CHECK = {
     return { type: 'donut', slices };
   },
 
+  /* flat explainer illustrations (src/remotion/library/Illustrations.jsx) */
+  phoneApps(v) {
+    if (!inRange(v.apps, 2, 4)) return null;
+    const apps = v.apps.map((a) => clip(a, 14));
+    if (apps.includes('')) return null;
+    const label = clip(v.label, 60);
+    return { type: 'phoneApps', apps, ...(label ? { label } : {}) };
+  },
+  wireframe(v) {
+    const title = clip(v.title, 48);
+    const url = clip(v.url, 32);
+    const button = clip(v.button, 16);
+    if (!title && !url) return null;
+    return { type: 'wireframe', ...(title ? { title } : {}), ...(url ? { url } : {}), ...(button ? { button } : {}) };
+  },
+  orgTree(v) {
+    const rootText = clip(v.root, 24);
+    if (!rootText || !inRange(v.children, 2, 4)) return null;
+    const children = v.children.map((c) => clip(c, 22));
+    if (children.includes('')) return null;
+    return { type: 'orgTree', root: rootText, children };
+  },
+  priceTag(v) {
+    const value = clip(v.value, 12);
+    if (!value) return null;
+    const label = clip(v.label, 60);
+    return { type: 'priceTag', value, ...(label ? { label } : {}) };
+  },
+  iconGrid(v) {
+    if (!inRange(v.cards, 2, 4)) return null;
+    const cards = v.cards.map((c) => ({ icon: c && LUCIDE[c.icon] ? c.icon : 'Sparkles', label: clip(c && c.label, 24) }));
+    if (cards.some((c) => !c.label)) return null;
+    return { type: 'iconGrid', cards };
+  },
+
   hero3d(v) {
     if (!HERO_OBJECTS.includes(v.object)) return null;
     const label = clip(v.label, 30);
@@ -184,6 +220,11 @@ function graphicsPrompt(opts, recent = []) {
     `  - {"type":"line","points":[{"label":"২০২২","value":10},{"label":"২০২৪","value":25},{"label":"২০২৬","value":60}],"unit":"লাখ"}: 3-8 points of a change over time. labels: a year or a short month and year (max 16 characters); unit: 1-2 short words (max 14). ${REAL}`,
     `  - {"type":"donut","slices":[{"label":"হ্যাঁ","share":60},{"label":"না","share":40}]}: 2-5 shares of a whole, adding up to 100. labels: 1-3 short words (max 18 characters). ${REAL}`,
     '  - {"type":"hero3d","object":"phone","label":"আপনার ফোন"}: a lit, slowly turning 3D object for a scene about one real thing. object: one of phone, coin, laptop, rocket, shield, lock, chip, cube (phone = apps/devices, coin = money, laptop = work/software, rocket = launches/growth, shield = safety, lock = privacy/passwords, chip = AI/hardware, cube = abstract). label: optional, 1-3 words (max 30). At most one hero3d scene per video.',
+    '  - {"type":"phoneApps","apps":["ক্যানভা","ক্লড","চ্যাটজিপিটি"],"label":"একটা ফোনেই পুরো স্টুডিও"}: a phone showing 2-4 app buttons (names max 14 characters each), label optional (max 60). For scenes about apps, tools or "everything is on your phone".',
+    '  - {"type":"wireframe","title":"একটা ওয়েবসাইট","url":"yoursite.com","button":"অর্ডার করুন"}: a website or dashboard sketch. title max 48, url max 32, button max 16; all optional but give a title or a url. For websites, online shops, portfolios, dashboards.',
+    '  - {"type":"orgTree","root":"এআই","children":["লেখা","ছবি","কোড"]}: one box on top branching into 2-4 below (root max 24, children max 22 characters). For hierarchies, categories, "X splits into A, B, C".',
+    '  - {"type":"priceTag","value":"$১০,০০০","label":"একটা প্রজেক্টের দাম"}: a red stamp with a price or figure (value max 12 characters), label optional (max 60). Only when the narration itself states that figure.',
+    '  - {"type":"iconGrid","cards":[{"icon":"Stethoscope","label":"ডাক্তার"},{"icon":"Scale","label":"আইনজীবী"}]}: 2-4 cards with a line icon and a short label (max 24). icon is a lucide icon name (Smartphone, Laptop, Briefcase, GraduationCap, DollarSign, Shield, Users, Globe, Heart, Home, Scale, Stethoscope, Wrench, Car, ShoppingCart, Camera). For "these kinds of people, things or jobs".',
     '  - {"type":"timeline","events":[{"when":"২০১৯","text":"প্রথম সংস্করণ"},{"when":"২০২১","text":"বড় আপডেট"},{"when":"২০২৪","text":"সবার জন্য খোলা"}]}: 3-5 dated events. when: a year or a short date (max 12 characters); text: a short phrase of up to 6 words (max 32). Only dates the narration itself gives.',
     '  Never use the same graphic type on two scenes in a row (icon is exempt; a B-roll scene in between is fine).' +
       (recent.length ? ` The last videos relied most on ${recent.join(', ')}: use them less this time.` : ''),

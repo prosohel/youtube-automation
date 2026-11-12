@@ -84,6 +84,13 @@ const SCRIPT_SCHEMA = {
               // Library graphics (checked by src/graphics.js; described only when switched on).
               pre: { type: 'string' },
               object: { type: 'string' },
+              // explainer illustrations
+              apps: { type: 'array', items: { type: 'string' } },
+              url: { type: 'string' },
+              button: { type: 'string' },
+              root: { type: 'string' },
+              children: { type: 'array', items: { type: 'string' } },
+              cards: { type: 'array', items: { type: 'object', properties: { icon: { type: 'string' }, label: { type: 'string' } }, required: ['label'] } },
               unit: { type: 'string' },
               highlight: { type: 'integer' },
               bars: { type: 'array', items: { type: 'object', properties: { label: { type: 'string' }, value: { type: 'number' } }, required: ['label', 'value'] } },

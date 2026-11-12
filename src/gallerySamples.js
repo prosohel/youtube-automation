@@ -9,6 +9,11 @@ const BCS_Q1 = {
 };
 
 module.exports = [
+  { name: 'phoneApps', visual: { type: 'phoneApps', apps: ['ক্যানভা', 'ক্লড', 'চ্যাটজিপিটি', 'ফিগমা'], label: 'একটা ফোনেই পুরো ডিজাইন স্টুডিও, কোনো ল্যাপটপ ছাড়াই' } },
+  { name: 'wireframe', visual: { type: 'wireframe', title: 'নিজের পোর্টফোলিও সাইট: কাজ, দাম আর যোগাযোগ', url: 'sohel-design.com', button: 'অর্ডার করুন' } },
+  { name: 'orgTree', visual: { type: 'orgTree', root: 'ফ্রিল্যান্স আয়ের উৎস', children: ['ডিজাইন ক্লায়েন্ট', 'নিজের টেমপ্লেট', 'ইউটিউব', 'কোর্স বিক্রি'] } },
+  { name: 'priceTag', visual: { type: 'priceTag', value: '$১০,০০০', label: 'একটা ওয়েবসাইট প্রজেক্টের দাম, যেটা এখন এআই দিয়ে এক দিনে হয়' } },
+  { name: 'iconGrid', visual: { type: 'iconGrid', cards: [{ icon: 'Stethoscope', label: 'লোকাল ডেন্টিস্ট' }, { icon: 'Scale', label: 'ছোট ল ফার্ম' }, { icon: 'Home', label: 'রিয়েল এস্টেট এজেন্সি' }, { icon: 'Wrench', label: 'প্লাম্বার' }] } },
   {
     name: 'bigNumber',
     visual: { type: 'bigNumber', value: '৳১২,৫০০ কোটি', label: 'প্রতিদিন অনলাইন প্রতারণার শিকার হন মানুষ', pre: 'গত বছরের তুলনায় এখন মোট' },
