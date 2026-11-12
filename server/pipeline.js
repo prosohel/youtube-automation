@@ -9,6 +9,7 @@ const { resolveThumbnail } = require('../src/thumbnail');
 const { localDate } = require('../src/util');
 const { extraLabel, withExtraLink } = require('../src/extraLink');
 const { sourceLabel } = require('../src/examVisuals');
+const { fitToClip } = require('../src/wordTiming');
 
 /** The real stage functions. Tests pass their own. Required lazily: Remotion etc. load only when used. */
 function realDeps() {
@@ -113,13 +114,15 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
           continue;
         }
         fs.rmSync(file, { force: true });
-        await deps.synthScene(provider, scenes[i].narration, file, workDir, i);
+        const voiced = await deps.synthScene(provider, scenes[i].narration, file, workDir, i);
         const duration = await deps.audioDuration(file);
+        // Word timings for the captions; null (estimated captions) when the provider gave none.
+        const wordTimes = fitToClip(voiced && voiced.wordTimes, scenes[i].narration, duration);
         if (!(duration > 0)) throw new Error(`Voice ${i + 1}/${scenes.length}: the audio file is empty or unreadable`);
         await say(`Voice ${i + 1}/${scenes.length}: ${duration.toFixed(1)}s (${provider.name})`);
         v = await save((o) => {
           const list = [...(o.scenes || [])];
-          list[i] = { ...scenes[i], audioFile: file, duration };
+          list[i] = { ...scenes[i], audioFile: file, duration, wordTimes };
           return { ...o, scenes: list };
         });
       }

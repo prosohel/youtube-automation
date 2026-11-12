@@ -17,7 +17,7 @@ export const EXAM_FULL_CARD = ['question', 'solution', 'reveal'];
  * that stage, so nothing is drawn until the theme's and KaTeX's fonts have loaded.
  * voiceFrames: frames of voice; frames: the whole scene (a question's countdown runs from voiceFrames to frames).
  */
-export const ExamVisual = ({ visual, accent, isShort, voiceFrames, frames, narration, start }) => {
+export const ExamVisual = ({ visual, accent, isShort, voiceFrames, frames, narration, wordFrames, start }) => {
   const root = useRef(null);
   const [fonts, setFonts] = useState({ ready: false, room: 0 });
   const [handle] = useState(() => delayRender('Exam scene fonts'));
@@ -51,7 +51,7 @@ export const ExamVisual = ({ visual, accent, isShort, voiceFrames, frames, narra
     if (visual.type === 'question' || visual.type === 'reveal') {
       card = <QuestionCard {...props} reveal={visual.type === 'reveal'} voiceFrames={voiceFrames} frames={frames} />;
     } else if (visual.type === 'solution') {
-      card = <Solution {...props} voiceFrames={voiceFrames} narration={narration} />;
+      card = <Solution {...props} voiceFrames={voiceFrames} narration={narration} wordFrames={wordFrames} />;
     } else if (visual.type === 'tip') {
       card = <Tip {...props} />;
     }

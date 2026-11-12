@@ -276,13 +276,13 @@ const CompareVisual = ({ left, right, isShort }) => {
  * Picks the visual for a scene from the script's `visual` object; always falls back to an icon.
  * voiceFrames, frames and narration time the exam scenes (the countdown, the solution lines).
  */
-export const SceneVisual = ({ visual, accent, isShort, voiceFrames, frames, narration }) => {
+export const SceneVisual = ({ visual, accent, isShort, voiceFrames, frames, narration, wordFrames }) => {
   const v = visual || {};
   if (EXAM_RENDERED.includes(v.type)) {
     // Exam cards draw every theme themselves, like the library graphics.
     return (
       <Stage isShort={isShort} tall={EXAM_FULL_CARD.includes(v.type)}>
-        <ExamVisual visual={v} accent={accent} isShort={isShort} voiceFrames={voiceFrames} frames={frames} narration={narration} start={START} />
+        <ExamVisual visual={v} accent={accent} isShort={isShort} voiceFrames={voiceFrames} frames={frames} narration={narration} wordFrames={wordFrames} start={START} />
       </Stage>
     );
   }

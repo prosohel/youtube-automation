@@ -3,6 +3,11 @@ const fs = require('fs');
 const cfg = require('./config');
 const { run, log } = require('./util');
 const { forSpeech } = require('./pronunciation');
+const { alignWords, fitToClip, wordsFromCharacters } = require('./wordTiming');
+
+const EDGE_HELPER = path.join(__dirname, 'edgeWords.py');
+const PYTHON = process.platform === 'win32' ? 'python' : 'python3';
+let helperWarned = false; // say once per run why Edge word timings are missing
 
 async function audioDuration(file) {
   const out = await run('ffprobe', [
@@ -15,13 +20,40 @@ async function audioDuration(file) {
 }
 
 /* ---------- providers: each writes one MP3 for one scene ---------- */
+// A provider may also return { words: [{ text, start }] }: when each SPOKEN word starts, in seconds.
+// synthScene maps those onto the caption words. Returning nothing just means the captions estimate.
+
+const readWords = (file) => {
+  try {
+    const list = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+};
 
 /** Free Microsoft Edge neural voices (pip install edge-tts). Good, but clearly synthetic. */
 async function edgeTts(text, file, workDir, i) {
   const textFile = path.join(workDir, `scene-${i}.txt`);
+  const wordsFile = path.join(workDir, `scene-${i}.words.json`);
   fs.writeFileSync(textFile, text);
+  fs.rmSync(wordsFile, { force: true });
   try {
-    await run('edge-tts', ['--voice', cfg.voice, `--rate=${cfg.ttsRate}`, '--file', textFile, '--write-media', file]);
+    try {
+      // The library gives word timings; the edge-tts command only gives sentences (edge-tts 7.2+).
+      await run(PYTHON, ['-I', EDGE_HELPER, '--voice', cfg.voice, `--rate=${cfg.ttsRate}`, '--file', textFile, '--media', file, '--words', wordsFile]);
+      return { words: readWords(wordsFile) };
+    } catch (e) {
+      if (/NoAudioReceived/.test(e.message)) throw e; // the service, not the helper: the command would fail the same way
+      // The helper could not run here (no Python, the Windows Store "python" stub, edge_tts installed for
+      // another Python...): the edge-tts command still makes the voice, only without word timings.
+      if (!helperWarned) {
+        helperWarned = true;
+        log(`Edge word timings unavailable (${String(e.message).split('\n').filter(Boolean).pop()}); captions will estimate`);
+      }
+      await run('edge-tts', ['--voice', cfg.voice, `--rate=${cfg.ttsRate}`, '--file', textFile, '--write-media', file]);
+      return undefined;
+    }
   } catch (e) {
     if (/NoAudioReceived/.test(e.message)) {
       throw new Error(
@@ -54,9 +86,11 @@ async function googleTts(text, file) {
 /** ElevenLabs Eleven v3 (supports Bengali). Needs an API key and a voice id from your Voice Library. */
 async function elevenTts(text, file) {
   // Only v3/v4 understand audio tags; older models would read "[confident]" aloud
-  const tagged = cfg.elevenStyleTags && /^eleven_v[34]/.test(cfg.elevenModel) ? `${cfg.elevenStyleTags} ${text}` : text;
+  const prefix = cfg.elevenStyleTags && /^eleven_v[34]/.test(cfg.elevenModel) ? `${cfg.elevenStyleTags} ` : '';
+  const tagged = `${prefix}${text}`;
+  // with-timestamps: same request, but JSON back with the audio and a start time for every character.
   const res = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${cfg.elevenVoiceId}?output_format=mp3_44100_128`,
+    `https://api.elevenlabs.io/v1/text-to-speech/${cfg.elevenVoiceId}/with-timestamps?output_format=mp3_44100_128`,
     {
       method: 'POST',
       headers: { 'xi-api-key': cfg.elevenKey, 'Content-Type': 'application/json' },
@@ -70,7 +104,15 @@ async function elevenTts(text, file) {
     }
   );
   if (!res.ok) throw new Error(`ElevenLabs ${res.status}: ${(await res.text()).slice(0, 300)}`);
-  fs.writeFileSync(file, Buffer.from(await res.arrayBuffer()));
+  const body = await res.json();
+  if (!body || typeof body.audio_base64 !== 'string' || !body.audio_base64) throw new Error('ElevenLabs returned no audio');
+  fs.writeFileSync(file, Buffer.from(body.audio_base64, 'base64'));
+  // `alignment` follows the text exactly as sent; skip the style tags in front of it.
+  const a = body.alignment;
+  if (!a || !Array.isArray(a.characters)) return undefined;
+  let skip = 0;
+  for (let n = 0; skip < a.characters.length && n < prefix.length; skip++) n += String(a.characters[skip]).length;
+  return { words: wordsFromCharacters(a.characters.slice(skip), (a.character_start_times_seconds || []).slice(skip)) };
 }
 
 function pickProvider() {
@@ -109,18 +151,28 @@ function applyPronunciation(text, fixes) {
   return out;
 }
 
-/** One scene's narration to one MP3 with the given provider. */
-const synthScene = (provider, text, file, workDir, i) => provider.fn(applyPronunciation(text, cfg.pronunciationFixes), file, workDir, i);
+/** The text the voice reads for some narration: the respellings (pronunciation.json and built-ins), then the dashboard's fixes. */
+const speechText = (text, respell = true) => applyPronunciation(respell ? forSpeech(text) : text, cfg.pronunciationFixes);
+
+/**
+ * One scene's narration to one MP3 with the given provider. The voice reads the respelled text; captions
+ * keep the narration as written. Returns { wordTimes }: the start (seconds) of every caption word, from
+ * the provider's word timings, or null when it gave none (Google) or they could not be used.
+ */
+async function synthScene(provider, text, file, workDir, i, { respell = true } = {}) {
+  const res = await provider.fn(speechText(text, respell), file, workDir, i);
+  return { wordTimes: res && res.words ? alignWords(text, res.words, (w) => speechText(w, respell)) : null };
+}
 
 async function synthAll(provider, scenes, workDir, { respell = true } = {}) {
   const out = [];
   for (let i = 0; i < scenes.length; i++) {
     const file = path.join(workDir, `scene-${String(i).padStart(2, '0')}.mp3`);
-    // The voice reads the respelled text (acronyms letter by letter, loanwords split); captions keep the original.
-    await synthScene(provider, respell ? forSpeech(scenes[i].narration) : scenes[i].narration, file, workDir, i);
+    const { wordTimes } = await synthScene(provider, scenes[i].narration, file, workDir, i, { respell });
     const duration = await audioDuration(file);
-    out.push({ ...scenes[i], audioFile: file, duration });
-    log(`Voice ${i + 1}/${scenes.length}: ${duration.toFixed(1)}s`);
+    const timed = fitToClip(wordTimes, scenes[i].narration, duration);
+    out.push({ ...scenes[i], audioFile: file, duration, wordTimes: timed });
+    log(`Voice ${i + 1}/${scenes.length}: ${duration.toFixed(1)}s${timed ? ', word timings' : ''}`);
   }
   return out;
 }
@@ -144,4 +196,4 @@ async function makeVoice(scenes, workDir, opts = {}) {
   }
 }
 
-module.exports = { makeVoice, pickProvider, edgeProvider, synthScene, audioDuration, applyPronunciation };
+module.exports = { makeVoice, pickProvider, edgeProvider, synthScene, speechText, audioDuration, applyPronunciation };

@@ -321,7 +321,9 @@ async function prepareRender({ scenes, workDir, title, theme, direction, thumbna
     // If no clip is found the scene just shows its animated graphic.
     const bg = wantsFootage(sc, cfg.visuals) ? await prepBackground({ ...sc, frames }, i, workDir, publicDir) : null;
     const emoji = await prepEmoji(sc.emoji, publicDir);
-    sceneProps.push({ frames, voiceFrames, narration: sc.narration, headline: sc.headline || '', visual: sc.visual || null, emoji, bg, audio, ...sceneDirection(direction, i) });
+    // Real word starts from the voice (seconds -> frames from the scene's first voice frame), when the provider gave them.
+    const wordFrames = Array.isArray(sc.wordTimes) ? sc.wordTimes.map((t) => Math.round(t * fps)) : null;
+    sceneProps.push({ frames, voiceFrames, narration: sc.narration, headline: sc.headline || '', visual: sc.visual || null, emoji, bg, audio, wordFrames, ...sceneDirection(direction, i) });
   }
 
   const thumb = await prepThumbnail(thumbnail, sceneProps, publicDir);

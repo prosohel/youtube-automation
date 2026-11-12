@@ -155,6 +155,7 @@ const Scene = ({ scene, index, total, isShort, kicker }) => {
                 voiceFrames={voiceFrames}
                 frames={scene.frames}
                 narration={scene.narration}
+                wordFrames={scene.wordFrames}
               />
             )}
             {/* A question, solution or reveal card is the content itself: no headline over it. */}
@@ -167,7 +168,7 @@ const Scene = ({ scene, index, total, isShort, kicker }) => {
       </AbsoluteFill>
       <SceneBadge index={index} total={total} accent={accent} frames={scene.frames} isShort={isShort} />
       {/* Timed to the voice only, so the captions never stretch over a question's silent countdown. */}
-      <Captions narration={scene.narration} frames={voiceFrames} accent={accent} isShort={isShort} onFootage={Boolean(scene.bg)} />
+      <Captions narration={scene.narration} frames={voiceFrames} wordFrames={scene.wordFrames} accent={accent} isShort={isShort} onFootage={Boolean(scene.bg)} />
     </AbsoluteFill>
   );
 };

@@ -25,7 +25,7 @@ topic  ->  script  ->  voice (one MP3 per scene)  ->  render  ->  ready
 |---|---|---|
 | topic | [src/topics.js](../src/topics.js) | Asks Claude for a topic in your niche, with Google Trends headlines as hints. Skips topics already in the history. |
 | script | [src/script.js](../src/script.js), [src/style.js](../src/style.js) | Asks Claude for scene-by-scene JSON: narration, footage keywords, title, description, tags and a design theme. |
-| voice | [src/voice.js](../src/voice.js) | One MP3 per scene from Google TTS, ElevenLabs or the free Edge voices. |
+| voice | [src/voice.js](../src/voice.js), [src/wordTiming.js](../src/wordTiming.js) | One MP3 per scene from Google TTS, ElevenLabs or the free Edge voices, plus when each word starts. Edge ([src/edgeWords.py](../src/edgeWords.py)) and ElevenLabs (`/with-timestamps`) report word timings; they are mapped back onto the caption words (the voice reads a respelled text) and drive the captions and exam solution lines. Google gives none, so its captions use the length-based estimate. |
 | render | [src/renderAny.js](../src/renderAny.js) | Remotion ([src/render.js](../src/render.js), [src/remotion/](../src/remotion/)); if that fails, plain FFmpeg ([src/video.js](../src/video.js)). Footage comes from [src/footage.js](../src/footage.js). |
 
 All Claude calls go through `askJson` in [src/llm.js](../src/llm.js), which uses either the local `claude` CLI
