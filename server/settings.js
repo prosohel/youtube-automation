@@ -72,7 +72,7 @@ const SETTINGS_SCHEMA = [
   // Channel
   { key: 'NICHE', scope: 'brand', cfg: 'niche', group: 'channel', type: 'string', default: 'technology tips', label: 'Channel niche (used to pick topics)' },
   { key: 'LANGUAGE', scope: 'brand', cfg: 'language', group: 'channel', type: 'string', default: 'English', label: 'Language' },
-  { key: 'SCRIPT_MODE', scope: 'brand', cfg: 'scriptMode', group: 'channel', type: 'enum', options: ['idea', 'story'], default: 'idea', label: 'Script mode', hint: 'idea = tips/explainers; story = a cartoon parable with one lesson (vox-story theme)' },
+  { key: 'SCRIPT_MODE', scope: 'brand', cfg: 'scriptMode', group: 'channel', type: 'enum', options: ['idea', 'story', 'essay'], default: 'idea', label: 'Script mode', hint: 'idea = tips/explainers; story = a cartoon parable with one lesson (vox-story theme); essay = a chaptered argument for 5-10 minute videos' },
   { key: 'VIDEO_FORMAT', scope: 'brand', cfg: 'format', group: 'channel', type: 'enum', options: ['shorts', 'landscape'], default: 'landscape', label: 'Video format' },
   { key: 'TARGET_MINUTES', scope: 'brand', cfg: 'targetMinutes', group: 'channel', type: 'number', default: 3, label: 'Video length (min)', hint: 'Every video, Shorts included. YouTube counts vertical videos up to 3 minutes as Shorts.' },
   { key: 'PRIVACY_STATUS', scope: 'brand', cfg: 'privacy', group: 'channel', type: 'enum', options: ['private', 'unlisted', 'public'], default: 'private', label: 'YouTube privacy' },

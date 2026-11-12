@@ -126,3 +126,16 @@ test('the thumbnail prompt avoids the last styles, or asks for the one forced in
   assert.match(asked[1].prompt, /Use the style "versus"/);
   cfg.applySettings({ thumbStyle: '' });
 });
+
+test('essay mode asks for a thesis, numbered chapters, a counterpoint and chapter cards; idea mode does not', async () => {
+  cfg.applySettings({ scriptMode: 'essay' });
+  await writeScript(topic);
+  assert.match(asked[0].prompt, /ESSAY MODE/);
+  assert.match(asked[0].prompt, /counterpoint/);
+  assert.match(asked[0].prompt, /"type":"chapter"/);
+  assert.match(asked[0].prompt, /prefer ledger/);
+  cfg.applySettings({ scriptMode: 'idea' });
+  await writeScript(topic);
+  assert.doesNotMatch(asked[1].prompt, /ESSAY MODE/);
+  assert.doesNotMatch(asked[1].prompt, /"type":"chapter"/);
+});

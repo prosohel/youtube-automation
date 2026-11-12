@@ -95,7 +95,13 @@
     "leaks": false,
     "leakHue": 0,
     "glitch": false,
-    "overlays": []
+    "overlays": [],
+    "chapter": {
+      "number": "#2f6bff",
+      "title": "#f6f5f1",
+      "book": "#111318",
+      "dark": "#111318"
+    }
   },
   "news": {
     "label": "Breaking News",
@@ -862,7 +868,13 @@
     "captionBg": "transparent",
     "captionText": "#141414",
     "shadow": "0 2px 0 rgba(20,20,20,0.9)",
-    "highlight": "#ffe14d"
+    "highlight": "#ffe14d",
+    "chapter": {
+      "number": "#0f6b3f",
+      "title": "#efe9dc",
+      "book": "#141414",
+      "dark": "#0f3d2e"
+    }
   },
   "ledger-green": {
     "label": "Ledger: green board",
@@ -912,6 +924,12 @@
     "captionBg": "transparent",
     "captionText": "#faf7f0",
     "shadow": "0 2px 0 rgba(0,0,0,0.6)",
-    "highlight": "#ffe14d"
+    "highlight": "#ffe14d",
+    "chapter": {
+      "number": "#0f6b3f",
+      "title": "#efe9dc",
+      "book": "#141414",
+      "dark": "#0b2a20"
+    }
   }
 }
