@@ -58,7 +58,7 @@ const cfg = (module.exports = {
   critiqueRounds: Number(process.env.CRITIQUE_ROUNDS || 1),
   // Music: 'synth' = an original track synthesized per video, cuts and SFX snapped to its beat (default);
   // 'folder' = a random file from ./music; 'none'
-  music: (process.env.MUSIC || 'synth').toLowerCase(),
+  music: (process.env.MUSIC || 'none').toLowerCase(),
   musicVolume: Number(process.env.MUSIC_VOLUME || 0.12),
   // Claude picks each scene's transition / sound cues / camera move (false = the theme's fixed behaviour)
   directTransitions: (process.env.DIRECT_TRANSITIONS || 'true').toLowerCase() !== 'false',

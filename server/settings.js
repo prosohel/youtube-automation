@@ -32,6 +32,7 @@ const SETTINGS_SCHEMA = [
   { key: 'TTS_RATE', scope: 'brand', cfg: 'ttsRate', group: 'voice', type: 'string', default: '-4%', label: 'Edge voice speed' },
   { key: 'GOOGLE_TTS_API_KEY', cfg: 'googleTtsKey', group: 'voice', type: 'string', secret: true, default: '', label: 'Google TTS API key' },
   { key: 'GOOGLE_TTS_VOICE', scope: 'brand', cfg: 'googleTtsVoice', group: 'voice', type: 'string', default: 'bn-IN-Chirp3-HD-Kore', label: 'Google voice' },
+  { key: 'ELEVENLABS_STABILITY', scope: 'brand', cfg: 'elevenStability', group: 'voice', type: 'number', default: 0.5, label: 'ElevenLabs stability', hint: 'v3: 0.5 natural, 1 = steadiest pronunciation (less expressive)' },
   { key: 'PRONUNCIATION_FIXES', cfg: 'pronunciationFixes', group: 'voice', type: 'json', default: [], label: 'Pronunciation fixes (word = how the voice should say it)' },
   // Visuals
   { key: 'PIXABAY_API_KEY', cfg: 'pixabayKey', group: 'visuals', type: 'string', secret: true, default: '', label: 'Pixabay API key' },
@@ -45,6 +46,11 @@ const SETTINGS_SCHEMA = [
   },
   { key: 'SFX', cfg: 'sfx', group: 'visuals', type: 'boolean', default: true, label: 'Sound effects' },
   // What Claude decides per video: shown together in the dashboard ("subgroup"), each with what "off" means.
+  { key: 'MUSIC', scope: 'brand', cfg: 'music', group: 'visuals', type: 'enum', options: ['none', 'synth', 'folder'], default: 'none', label: 'Background music', hint: 'synth = an original track made in code per video (cuts snap to its beat); folder = a file from ./music' },
+  { key: 'MUSIC_VOLUME', scope: 'brand', cfg: 'musicVolume', group: 'visuals', type: 'number', default: 0.12, label: 'Music volume (0-1)' },
+  { key: 'LOUDNESS', cfg: 'loudness', group: 'visuals', type: 'boolean', default: true, label: 'Normalise loudness to -14 LUFS' },
+  { key: 'CRITIQUE', cfg: 'critique', group: 'visuals', type: 'boolean', default: true, label: 'Critique loop (Claude scores a contact sheet; re-renders once if weak)' },
+  { key: 'CRITIQUE_MIN', cfg: 'critiqueMin', group: 'visuals', type: 'number', default: 7, label: 'Critique: re-render under this score (1-10)' },
   { key: 'DIRECT_TRANSITIONS', cfg: 'directTransitions', group: 'visuals', subgroup: 'claude', type: 'boolean', default: true, label: 'Transitions', hint: "Off: the theme's own transitions." },
   { key: 'DIRECT_SFX', cfg: 'directSfx', group: 'visuals', subgroup: 'claude', requires: 'SFX', type: 'boolean', default: true, label: 'Sound cues', hint: 'Off: fixed sounds. Needs Sound effects on.' },
   { key: 'DIRECT_CAMERA', cfg: 'directCamera', group: 'visuals', subgroup: 'claude', type: 'boolean', default: true, label: 'Camera moves', hint: "Off: the theme's own camera." },
@@ -66,6 +72,7 @@ const SETTINGS_SCHEMA = [
   // Channel
   { key: 'NICHE', scope: 'brand', cfg: 'niche', group: 'channel', type: 'string', default: 'technology tips', label: 'Channel niche (used to pick topics)' },
   { key: 'LANGUAGE', scope: 'brand', cfg: 'language', group: 'channel', type: 'string', default: 'English', label: 'Language' },
+  { key: 'SCRIPT_MODE', scope: 'brand', cfg: 'scriptMode', group: 'channel', type: 'enum', options: ['idea', 'story'], default: 'idea', label: 'Script mode', hint: 'idea = tips/explainers; story = a cartoon parable with one lesson (vox-story theme)' },
   { key: 'VIDEO_FORMAT', scope: 'brand', cfg: 'format', group: 'channel', type: 'enum', options: ['shorts', 'landscape'], default: 'landscape', label: 'Video format' },
   { key: 'TARGET_MINUTES', scope: 'brand', cfg: 'targetMinutes', group: 'channel', type: 'number', default: 3, label: 'Video length (min)', hint: 'Every video, Shorts included. YouTube counts vertical videos up to 3 minutes as Shorts.' },
   { key: 'PRIVACY_STATUS', scope: 'brand', cfg: 'privacy', group: 'channel', type: 'enum', options: ['private', 'unlisted', 'public'], default: 'private', label: 'YouTube privacy' },
