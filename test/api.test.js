@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 const { freshRedis, closeAll } = require('./helpers/redis');
 const { createQueues } = require('../server/queues');
 const { createApp } = require('../server/api');
+// The TikTok redirect follows PUBLIC_URL, which the local .env (loaded by config above) may set to the real domain.
+const callback = () => `${(process.env.PUBLIC_URL || 'http://localhost:7000').replace(/\/$/, '')}/tiktok/callback`;
 const store = require('../server/store');
 const { BRAND_KEYS } = require('../server/settings');
 const { seedBrand } = require('./helpers/brands');
@@ -440,7 +442,7 @@ test('TikTok connect needs a brand and the TikTok app, then sends the person to 
   assert.equal(ok.status, 302);
   const to = new URL(ok.headers.get('location'));
   assert.equal(to.origin, 'https://www.tiktok.com');
-  assert.equal(to.searchParams.get('redirect_uri'), 'http://localhost:7000/tiktok/callback');
+  assert.equal(to.searchParams.get('redirect_uri'), callback());
   const pending = await require('../server/tiktokAuth').takePending(redis, to.searchParams.get('state'));
   assert.equal(pending.brandId, brand.id);
 });
@@ -473,7 +475,7 @@ test('the TikTok callback sends the person back to the brand it was started for'
   const stale = await call('GET', '/tiktok/callback?state=unknown&code=good');
   assert.match(decodeURIComponent(stale.headers.get('location')), /^\/integrations\?tiktok=.*Connect TikTok again/);
   assert.equal((await call('GET', '/tiktok/callback')).headers.get('location'), '/integrations?tiktok=cancelled');
-  assert.deepEqual(seen, [['good', brand.id, 'http://localhost:7000/tiktok/callback'], ['bad', brand.id, 'http://localhost:7000/tiktok/callback']]);
+  assert.deepEqual(seen, [['good', brand.id, callback()], ['bad', brand.id, callback()]]);
 });
 
 test('F6: a brandId sent as a list is stored as the brand\'s id', async (t) => {

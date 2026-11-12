@@ -197,12 +197,26 @@ Metadata rules:
     name: 'submit_script',
     description: 'Submit the finished video script and YouTube metadata.',
     schema: SCRIPT_SCHEMA,
+    // A 10-minute Bangla script is 10-14k output tokens: give it about half a second per word on top of 2 min.
+    timeoutSec: scriptTimeoutSec(words),
+    maxTokens: Math.max(8000, Math.round(words * 12)),
   });
 
   if (!script.scenes || !script.scenes.length) throw new Error('Script has no scenes');
   const total = script.scenes.reduce((n, s) => n + s.narration.split(/\s+/).length, 0);
   log(`Script: "${script.title}" - ${script.scenes.length} scenes, ~${total} words`);
+  const short = scriptShortfall(total, words);
+  if (short) log(`Warning: the script is ${short}% shorter than the ${words} words asked for; the video will run short of ${minutesLabel(cfg.targetMinutes)}`);
   return script;
 }
 
-module.exports = { writeScript, lengthPlan, minutesLabel, SCRIPT_SCHEMA };
+/** Seconds to allow Claude for a script of about `words` words (never below the configured timeout). */
+const scriptTimeoutSec = (words) => Math.round(120 + words * 0.5);
+
+/** Percent the script fell short of the asked length when it is well under (below 70%); 0 otherwise. */
+function scriptShortfall(actualWords, askedWords) {
+  if (!askedWords || actualWords >= askedWords * 0.7) return 0;
+  return Math.round((1 - actualWords / askedWords) * 100);
+}
+
+module.exports = { writeScript, lengthPlan, minutesLabel, SCRIPT_SCHEMA, scriptTimeoutSec, scriptShortfall };

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const storage = require('../src/storage');
+const { checkLimits, mediaInfo } = require('../src/platformLimits');
 const store = require('./store');
 const settings = require('./settings');
 const brands = require('./brands');
@@ -229,6 +230,14 @@ async function runPublish({ redis, videoId, platform, rule, getPublisher = requi
     }
   }
 
+  // Over a platform's length or size limit: skip with the reason instead of uploading and being rejected.
+  const media = video.files && video.files.video ? await mediaInfo(video.files.video) : null;
+  const over = checkLimits(platform, media);
+  if (over) {
+    await setRec({ status: 'skipped', error: over, attempts: rec.attempts || 0 });
+    await say(`${platform}: skipped: ${over}`);
+    return setRec({});
+  }
   await setRec({ status: 'uploading', check: false, checks: 0, error: null, startedAt: new Date().toISOString() });
   await say(`${platform}: uploading...`);
   try {
@@ -238,6 +247,11 @@ async function runPublish({ redis, videoId, platform, rule, getPublisher = requi
     return setRec(res.channelId ? { ...done, channelId: res.channelId } : done);
   } catch (e) {
     const msg = String(e.message || e).slice(0, 500);
+    if (e && e.skip) {
+      // The platform told us the video cannot be posted as it is (e.g. TikTok's per-account length limit).
+      await say(`${platform}: skipped: ${msg}`);
+      return setRec({ status: 'skipped', error: msg, attempts: rec.attempts || 0 });
+    }
     await setRec({ status: 'failed', error: msg, attempts: (rec.attempts || 0) + (isConfigError(e) ? 0 : 1) });
     await say(`${platform}: failed: ${msg}`);
     throw e;

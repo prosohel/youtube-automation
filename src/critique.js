@@ -41,8 +41,12 @@ const SCHEMA = {
 async function contactSheet(videoFile, outDir, { every = 2.5, tile = 4 } = {}) {
   ensureDir(outDir);
   const dur = parseFloat((await run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', videoFile])).trim());
+  // Long videos: spread the tiles so the sheet stays readable (at most ~60 tiles, 6 across).
+  const MAX_TILES = 60;
+  const step = Math.max(every, (dur - 1.5) / (MAX_TILES - 3));
+  if (step > every) tile = 6;
   const times = [0.15, 0.6, 1.2];
-  for (let t = every; t < dur - 0.3; t += every) times.push(Number(t.toFixed(2)));
+  for (let t = step; t < dur - 0.3; t += step) times.push(Number(t.toFixed(2)));
   const frames = [];
   for (let i = 0; i < times.length; i++) {
     const f = path.join(outDir, `f-${String(i).padStart(2, '0')}.png`);

@@ -19,10 +19,10 @@ const SYSTEM =
  * tools: built-in Claude Code tools to allow (default none); cwd: the folder the CLI runs in (default an empty
  * temp folder, so it never reads this project); images: files the API path attaches (the CLI reads them with Read).
  */
-async function askJson({ prompt, schema, name, description, maxTokens = 8000, tools = [], cwd = null, images = [] }) {
+async function askJson({ prompt, schema, name, description, maxTokens = 8000, tools = [], cwd = null, images = [], timeoutSec = null }) {
   return cfg.llmProvider === 'api'
     ? viaApi({ prompt, schema, name, description, maxTokens, images })
-    : viaClaudeCode({ prompt, schema, tools, cwd });
+    : viaClaudeCode({ prompt, schema, tools, cwd, timeoutSec });
 }
 
 /* ---------- Claude Code headless (your Claude plan, no API key) ---------- */
@@ -39,7 +39,8 @@ function claudeEnv(base = process.env) {
   return env;
 }
 
-function viaClaudeCode({ prompt, schema, tools = [], cwd: dir = null }) {
+function viaClaudeCode({ prompt, schema, tools = [], cwd: dir = null, timeoutSec = null }) {
+  const limitSec = Math.max(cfg.claudeTimeoutSec, timeoutSec || 0); // a long script gets longer than the default
   // Run in an empty folder so it never reads this project's files or a CLAUDE.md (or in the folder given,
   // e.g. a review folder holding one contact sheet).
   const cwd = dir || path.join(os.tmpdir(), 'yt-automation-claude');
@@ -66,8 +67,8 @@ function viaClaudeCode({ prompt, schema, tools = [], cwd: dir = null }) {
     let err = '';
     const timer = setTimeout(() => {
       p.kill();
-      reject(new Error(`claude CLI timed out after ${cfg.claudeTimeoutSec}s`));
-    }, cfg.claudeTimeoutSec * 1000);
+      reject(new Error(`claude CLI timed out after ${limitSec}s`));
+    }, limitSec * 1000);
 
     p.stdout.on('data', (d) => (out += d));
     p.stderr.on('data', (d) => (err += d));

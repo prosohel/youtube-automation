@@ -1,4 +1,5 @@
 const fs = require('fs');
+const { checkLimits, mediaInfo, SkipError } = require('../../src/platformLimits');
 const { request, wait, notConnected, recordAccount } = require('./http');
 
 // TikTok Content Posting API, Direct Post with FILE_UPLOAD (docs read 2026-11-05).
@@ -101,6 +102,13 @@ async function publish(ctx) {
   const allowed = info.privacy_level_options || [];
   if (!allowed.includes(privacy)) {
     throw new Error(`TikTok: privacy ${privacy} is not allowed for this account (allowed: ${allowed.join(', ') || 'none'})`);
+  }
+
+  // creator_info carries this account's maximum length; a longer video is skipped, not uploaded three times.
+  const maxSec = Number(info.max_video_post_duration_sec) || 0;
+  if (maxSec) {
+    const over = checkLimits('tiktok', await mediaInfo(ctx.video.files.video), { maxSec });
+    if (over) throw new SkipError(over);
   }
 
   const buf = await fs.promises.readFile(ctx.video.files.video);
