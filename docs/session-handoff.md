@@ -1,4 +1,4 @@
-# Session handoff (2026-11-12)
+# Session handoff (2026-11-12, updated the same day on the new PC)
 
 Notes from a Claude Code session so the work can continue on another computer. Point a new Claude Code
 session at this file: "Read docs/session-handoff.md and continue."
@@ -13,42 +13,28 @@ session at this file: "Read docs/session-handoff.md and continue."
 Both arrived in PR #12. Earlier in the same session: the three Vox themes (`vox-paper`, `vox-newsprint`,
 `vox-marker`) and the missing keys added to the local `.env`.
 
-## Not verified yet (do this first)
+## Verified on 2026-11-12 (this PC, Docker working)
 
-1. **Redis-backed tests have not run** since the word-timing change, because Docker Desktop was returning
-   "500 Internal Server Error" on the old PC. `test/pipeline.test.js` covers the changed voice step.
-   ```bash
-   npm install
-   npm run test:redis && npm test
-   ```
-2. **Five tests were already failing before this work** and are unrelated to it:
-   - `test/direction.test.js`: "the prompt offers exactly the transitions the composition can draw"
-     (the reel themes' `cut` transition is not in `TRANSITIONS`).
-   - `test/themes.test.js`: `vox-story`, `reel-light` and `reel-dark` (newer themes use styles the test does
-     not know about).
-3. **ElevenLabs word timings were not tested live** (only with a fake response in `test/voice.test.js`).
-   Edge was tested live with `bn-BD-NabanitaNeural`.
-4. Rebuild the containers so the pinned edge-tts and the helper are in the image:
-   `docker compose up -d --build`.
+1. **Tests:** `npm run test:redis && npm test` → 517/519 before the fixes below, now all green locally
+   (the Redis-backed `test/pipeline.test.js` included). The two api failures were the TikTok redirect tests assuming
+   `PUBLIC_URL` is localhost while the local `.env` has the real domain; the tests now follow `PUBLIC_URL`.
+2. **The five old failures are fixed:** `cut` is in `TRANSITIONS` (Claude may pick a hard cut), `Backgrounds.jsx`
+   has a `plain` branch, and `vox-story`'s fourth accent is dark enough to carry white type.
+3. **ElevenLabs word timings tested live:** 10-word Bangla line → 10 start times with `/with-timestamps`.
+4. **Containers rebuilt** (`docker compose up -d --build`): pinned edge-tts and the timing helper are in the image.
 
-## Open question: 10-minute videos
+## 10-minute videos: the four changes are done
 
-It works with settings alone (verified per stage, see the reasoning below), but four code changes were
-proposed and **not started**:
+| Change | Where |
+|---|---|
+| Claude timeout and max tokens follow the script length (`120 s + 0.5 s/word`; 1,360 words → 800 s) | `src/script.js` (`scriptTimeoutSec`), `src/llm.js` (`timeoutSec`) |
+| Critique contact sheet capped at ~60 tiles, 6 across, whatever the length | `src/critique.js` |
+| Platform limits checked before upload; over the limit → status `skipped` with the reason, no retries. Facebook Reels 90 s, Instagram 15 min / 300 MB, YouTube 15 min, TikTok the account's `max_video_post_duration_sec` | `src/platformLimits.js`, `server/publishFlow.js`, `server/publishers/tiktok.js` |
+| Warning in the log when the script is under 70% of the words asked for | `src/script.js` (`scriptShortfall`) |
 
-1. Scale the Claude timeout with the script length (a 10-minute Bangla script is about 10-14k output tokens;
-   on Opus about 170-350 s against the 300 s default).
-2. Cap the critique contact sheet at about 60 tiles (today it grows to 243 tiles, about 29,000 px tall, at
-   10 minutes, so the critic cannot read it). Code: `src/critique.js`.
-3. Check video length and file size against each platform before uploading, and skip with a clear reason:
-   Facebook Reels max 90 s; Instagram Reels max 15 min and 300 MB; TikTok per account
-   (`max_video_post_duration_sec` is fetched in `server/publishers/tiktok.js` but never checked);
-   YouTube fine up to 15 min. Today the publishers upload anyway and retry 3 times.
-4. Warn when the script is much shorter than `lengthPlan` asked for (nothing checks it; `src/script.js`).
-
-To make a 10-minute video without those changes: `TARGET_MINUTES=10`, `VIDEO_FORMAT=landscape`,
-`CLAUDE_TIMEOUT_SEC=900`, critique off, and publish to YouTube only. Expect about 1,360 Bangla words,
-40-60 scenes, a 10-40 minute render and a 400-700 MB file.
+Still manual for a 10-minute video: `TARGET_MINUTES=10`, `VIDEO_FORMAT=landscape`; expect a 10-40 minute render and a
+400-700 MB file (over Instagram's 300 MB: it will be skipped there with that reason). The dashboard's Queue page
+does not yet show `skipped` as its own state (it shows the platform's error text).
 
 ## Other ideas from the gap analysis (not started)
 
