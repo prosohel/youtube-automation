@@ -94,7 +94,8 @@ function resolveStyle(requested = {}, { forceTheme, seed, family } = {}) {
   const theme = JSON.parse(JSON.stringify(base));
 
   // Per-video variation inside the theme: accent order, background order, transition order.
-  const rot = Math.floor(rand() * theme.accents.length);
+  // Themes whose first accent has a fixed meaning (the red bar, the green key word) keep their order.
+  const rot = theme.fixedAccents ? 0 : Math.floor(rand() * theme.accents.length);
   theme.accents = [...theme.accents.slice(rot), ...theme.accents.slice(0, rot)];
   theme.bgStyles = shuffle(theme.bgStyles, rand);
   theme.transitions = shuffle(theme.transitions, rand);

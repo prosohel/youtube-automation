@@ -105,3 +105,12 @@ test('a pinned theme wins over the family', () => {
     assert.equal(resolveStyle({ theme: 'notebook' }, { forceTheme: 'neon', family: 'exam' }).theme.id, 'neon');
   });
 });
+
+test('themes with fixedAccents keep their accent order whatever the seed', () => {
+  const { resolveStyle } = require('../src/style');
+  const THEMES = require('../src/remotion/themes.json');
+  for (const seed of [1, 2, 3, 7, 11]) {
+    const { theme } = resolveStyle({}, { forceTheme: 'decode', seed });
+    assert.deepEqual(theme.accents, THEMES.decode.accents, `seed ${seed}`);
+  }
+});
