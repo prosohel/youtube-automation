@@ -239,6 +239,13 @@ async function renderWithRemotion(args) {
     },
   });
 
+  // Every upload at the same loudness (-14 LUFS): the platforms stop turning quiet videos down or loud ones up.
+  if (cfg.loudness) {
+    const { normalizeLoudness } = require('./loudness');
+    const l = await normalizeLoudness(videoFile);
+    if (l) log(`Loudness: ${l.before.toFixed(1)} -> ${l.after} LUFS`);
+  }
+
   const thumbFile = path.join(cfg.OUT_DIR, `${args.slug}.jpg`);
   try {
     await renderThumbStill({ serveUrl, composition, inputProps, thumb, thumbFile });
