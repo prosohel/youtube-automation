@@ -469,6 +469,7 @@ export const MotionBg = ({ index, accent, variant }) => {
   const style = variant || styles[index % styles.length];
   return (
     <AbsoluteFill style={{ background: baseGradient(), overflow: 'hidden' }}>
+      {style === 'plain' && <AbsoluteFill style={{ background: baseGradient() }} />}
       {style === 'orbs' && <Orbs seed={index} accent={accent} />}
       {style === 'grid' && <Grid accent={accent} />}
       {style === 'rings' && <Rings seed={index} accent={accent} />}

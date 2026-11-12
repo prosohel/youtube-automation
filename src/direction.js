@@ -7,7 +7,7 @@ const { loadHistory } = require('./history');
  */
 
 // Must match the cases of makePresentation() in src/remotion/Main.jsx (a test checks this).
-const TRANSITIONS = ['slideRight', 'slideLeft', 'slideBottom', 'wipe', 'iris', 'clockWipe', 'pushCut', 'fade'];
+const TRANSITIONS = ['slideRight', 'slideLeft', 'slideBottom', 'wipe', 'iris', 'clockWipe', 'pushCut', 'fade', 'cut'];
 // Neutral UI sounds from @remotion/sfx (no meme sounds: those risk YouTube copyright claims).
 const SOUNDS = ['whoosh', 'whip', 'ding', 'mouse-click', 'switch'];
 // When a cue plays: as the scene enters, when its graphic lands, on each list item, when its emoji pops.
