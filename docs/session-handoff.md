@@ -51,6 +51,16 @@ does not yet show `skipped` as its own state (it shows the platform's error text
 
 Every item of the gap-analysis list is now done.
 
+## Paper-explainer family (reference: youtu.be/V_C0Hrybm6E, "Miad Unpacks"), 2026-11-13
+
+| Item | State |
+|---|---|
+| 1. `ledger` / `ledger-green` themes (cream, green, red, ink-outlined cards; reel grammar; best in landscape) | done |
+| 2. Five flat graphics: `phoneApps`, `wireframe`, `orgTree`, `priceTag`, `iconGrid` (`src/remotion/library/Illustrations.jsx`, checks + prompt in `src/graphics.js`, gallery samples) | done |
+| 3. Silhouette figures (flat black/green people: at a laptop, at a podium, a group) | not started |
+| 4. `SCRIPT_MODE=essay`: a chaptered 5-10 minute argument | not started |
+
+
 **Render speed trap found the same day:** `REMOTION_GL=swangle` had been copied into the Windows `.env` from the
 deploy notes. On Windows/Mac that is software rendering and made every render ~10x slower (417 frames: 6.5 min
 instead of 37 s). It is now commented out there; `.env.example` and `docs/deploy.md` say it is server-only.

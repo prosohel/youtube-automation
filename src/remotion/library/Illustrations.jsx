@@ -22,7 +22,8 @@ export const PhoneApps = ({ visual, accent, isShort, start }) => {
   const f = isVox() ? twos(f0) : f0;
   const s = clamp01(pop(f0, fps, start, 12));
   const apps = visual.apps.slice(0, 4);
-  const w = isShort ? 420 : 300;
+  // Shorts: the stage is ~940 px tall and the headline sits above it, so the phone stays under 700 px.
+  const w = isShort ? 330 : 300;
   const h = w * 2.05;
   const at = (i) => clamp01(pop(f0, fps, start + 6 + i * ITEM_STAGGER, 11));
   const tilt = Math.sin(f / 40) * 1.5;
