@@ -7,12 +7,12 @@ const { loadHistory } = require('./history');
  */
 
 // Must match the cases of makePresentation() in src/remotion/Main.jsx (a test checks this).
-const TRANSITIONS = ['slideRight', 'slideLeft', 'slideBottom', 'wipe', 'iris', 'clockWipe', 'pushCut', 'fade', 'cut'];
+const TRANSITIONS = ['slideRight', 'slideLeft', 'slideBottom', 'wipe', 'iris', 'clockWipe', 'pushCut', 'fade', 'cut', 'zoomThrough', 'flashCut', 'splitWipe'];
 // Neutral UI sounds from @remotion/sfx (no meme sounds: those risk YouTube copyright claims).
 const SOUNDS = ['whoosh', 'whip', 'ding', 'mouse-click', 'switch'];
 // When a cue plays: as the scene enters, when its graphic lands, on each list item, when its emoji pops.
 const CUE_TIMES = ['enter', 'visual', 'items', 'emoji'];
-const CAMERAS = ['still', 'push', 'pan', 'punch'];
+const CAMERAS = ['still', 'push', 'pan', 'punch', 'pullBack', 'drift', 'orbit'];
 
 const MAX_CUES = 3;
 const KICKER_MAX_WORDS = 4;
@@ -107,7 +107,8 @@ function directionPrompt(opts, recent = {}) {
   if (opts.directTransitions) {
     lines.push(
       `- For each scene give a "transition": how the previous shot hands over to this scene. One of: ${TRANSITIONS.join(', ')}. ` +
-        'Match the moment (fade for calm or serious beats, pushCut/wipe for a sharp change of subject, iris/clockWipe for a reveal) and vary them.' +
+        'Match the moment (fade for calm or serious beats, pushCut/wipe for a sharp change of subject, iris/clockWipe for a reveal, ' +
+        'zoomThrough to dive into a detail, flashCut for a shock, splitWipe for a before/after or a new chapter, cut for pace) and vary them.' +
         avoid(recent.transitions)
     );
   }
@@ -122,7 +123,8 @@ function directionPrompt(opts, recent = {}) {
   if (opts.directCamera) {
     lines.push(
       `- For each scene give a "camera": ${CAMERAS.join(', ')}. still = calm explanation, push = slow zoom in to build tension, ` +
-        'pan = slow sideways drift, punch = a hard zoom with a short shake for a shock or a big number. Mostly still/push/pan; punch at most twice per video.' +
+        'pan = slow sideways drift, punch = a hard zoom with a short shake for a shock or a big number, pullBack = start close and ease out to reveal the whole picture, ' +
+        'drift = a slow vertical float for a quiet or reflective beat, orbit = a slight turn and settle, as if the camera walks around the subject. Mostly still/push/pan; punch at most twice per video.' +
         avoid(recent.cameras)
     );
   }

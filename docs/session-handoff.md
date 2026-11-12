@@ -36,11 +36,20 @@ Still manual for a 10-minute video: `TARGET_MINUTES=10`, `VIDEO_FORMAT=landscape
 400-700 MB file (over Instagram's 300 MB: it will be skipped there with that reason). The dashboard's Queue page
 does not yet show `skipped` as its own state (it shows the platform's error text).
 
-## Other ideas from the gap analysis (not started)
+## Gap-analysis items done on 2026-11-12
 
-In order: ffmpeg loudness normalisation (-14 LUFS) and music ducking under the voice; more camera moves and
-transitions (ideas from Video ShotCraft); more SFX; better Hero3D lighting with the three.js addons that are
-already installed. Details in [gap-analysis.md](gap-analysis.md).
+| Item | Where | Switch |
+|---|---|---|
+| Queue page shows `skipped` with the reason, plus a list chip | `web/src/components/ui.jsx`, `web/src/pages/Queue.jsx` | - |
+| Loudness normalisation to -14 LUFS / -1 dBTP (two-pass ffmpeg loudnorm, video copied, ~3 s) | `src/loudness.js`, called from `src/render.js` after the render | `LOUDNESS=false` |
+| 3 camera moves: `pullBack`, `drift`, `orbit` | `CAMERAS` in `src/direction.js`, the camera chain in `Main.jsx` (a sync test guards them now) | DIRECT_CAMERA |
+| 3 transitions: `zoomThrough`, `flashCut`, `splitWipe` (hand-written after the ShotCraft cards, no blur) | `src/remotion/Presentations.jsx`, `makePresentation` in `Main.jsx`, `TRANSITIONS` | DIRECT_TRANSITIONS |
+
+Not done from that list: more SFX, Hero3D lighting (RoomEnvironment/PMREM, RoundedBoxGeometry).
+
+**Render speed trap found the same day:** `REMOTION_GL=swangle` had been copied into the Windows `.env` from the
+deploy notes. On Windows/Mac that is software rendering and made every render ~10x slower (417 frames: 6.5 min
+instead of 37 s). It is now commented out there; `.env.example` and `docs/deploy.md` say it is server-only.
 
 ## Moving to the new computer
 

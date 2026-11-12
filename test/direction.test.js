@@ -114,6 +114,13 @@ test('the prompt offers exactly the transitions the composition can draw', () =>
   assert.deepEqual([...D.TRANSITIONS].sort(), drawn);
 });
 
+test('the prompt offers exactly the camera moves the composition can draw', () => {
+  const main = fs.readFileSync(path.join(__dirname, '..', 'src', 'remotion', 'Main.jsx'), 'utf8');
+  const body = main.slice(main.indexOf('const camera ='), main.indexOf('return (', main.indexOf('const camera =')));
+  const drawn = [...body.matchAll(/cam === '(\w+)'/g)].map((m) => m[1]);
+  assert.deepEqual([...D.CAMERAS].sort(), [...drawn, 'punch'].sort()); // punch is the default branch
+});
+
 test('the prompt names the most-used recent picks so Claude can avoid them', () => {
   const text = D.directionPrompt(ON, { transitions: ['fade', 'slideRight'], sounds: ['whoosh'], cameras: [] });
   assert.match(text, /fade, slideRight/);

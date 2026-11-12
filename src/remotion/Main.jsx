@@ -19,6 +19,7 @@ import { clockWipe } from '@remotion/transitions/clock-wipe';
 import { pushCut } from '@remotion/transitions/push-cut';
 import { fade } from '@remotion/transitions/fade';
 import { none } from '@remotion/transitions/none';
+import { flashCut, splitWipe, zoomThrough } from './Presentations';
 import { ReelIntro } from './Reel';
 import { CameraMotionBlur } from '@remotion/motion-blur';
 import { Bell } from 'lucide-react';
@@ -116,7 +117,13 @@ const Scene = ({ scene, index, total, isShort, kicker }) => {
         ? `scale(${interpolate(f, [0, dur], [1, 1.08])})`
         : cam === 'pan'
           ? `scale(1.06) translateX(${interpolate(f, [0, dur], [-1.8 * dir, 1.8 * dir])}%)`
-          : `translate(${sx}px, ${sy}px) scale(${1 + zoom - zoom * punch})`;
+          : cam === 'pullBack'
+            ? `scale(${interpolate(f, [0, dur], [1.12, 1], { easing: Easing.out(Easing.cubic) })})`
+            : cam === 'drift'
+              ? `scale(1.05) translateY(${interpolate(f, [0, dur], [1.4 * dir, -1.4 * dir])}%)`
+              : cam === 'orbit'
+                ? `scale(${interpolate(f, [0, dur], [1.08, 1.04])}) rotate(${interpolate(f, [0, dur], [-1.2 * dir, 0.6 * dir], { easing: Easing.out(Easing.quad) })}deg)`
+                : `translate(${sx}px, ${sy}px) scale(${1 + zoom - zoom * punch})`;
 
   return (
     <AbsoluteFill style={{ background: theme().bg[0], overflow: 'hidden' }}>
@@ -404,6 +411,12 @@ const makePresentation = (name, width, height) => {
       return wipe({ direction: 'from-top-left' });
     case 'cut':
       return none();
+    case 'zoomThrough':
+      return zoomThrough();
+    case 'flashCut':
+      return flashCut({ color: theme().dark ? '#ffffff' : accentFor(0) });
+    case 'splitWipe':
+      return splitWipe();
     case 'fade':
       return fade();
     case 'slideBottom':

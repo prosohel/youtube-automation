@@ -38,7 +38,7 @@ Set at least:
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | from Cloudflare → R2 → Manage R2 API tokens (Object Read & Write, this bucket) |
 | `CLAUDE_CODE_OAUTH_TOKEN` | run `claude setup-token` on your PC and paste the token (the server has no browser to log in) |
 | `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID` | your voice |
-| `REMOTION_GL` | `swangle` (software WebGL; the VM has no GPU) |
+| `REMOTION_GL` | `swangle` (software WebGL; the VM has no GPU). **Server only**: never put this in a Windows/Mac `.env`, it is software rendering there and about 10x slower than the default `angle`. |
 | `REMOTION_CONCURRENCY` | `3` on 4 vCPU |
 
 `client_secret.json` (YouTube OAuth client) goes next to `.env`. It is imported into Redis on first start together with `.env`;
