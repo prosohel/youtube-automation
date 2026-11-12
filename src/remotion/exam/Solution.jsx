@@ -18,7 +18,7 @@ const SIZES = {
   wide: { width: 1500, padY: 36, padX: 48, label: 32, line: 46, gapHead: 22, gap: 12 },
 };
 
-export const Solution = ({ visual, accent, isShort, room, voiceFrames, narration, start }) => {
+export const Solution = ({ visual, accent, isShort, room, voiceFrames, narration, wordFrames, start }) => {
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
   const T = theme();
@@ -46,7 +46,7 @@ export const Solution = ({ visual, accent, isShort, room, voiceFrames, narration
   const S = isShort ? SIZES.short : SIZES.wide;
   const z = (n) => n * SIZE_STEPS[lay.fit.step];
   const size = (key, px) => px * (lay.fit.shrink[key] || 1);
-  const starts = lineStarts(visual.lines, wordStarts(narration, voiceFrames));
+  const starts = lineStarts(visual.lines, wordStarts(narration, voiceFrames, wordFrames));
   const newest = newestLine(starts, f);
   let scroll = 0;
   if (lay.viewport && newest >= 0) {

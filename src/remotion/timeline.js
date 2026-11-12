@@ -4,14 +4,17 @@
 export const OVERLAP = 15;
 
 /**
- * Frame each word of the narration starts at, spread over `frames` by word length (the captions' karaoke
- * timing; the exam solution lines use it too, so a line appears as the voice reaches it).
+ * Frame each word of the narration starts at (the captions' karaoke timing; the exam solution lines use it
+ * too, so a line appears as the voice reaches it). Frame 0 of a scene is the first frame of its voice.
+ * `timed`: the real start frame of every word, measured from the voice (src/wordTiming.js), when the
+ * provider gave word timings. Otherwise the words are spread over `frames` by length (an estimate).
  */
-export function wordStarts(narration, frames) {
-  const weights = String(narration || '')
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => [...w].length + 2);
+export function wordStarts(narration, frames, timed) {
+  const words = String(narration || '').split(/\s+/).filter(Boolean);
+  if (Array.isArray(timed) && timed.length === words.length && timed.every(Number.isFinite)) {
+    return timed.map((f) => Math.max(0, Math.min(f, frames - 1)));
+  }
+  const weights = words.map((w) => [...w].length + 2);
   const sum = weights.reduce((x, y) => x + y, 0);
   const span = frames * 0.96;
   const starts = [];

@@ -19,7 +19,7 @@ RUN apt-get update \
      ca-certificates ffmpeg python3 python3-pip fonts-noto-core fontconfig \
      libnss3 libdbus-1-3 libatk1.0-0 libgbm-dev libasound2 libxrandr2 libxkbcommon-dev \
      libxfixes3 libxcomposite1 libxdamage1 libatk-bridge2.0-0 libpango-1.0-0 libcairo2 libcups2 \
-  && pip3 install --no-cache-dir --break-system-packages edge-tts \
+  && pip3 install --no-cache-dir --break-system-packages edge-tts==7.3.1 \
   && npm install -g @anthropic-ai/claude-code \
   && rm -rf /var/lib/apt/lists/* /root/.npm
 

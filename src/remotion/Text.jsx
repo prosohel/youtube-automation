@@ -189,18 +189,18 @@ export const HeadlineCard = ({ text, accent, frames, isShort, kicker, seed = 0, 
 /* ---------- captions: one look per theme ---------- */
 
 /** Karaoke captions: a few words at a time, the spoken word highlighted in the theme's caption style. */
-export const Captions = ({ narration, frames, accent, isShort, onFootage = false }) => {
+export const Captions = ({ narration, wordFrames, frames, accent, isShort, onFootage = false }) => {
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
   const T = theme();
   const style = T.caption;
   if (style === 'none') return null; // story theme: the scene's own line is the text
-  if (style === 'reel') return <ReelCaptions narration={narration} frames={frames} accent={accent} isShort={isShort} onFootage={onFootage} />;
+  if (style === 'reel') return <ReelCaptions narration={narration} frames={frames} wordFrames={wordFrames} accent={accent} isShort={isShort} onFootage={onFootage} />;
   const words = narration.split(/\s+/).filter(Boolean);
   if (!words.length) return null;
   const perChunk = isShort ? 3 : 6;
 
-  const starts = wordStarts(narration, frames);
+  const starts = wordStarts(narration, frames, wordFrames);
   let active = 0;
   for (let i = 0; i < words.length; i++) if (f >= starts[i]) active = i;
   const first = Math.floor(active / perChunk) * perChunk;

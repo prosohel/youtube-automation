@@ -49,14 +49,14 @@ export const ReelEyebrow = ({ text, accent, isShort, start }) => {
 
 /* ---------- captions: the narration as left-aligned display type, 3-4 words at a time ---------- */
 
-export const ReelCaptions = ({ narration, frames, accent, isShort, onFootage = false }) => {
+export const ReelCaptions = ({ narration, frames, wordFrames, accent, isShort, onFootage = false }) => {
   const f = useCurrentFrame();
   const { fps } = useVideoConfig();
   const T = theme();
   const words = String(narration || '').split(/\s+/).filter(Boolean);
   if (!words.length) return null;
   const per = isShort ? 4 : 7;
-  const starts = wordStarts(narration, frames);
+  const starts = wordStarts(narration, frames, wordFrames);
   let active = 0;
   for (let i = 0; i < words.length; i++) if (f >= starts[i]) active = i;
   const first = Math.floor(active / per) * per;

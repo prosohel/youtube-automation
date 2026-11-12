@@ -171,13 +171,18 @@ test('wordStarts is the captions word timing, unchanged', () => {
   assert.deepEqual(wordStarts('   ', 100), []);
 });
 
-test('Captions takes its timing from wordStarts and the scene passes the voice length', () => {
+test('Captions takes its timing from wordStarts and the scene passes the voice length and word frames', () => {
   const text = fs.readFileSync(path.join(__dirname, '..', 'src', 'remotion', 'Text.jsx'), 'utf8');
-  assert.match(text, /wordStarts\(narration, frames\)/);
+  assert.match(text, /wordStarts\(narration, frames, wordFrames\)/);
   assert.match(text, /export \{[^}]*\bwordStarts\b[^}]*\}/);
   const main = fs.readFileSync(path.join(__dirname, '..', 'src', 'remotion', 'Main.jsx'), 'utf8');
   assert.match(main, /const voiceFrames = scene\.voiceFrames \|\| scene\.frames;/);
-  assert.match(main, /<Captions[^>]*frames=\{voiceFrames\}/);
+  assert.match(main, /<Captions[^>]*frames=\{voiceFrames\}[^>]*wordFrames=\{scene\.wordFrames\}/);
+  // The reel captions and the exam solution lines follow the same timings.
+  const reel = fs.readFileSync(path.join(__dirname, '..', 'src', 'remotion', 'Reel.jsx'), 'utf8');
+  assert.match(reel, /wordStarts\(narration, frames, wordFrames\)/);
+  const solution = fs.readFileSync(path.join(__dirname, '..', 'src', 'remotion', 'exam', 'Solution.jsx'), 'utf8');
+  assert.match(solution, /wordStarts\(narration, voiceFrames, wordFrames\)/);
 });
 
 test('exam visuals are drawn before the Vox branch can swallow them', () => {
