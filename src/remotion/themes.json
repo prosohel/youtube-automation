@@ -813,5 +813,105 @@
     "captionBg": "transparent",
     "captionText": "#fafafa",
     "shadow": "0 14px 40px rgba(0,0,0,0.5)"
+  },
+  "ledger": {
+    "label": "Ledger: paper explainer",
+    "mood": "long explainers and essays about money, jobs, markets, freelancing, the economy, technology and society; calm, factual, one idea per frame",
+    "family": "reel",
+    "bgStyles": [
+      "plain"
+    ],
+    "card": "ink",
+    "radius": 6,
+    "caption": "reel",
+    "headline": "eyebrow",
+    "badge": false,
+    "thumbIntro": false,
+    "transitions": [
+      "cut",
+      "fade"
+    ],
+    "motion": "smooth",
+    "particles": false,
+    "leaks": false,
+    "leakHue": 0,
+    "glitch": false,
+    "overlays": [
+      "channelPill"
+    ],
+    "headingFont": "AnekBangla",
+    "headingWeight": "800",
+    "bodyFont": "NotoSansBengali",
+    "bodyWeight": "600",
+    "dark": false,
+    "bg": [
+      "#efe9dc",
+      "#efe9dc"
+    ],
+    "surface": "#faf7f0",
+    "text": "#141414",
+    "muted": "rgba(20,20,20,0.6)",
+    "onAccent": "#faf7f0",
+    "accents": [
+      "#0f6b3f",
+      "#d7261e",
+      "#0f6b3f",
+      "#d7261e"
+    ],
+    "track": "rgba(20,20,20,0.12)",
+    "captionBg": "transparent",
+    "captionText": "#141414",
+    "shadow": "0 2px 0 rgba(20,20,20,0.9)",
+    "highlight": "#ffe14d"
+  },
+  "ledger-green": {
+    "label": "Ledger: green board",
+    "mood": "the same paper-explainer family on a deep green board, for chapters, conclusions and bold claims",
+    "family": "reel",
+    "bgStyles": [
+      "plain"
+    ],
+    "card": "ink",
+    "radius": 6,
+    "caption": "reel",
+    "headline": "eyebrow",
+    "badge": false,
+    "thumbIntro": false,
+    "transitions": [
+      "cut",
+      "fade"
+    ],
+    "motion": "smooth",
+    "particles": false,
+    "leaks": false,
+    "leakHue": 0,
+    "glitch": false,
+    "overlays": [
+      "channelPill"
+    ],
+    "headingFont": "AnekBangla",
+    "headingWeight": "800",
+    "bodyFont": "NotoSansBengali",
+    "bodyWeight": "600",
+    "dark": true,
+    "bg": [
+      "#0f3d2e",
+      "#0f3d2e"
+    ],
+    "surface": "#faf7f0",
+    "text": "#faf7f0",
+    "muted": "rgba(250,247,240,0.65)",
+    "onAccent": "#0f3d2e",
+    "accents": [
+      "#ffd84d",
+      "#ff5a4e",
+      "#ffd84d",
+      "#ff5a4e"
+    ],
+    "track": "rgba(250,247,240,0.18)",
+    "captionBg": "transparent",
+    "captionText": "#faf7f0",
+    "shadow": "0 2px 0 rgba(0,0,0,0.6)",
+    "highlight": "#ffe14d"
   }
 }

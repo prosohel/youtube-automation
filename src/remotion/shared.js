@@ -109,6 +109,9 @@ export const tornClip = (seed, rough = 1.6) => {
 export const cardStyle = (accent, opts = {}) => {
   const r = T.radius;
   switch (T.card) {
+    case 'ink':
+      // Paper explainer: a flat cream card with a thin ink outline and a hard 2 px drop line, no blur, no glow.
+      return { background: T.surface, borderRadius: r, border: '2px solid #141414', boxShadow: T.shadow };
     case 'flat':
       return { background: T.surface, borderRadius: r, boxShadow: T.shadow };
     case 'shadow':
