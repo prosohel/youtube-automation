@@ -14,3 +14,5 @@ redis-data/
 
 # Local Redis backups (contain secrets)
 backups/
+.env.*
+!.env.example
