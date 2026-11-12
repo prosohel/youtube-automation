@@ -212,3 +212,15 @@ test('numbers keep up to two decimals, so the chart says what the narration says
   const d = G.validateVisual({ type: 'donut', slices: [{ label: 'হ্যাঁ', share: 99.6 }, { label: 'না', share: 0.4 }] }, ON);
   assert.deepEqual(d.slices.map((x) => x.shown), ['৯৯.৬%', '০.৪%']);
 });
+
+test('hero3d objects: the renderer, the validator and the prompt list the same objects', () => {
+  const src = readRemotion('Hero3D.jsx');
+  const listed = [...src.match(/HERO_OBJECTS = \[([^\]]*)\]/)[1].matchAll(/'(\w+)'/g)].map((m) => m[1]).sort();
+  const drawn = [...src.match(/const OBJECTS = \{([^}]*)\}/)[1].matchAll(/(\w+): \w+/g)].map((m) => m[1]).sort();
+  assert.deepEqual(listed, drawn);
+  assert.deepEqual([...G.HERO_OBJECTS].sort(), listed);
+  const prompt = G.graphicsPrompt(ON, []);
+  const inPrompt = prompt.match(/"type":"hero3d"[^\n]*object: one of ([^(]*)\(/)[1].split(',').map((x) => x.trim()).filter(Boolean).sort();
+  assert.deepEqual(inPrompt, listed);
+  for (const o of listed) assert.match(prompt, new RegExp(`${o} = `), `meaning for ${o}`);
+});

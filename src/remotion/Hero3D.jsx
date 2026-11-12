@@ -1,7 +1,10 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo } from 'react';
 import { interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
 import { ThreeCanvas } from '@remotion/three';
+import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { bodyFont, pop, theme } from './shared';
 
 /*
@@ -14,15 +17,54 @@ export const HERO_OBJECTS = ['phone', 'coin', 'laptop', 'rocket', 'shield', 'loc
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
 
-const metal = (color, extra = {}) => <meshStandardMaterial color={color} metalness={0.45} roughness={0.3} {...extra} />;
-const matte = (color, extra = {}) => <meshStandardMaterial color={color} metalness={0.1} roughness={0.55} {...extra} />;
+const metal = (color, extra = {}) => <meshStandardMaterial color={color} metalness={0.7} roughness={0.28} envMapIntensity={1.1} {...extra} />;
+const matte = (color, extra = {}) => <meshStandardMaterial color={color} metalness={0.1} roughness={0.55} envMapIntensity={0.8} {...extra} />;
+
+/**
+ * Soft studio reflections without an HDR file: a RoomEnvironment baked through PMREM once per canvas and set as
+ * scene.environment (every standard material picks it up). useLayoutEffect, not useEffect: ThreeCanvas draws the
+ * frame in a sibling effect that runs first, so the first frame of a render tab would have no reflections.
+ */
+const StudioEnv = ({ intensity = 1 }) => {
+  const gl = useThree((st) => st.gl);
+  const scene = useThree((st) => st.scene);
+  const env = useMemo(() => {
+    const pmrem = new THREE.PMREMGenerator(gl);
+    const room = new RoomEnvironment();
+    const tex = pmrem.fromScene(room, 0.04).texture;
+    room.dispose();
+    pmrem.dispose();
+    return tex;
+  }, [gl]);
+  useLayoutEffect(() => {
+    scene.environment = env;
+    return () => {
+      scene.environment = null;
+      env.dispose();
+    };
+  }, [scene, env]);
+  useLayoutEffect(() => {
+    scene.environmentIntensity = intensity;
+  }, [scene, intensity]);
+  return null;
+};
+
+/** A box with softly rounded edges (they catch the reflections; sharp boxes look like paper). */
+const RoundedBox = ({ args, radius = 0.05, segments = 3, children, ...rest }) => {
+  const geo = useMemo(() => new RoundedBoxGeometry(args[0], args[1], args[2], segments, radius), [args[0], args[1], args[2], segments, radius]);
+  useEffect(() => () => geo.dispose(), [geo]);
+  return (
+    <mesh geometry={geo} {...rest}>
+      {children}
+    </mesh>
+  );
+};
 
 const Phone = ({ accent }) => (
   <group>
-    <mesh castShadow receiveShadow>
-      <boxGeometry args={[1.1, 2.2, 0.12]} />
+    <RoundedBox args={[1.1, 2.2, 0.12]} radius={0.06} castShadow receiveShadow>
       {metal('#2b303d')}
-    </mesh>
+    </RoundedBox>
     <mesh position={[0, 0, 0.065]}>
       <planeGeometry args={[0.98, 2.06]} />
       <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.55} roughness={0.3} />
@@ -61,19 +103,17 @@ const Coin = ({ accent }) => (
 
 const Laptop = ({ accent }) => (
   <group position={[0, -0.4, 0]}>
-    <mesh castShadow receiveShadow>
-      <boxGeometry args={[2.4, 0.1, 1.6]} />
+    <RoundedBox args={[2.4, 0.1, 1.6]} radius={0.04} castShadow receiveShadow>
       {metal('#b9bcc4')}
-    </mesh>
+    </RoundedBox>
     <mesh position={[0, 0.06, 0.05]}>
       <boxGeometry args={[2.0, 0.02, 0.9]} />
       {matte('#2a2d35')}
     </mesh>
     <group position={[0, 0.05, -0.8]} rotation={[-1.25, 0, 0]}>
-      <mesh position={[0, 0.8, 0]} castShadow>
-        <boxGeometry args={[2.4, 1.6, 0.08]} />
+      <RoundedBox args={[2.4, 1.6, 0.08]} radius={0.035} position={[0, 0.8, 0]} castShadow>
         {metal('#b9bcc4')}
-      </mesh>
+      </RoundedBox>
       <mesh position={[0, 0.8, 0.045]}>
         <planeGeometry args={[2.2, 1.4]} />
         <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.5} roughness={0.3} />
@@ -140,10 +180,9 @@ const Shield = ({ accent }) => {
 
 const Lock = ({ accent }) => (
   <group position={[0, -0.2, 0]}>
-    <mesh castShadow receiveShadow>
-      <boxGeometry args={[1.6, 1.3, 0.6]} />
-      <meshStandardMaterial color={accent} metalness={0.6} roughness={0.3} />
-    </mesh>
+    <RoundedBox args={[1.6, 1.3, 0.6]} radius={0.12} castShadow receiveShadow>
+      <meshStandardMaterial color={accent} metalness={0.7} roughness={0.28} envMapIntensity={1.1} />
+    </RoundedBox>
     <mesh position={[0, 1.0, 0]} rotation={[0, 0, 0]}>
       <torusGeometry args={[0.55, 0.13, 16, 48, Math.PI]} />
       {metal('#c9ccd4')}
@@ -163,10 +202,9 @@ const Lock = ({ accent }) => (
 
 const Chip = ({ accent }) => (
   <group rotation={[0.9, 0, 0]}>
-    <mesh castShadow receiveShadow>
-      <boxGeometry args={[1.8, 0.18, 1.8]} />
+    <RoundedBox args={[1.8, 0.18, 1.8]} radius={0.05} castShadow receiveShadow>
       {matte('#1b1f2a')}
-    </mesh>
+    </RoundedBox>
     <mesh position={[0, 0.1, 0]}>
       <boxGeometry args={[1.0, 0.04, 1.0]} />
       <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.4} metalness={0.7} roughness={0.25} />
@@ -189,10 +227,9 @@ const Chip = ({ accent }) => (
 );
 
 const Cube = ({ accent }) => (
-  <mesh castShadow receiveShadow>
-    <boxGeometry args={[1.6, 1.6, 1.6]} />
-    <meshStandardMaterial color={accent} metalness={0.5} roughness={0.25} />
-  </mesh>
+  <RoundedBox args={[1.6, 1.6, 1.6]} radius={0.14} castShadow receiveShadow>
+    <meshStandardMaterial color={accent} metalness={0.7} roughness={0.25} envMapIntensity={1.1} />
+  </RoundedBox>
 );
 
 const OBJECTS = { phone: Phone, coin: Coin, laptop: Laptop, rocket: Rocket, shield: Shield, lock: Lock, chip: Chip, cube: Cube };
@@ -205,8 +242,9 @@ const Scene3D = ({ object, accent, f, enter, dark }) => {
   const tilt = 0.25 + Math.sin(f / 40) * 0.08;
   return (
     <>
-      <ambientLight intensity={dark ? 0.4 : 0.6} />
-      <hemisphereLight args={['#ffffff', '#444466', dark ? 0.9 : 0.6]} />
+      <StudioEnv intensity={dark ? 0.9 : 1.1} />
+      <ambientLight intensity={dark ? 0.15 : 0.25} />
+      <hemisphereLight args={['#ffffff', '#444466', dark ? 0.35 : 0.25]} />
       <directionalLight position={[4, 6, 5]} intensity={dark ? 2.2 : 1.8} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
       <directionalLight position={[-5, 2, -4]} intensity={0.9} color={accent} />
       <pointLight position={[0, -3, 4]} intensity={dark ? 1.2 : 0.6} />
