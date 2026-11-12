@@ -436,7 +436,8 @@ const cutTiming = linearTiming({ durationInFrames: OVERLAP, easing: () => 1 });
 const cutOr = (name) => (isReel() ? 'cut' : name);
 const timingFor = (name) => (name === 'cut' ? cutTiming : timing);
 
-const SFX_VOLUME = { whoosh: 0.35, whip: 0.35, ding: 0.3, 'mouse-click': 0.45, switch: 0.4 };
+const SFX_VOLUME = { whoosh: 0.35, whip: 0.35, ding: 0.3, 'mouse-click': 0.45, switch: 0.4, pop: 0.4, tick: 0.35, riser: 0.28, impact: 0.45, chime: 0.3, swish: 0.3, type: 0.35 };
+const RISER_FRAMES = 30; // src/sfx.js riser is one second long: it starts this long before the graphic lands
 
 /** Frames at which one of Claude's cues plays. Footage scenes hide the graphic, so its cues are dropped there. */
 const cueFrames = (scene, start, at) => {
@@ -445,6 +446,8 @@ const cueFrames = (scene, start, at) => {
   const landed = start + VISUAL_START + (v.type === 'stat' || v.type === 'bigNumber' ? COUNT_FRAMES : 10);
   const each = (list, max) => (list || []).slice(0, max).map((_, i) => start + VISUAL_START + i * ITEM_STAGGER);
   if (at === 'enter') return [start];
+  if (at === 'build') return graphic ? [Math.max(start, landed - RISER_FRAMES)] : [];
+  if (at === 'exit') return [start + scene.frames - 12];
   if (at === 'visual') return graphic ? [landed] : [];
   if (at === 'items') {
     if (!graphic) return [];
@@ -476,9 +479,15 @@ const SceneSfx = ({ scene, start, index, grid }) => {
   const v = scene.visual || {};
   const out = [<Sfx key="w" name={index % 2 ? 'whip' : 'whoosh'} at={q(start)} volume={0.35} />];
   if (!scene.bg && v.type === 'list') {
-    (v.items || []).slice(0, 4).forEach((_, i) => out.push(<Sfx key={`c${i}`} name="mouse-click" at={q(start + VISUAL_START + i * 7)} volume={0.45} />));
+    (v.items || []).slice(0, 4).forEach((_, i) => out.push(<Sfx key={`c${i}`} name="pop" at={q(start + VISUAL_START + i * 7)} volume={0.4} />));
   }
-  if (!scene.bg && v.type === 'stat') out.push(<Sfx key="d" name="ding" at={q(start + VISUAL_START + 38)} volume={0.3} />);
+  if (!scene.bg && (v.type === 'stat' || v.type === 'bigNumber')) {
+    // a riser into the count, then the landing
+    out.push(<Sfx key="r" name="riser" at={q(start + VISUAL_START + 38 - RISER_FRAMES)} volume={0.28} />);
+    out.push(<Sfx key="d" name="impact" at={q(start + VISUAL_START + 38)} volume={0.4} />);
+  }
+  if (!scene.bg && theme().headline === 'typewriter' && scene.headline) out.push(<Sfx key="t" name="type" at={q(start + VISUAL_START)} volume={0.3} />);
+  if (!scene.bg && (v.type === 'chapter')) out.push(<Sfx key="i" name="impact" at={q(start + VISUAL_START + 2)} volume={0.35} />);
   if (!scene.bg && v.type === 'compare') out.push(<Sfx key="s" name="switch" at={q(start + VISUAL_START + 10)} volume={0.4} />);
   if (scene.emoji) out.push(<Sfx key="e" name="switch" at={q(start + VISUAL_START + 10)} volume={0.25} />);
   return <>{out}</>;

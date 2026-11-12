@@ -9,9 +9,11 @@ const { loadHistory } = require('./history');
 // Must match the cases of makePresentation() in src/remotion/Main.jsx (a test checks this).
 const TRANSITIONS = ['slideRight', 'slideLeft', 'slideBottom', 'wipe', 'iris', 'clockWipe', 'pushCut', 'fade', 'cut', 'zoomThrough', 'flashCut', 'splitWipe'];
 // Neutral UI sounds from @remotion/sfx (no meme sounds: those risk YouTube copyright claims).
-const SOUNDS = ['whoosh', 'whip', 'ding', 'mouse-click', 'switch'];
+// Downloaded from remotion.media (neutral UI sounds) + synthesized in src/sfx.js (pop, tick, riser, impact, chime, swish, type).
+const DOWNLOADED_SOUNDS = ['whoosh', 'whip', 'ding', 'mouse-click', 'switch'];
+const SOUNDS = [...DOWNLOADED_SOUNDS, ...require('./sfx').SYNTH_SOUNDS];
 // When a cue plays: as the scene enters, when its graphic lands, on each list item, when its emoji pops.
-const CUE_TIMES = ['enter', 'visual', 'items', 'emoji'];
+const CUE_TIMES = ['enter', 'visual', 'items', 'emoji', 'build', 'exit'];
 const CAMERAS = ['still', 'push', 'pan', 'punch', 'pullBack', 'drift', 'orbit'];
 
 const MAX_CUES = 3;
@@ -115,7 +117,8 @@ function directionPrompt(opts, recent = {}) {
   if (opts.sfx && opts.directSfx) {
     lines.push(
       `- For each scene give "sfx": 0-${MAX_CUES} sound cues like {"sound":"whoosh","at":"enter"}. sound is one of: ${SOUNDS.join(', ')}. ` +
-        'at is "enter" (as the scene arrives), "visual" (when its graphic lands), "items" (on each point of a list, each bar or each timeline event) or "emoji" (when its emoji pops; only if the scene has one). ' +
+        'at is "enter" (as the scene arrives), "build" (the second before the graphic lands: use riser here), "visual" (when its graphic lands), "items" (on each point of a list, each bar or each timeline event), "emoji" (when its emoji pops; only if the scene has one) or "exit" (the last moment of the scene). ' +
+        'Sounds: whoosh/whip/swish for movement, pop/tick/mouse-click for small things landing, ding/chime for a win or a check, impact for a shock or a big number, riser only at "build", type only for a typed-out headline. ' +
         'Sound only what deserves attention; [] makes a quiet scene. Do not put the same cue on every scene.' +
         avoid(recent.sounds)
     );
@@ -134,6 +137,7 @@ function directionPrompt(opts, recent = {}) {
 module.exports = {
   TRANSITIONS,
   SOUNDS,
+  DOWNLOADED_SOUNDS,
   CUE_TIMES,
   CAMERAS,
   fitKicker,

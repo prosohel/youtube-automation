@@ -3,6 +3,7 @@ const path = require('path');
 const cfg = require('./config');
 const { run, log, ensureDir } = require('./util');
 const { fetchClip } = require('./footage');
+const { SYNTH_SOUNDS, ensureSound } = require('./sfx');
 const { synthMusic, musicPlan, beatGrid, snapUp } = require('./music');
 const { SOUNDS, sceneDirection } = require('./direction');
 const { COLORS, pickPhotoScenes } = require('./thumbnail');
@@ -32,9 +33,12 @@ async function cachedDownload(url, dest) {
 async function prepSfx(publicDir) {
   if (!cfg.sfx) return false;
   try {
+    ensureDir(path.join(ASSET_DIR, 'sfx'));
+    ensureDir(path.join(publicDir, 'sfx'));
     for (const name of SOUNDS) {
-      const local = await cachedDownload(`https://remotion.media/${name}.wav`, path.join(ASSET_DIR, 'sfx', `${name}.wav`));
-      ensureDir(path.join(publicDir, 'sfx'));
+      const file = path.join(ASSET_DIR, 'sfx', `${name}.wav`);
+      // Our own sounds are made in code (src/sfx.js); the rest come from remotion.media once.
+      const local = SYNTH_SOUNDS.includes(name) ? ensureSound(name, file) : await cachedDownload(`https://remotion.media/${name}.wav`, file);
       fs.copyFileSync(local, path.join(publicDir, 'sfx', `${name}.wav`));
     }
     return true;
