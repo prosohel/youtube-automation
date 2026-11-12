@@ -1,7 +1,7 @@
 # Automation Studio: one image for the dashboard (web) and the background worker.
 
 # ---- 1. Build the dashboard ----
-FROM node:22-bookworm-slim AS web
+FROM node:25-bookworm-slim AS web
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
@@ -9,7 +9,7 @@ COPY web/ ./
 RUN npm run build
 
 # ---- 2. Runtime ----
-FROM node:22-bookworm-slim
+FROM node:25-bookworm-slim
 ENV IN_DOCKER=1 NODE_ENV=production
 
 # ffmpeg/ffprobe, edge-tts (free voice), Bengali fonts for the ffmpeg caption fallback,
