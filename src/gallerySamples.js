@@ -9,6 +9,11 @@ const BCS_Q1 = {
 };
 
 module.exports = [
+  { name: 'figures-laptop', visual: { type: 'figures', scene: 'laptop', label: 'রাত দুটোয় বসে ক্লায়েন্টের রিভিশন করা ফ্রিল্যান্সার' } },
+  { name: 'figures-podium', visual: { type: 'figures', scene: 'podium', label: 'ফাইভারের সিইও ঘোষণা দিলেন' } },
+  { name: 'figures-group', visual: { type: 'figures', scene: 'group', count: 5, highlight: 2, label: 'একশ জনের মধ্যে একজন কাজ পান' } },
+  { name: 'figures-phone', visual: { type: 'figures', scene: 'phone', label: 'ক্লায়েন্ট এখন নিজেই এআই দিয়ে করে নেন' } },
+  { name: 'figures-handshake', visual: { type: 'figures', scene: 'handshake' } },
   { name: 'phoneApps', visual: { type: 'phoneApps', apps: ['ক্যানভা', 'ক্লড', 'চ্যাটজিপিটি', 'ফিগমা'], label: 'একটা ফোনেই পুরো ডিজাইন স্টুডিও, কোনো ল্যাপটপ ছাড়াই' } },
   { name: 'wireframe', visual: { type: 'wireframe', title: 'নিজের পোর্টফোলিও সাইট: কাজ, দাম আর যোগাযোগ', url: 'sohel-design.com', button: 'অর্ডার করুন' } },
   { name: 'orgTree', visual: { type: 'orgTree', root: 'ফ্রিল্যান্স আয়ের উৎস', children: ['ডিজাইন ক্লায়েন্ট', 'নিজের টেমপ্লেট', 'ইউটিউব', 'কোর্স বিক্রি'] } },

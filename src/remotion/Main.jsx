@@ -457,6 +457,7 @@ const cueFrames = (scene, start, at) => {
     if (v.type === 'phoneApps') return (v.apps || []).slice(0, 4).map((_, i) => start + VISUAL_START + 6 + i * ITEM_STAGGER);
     if (v.type === 'orgTree') return (v.children || []).slice(0, 4).map((_, i) => start + VISUAL_START + 20 + i * ITEM_STAGGER);
     if (v.type === 'iconGrid') return each(v.cards, 4);
+    if (v.type === 'figures' && v.scene === 'group') return Array.from({ length: v.count || 3 }).map((_, i) => start + VISUAL_START + i * ITEM_STAGGER);
     return [landed];
   }
   if (at === 'emoji') return scene.emoji ? [start + VISUAL_START + 10] : [];

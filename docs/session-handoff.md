@@ -57,7 +57,7 @@ Every item of the gap-analysis list is now done.
 |---|---|
 | 1. `ledger` / `ledger-green` themes (cream, green, red, ink-outlined cards; reel grammar; best in landscape) | done |
 | 2. Five flat graphics: `phoneApps`, `wireframe`, `orgTree`, `priceTag`, `iconGrid` (`src/remotion/library/Illustrations.jsx`, checks + prompt in `src/graphics.js`, gallery samples) | done |
-| 3. Silhouette figures (flat black/green people: at a laptop, at a podium, a group) | not started |
+| 3. Silhouette figures: library graphic `figures` with scenes laptop, podium, group (count + highlight), phone, handshake (`src/remotion/library/Figures.jsx`) | done |
 | 4. `SCRIPT_MODE=essay`: a chaptered 5-10 minute argument | not started |
 
 

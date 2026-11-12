@@ -8,7 +8,8 @@ const { EXAM_TYPES, checkExamVisual } = require('./examVisuals');
 const { STORY_TYPES, checkStoryVisual } = require('./storyVisuals');
 
 const BASIC_TYPES = ['icon', 'stat', 'list', 'compare'];
-const LIBRARY_TYPES = ['bigNumber', 'bars', 'line', 'donut', 'timeline', 'hero3d', 'phoneApps', 'wireframe', 'orgTree', 'priceTag', 'iconGrid'];
+const LIBRARY_TYPES = ['bigNumber', 'bars', 'line', 'donut', 'timeline', 'hero3d', 'phoneApps', 'wireframe', 'orgTree', 'priceTag', 'iconGrid', 'figures'];
+const FIGURE_SCENES = ['laptop', 'podium', 'group', 'phone', 'handshake'];
 const LUCIDE = require('lucide-react').icons;
 const HERO_OBJECTS = ['phone', 'coin', 'laptop', 'rocket', 'shield', 'lock', 'chip', 'cube'];
 
@@ -145,6 +146,19 @@ const CHECK = {
     return { type: 'iconGrid', cards };
   },
 
+  figures(v) {
+    if (!FIGURE_SCENES.includes(v.scene)) return null;
+    const label = clip(v.label, 60);
+    const out = { type: 'figures', scene: v.scene, ...(label ? { label } : {}) };
+    if (v.scene === 'group') {
+      const count = parseNumber(v.count);
+      out.count = count === null ? 3 : Math.max(2, Math.min(5, Math.round(count)));
+      const hi = parseNumber(v.highlight);
+      if (hi !== null) out.highlight = Math.max(0, Math.min(out.count - 1, Math.round(hi)));
+    }
+    return out;
+  },
+
   hero3d(v) {
     if (!HERO_OBJECTS.includes(v.object)) return null;
     const label = clip(v.label, 30);
@@ -225,6 +239,7 @@ function graphicsPrompt(opts, recent = []) {
     '  - {"type":"orgTree","root":"এআই","children":["লেখা","ছবি","কোড"]}: one box on top branching into 2-4 below (root max 24, children max 22 characters). For hierarchies, categories, "X splits into A, B, C".',
     '  - {"type":"priceTag","value":"$১০,০০০","label":"একটা প্রজেক্টের দাম"}: a red stamp with a price or figure (value max 12 characters), label optional (max 60). Only when the narration itself states that figure.',
     '  - {"type":"iconGrid","cards":[{"icon":"Stethoscope","label":"ডাক্তার"},{"icon":"Scale","label":"আইনজীবী"}]}: 2-4 cards with a line icon and a short label (max 24). icon is a lucide icon name (Smartphone, Laptop, Briefcase, GraduationCap, DollarSign, Shield, Users, Globe, Heart, Home, Scale, Stethoscope, Wrench, Car, ShoppingCart, Camera). For "these kinds of people, things or jobs".',
+    '  - {"type":"figures","scene":"laptop","label":"রাতে বসে কাজ"}: flat silhouette people. scene: laptop (someone working), podium (someone speaking or announcing), group (2-5 people standing; "count" and the 0-based "highlight" index of the one who matters), phone (someone scrolling), handshake (a deal or a client). label optional (max 60). For human moments: workers, clients, bosses, crowds, announcements.',
     '  - {"type":"timeline","events":[{"when":"২০১৯","text":"প্রথম সংস্করণ"},{"when":"২০২১","text":"বড় আপডেট"},{"when":"২০২৪","text":"সবার জন্য খোলা"}]}: 3-5 dated events. when: a year or a short date (max 12 characters); text: a short phrase of up to 6 words (max 32). Only dates the narration itself gives.',
     '  Never use the same graphic type on two scenes in a row (icon is exempt; a B-roll scene in between is fine).' +
       (recent.length ? ` The last videos relied most on ${recent.join(', ')}: use them less this time.` : ''),
@@ -236,6 +251,7 @@ module.exports = {
   BASIC_TYPES,
   LIBRARY_TYPES,
   HERO_OBJECTS,
+  FIGURE_SCENES,
   isBangla,
   parseNumber,
   formatNumber,
