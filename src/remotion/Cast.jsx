@@ -470,7 +470,37 @@ const ChapterCard = ({ v, isShort, start }) => {
   const small = isShort ? 40 : 44;
   return (
     <div style={{ position: 'fixed', inset: 0, background: bg, backgroundImage: GRAIN, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isShort ? '0 90px' : '0 200px', textAlign: 'center', color: ink }}>
-      {v.kind === 'number' ? (
+      {v.kind === 'number' && T.chapterStripes ? (
+        // Printed report: a huge number drawn in diagonal stripes, a red disc behind it, the title beside.
+        <div style={{ display: 'flex', flexDirection: isShort ? 'column' : 'row', alignItems: 'center', gap: isShort ? 40 : 80, textAlign: isShort ? 'center' : 'left' }}>
+          <div style={{ position: 'relative', width: big * 1.5, height: big * 1.5, flexShrink: 0, opacity: a, transform: `scale(${0.7 + 0.3 * a})` }}>
+            <div style={{ position: 'absolute', inset: '12%', borderRadius: '50%', background: T.accents[0] }} />
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontFamily: headFont(),
+                fontSize: big * 1.3,
+                lineHeight: 1,
+                backgroundImage: `repeating-linear-gradient(135deg, ${ink} 0 7px, transparent 7px 14px)`,
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text',
+                color: 'transparent',
+                WebkitTextStroke: `3px ${ink}`,
+              }}
+            >
+              {v.value}
+            </div>
+          </div>
+          <div>
+            {v.unit ? <div style={{ fontFamily: headFont(), fontSize: mid * 1.2, lineHeight: 1.15, opacity: b }}>{v.unit}</div> : null}
+            {v.sub ? <div style={{ marginTop: 22, display: 'inline-block', fontFamily: bodyFont(), fontSize: small, padding: '10px 22px', border: `2px solid ${ink}`, borderRadius: 4, opacity: c }}>{v.sub}</div> : null}
+          </div>
+        </div>
+      ) : v.kind === 'number' ? (
         <div>
           <div style={{ fontFamily: headFont(), fontSize: big, lineHeight: 1, opacity: a, transform: `scale(${0.7 + 0.3 * a})` }}>{v.value}</div>
           {v.unit ? <div style={{ fontFamily: bodyFont(), fontSize: mid, marginTop: 20, opacity: b }}>{v.unit}</div> : null}

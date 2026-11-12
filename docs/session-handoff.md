@@ -60,6 +60,14 @@ Every item of the gap-analysis list is now done.
 | 3. Silhouette figures: library graphic `figures` with scenes laptop, podium, group (count + highlight), phone, handshake (`src/remotion/library/Figures.jsx`) | done |
 | 4. `SCRIPT_MODE=essay`: thesis card, 3-5 numbered chapter cards, a counterpoint chapter, closing; prefers the illustrated graphics and the ledger themes. Tested end to end (5-minute landscape essay, 25 scenes, 11 visual types; came out at 3.7 min: Claude wrote 34% fewer words than asked, the warning fired) | done |
 
+## Printed-report family (reference: youtu.be/BPUJjgt5-wU, "Turag Decodes"), 2026-11-13
+
+| Item | State |
+|---|---|
+| 1. `decode` theme: cream halftone paper, navy/red/blue, corner registration marks + labels + timecode, black caption box with a red bar (`caption: boxbar`), blue chapter card with a huge striped number (`chapterStripes`) | done |
+| 2. Graphics `crowd`, `cityscape`, `worldMap`, `metaphor`; a person pointing at `bars` | not started |
+| 3. Dotted path lines and walk-in motion | not started |
+
 Also fixed on the way: the critique contact sheet assumed vertical tiles (landscape sheets were mostly black); chapter cards and the reel eyebrow/icon were too small at 1080p.
 
 

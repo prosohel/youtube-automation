@@ -1,6 +1,6 @@
 import React from 'react';
 import { AbsoluteFill, random, useCurrentFrame, useVideoConfig } from 'remotion';
-import { GRAIN, accentFor, bodyFont, boil, energy, halftone, theme, tornClip } from './shared';
+import { GRAIN, accentFor, bodyFont, boil, energy, halftone, halftoneSize, theme, tornClip } from './shared';
 
 const baseGradient = () => {
   const T = theme();
@@ -554,6 +554,30 @@ export const Overlays = ({ kicker, title, brandLabel, isShort }) => {
           {/* Fibre grain over everything, shifted on twos like film flicker, plus slightly dark corners. */}
           <AbsoluteFill style={{ pointerEvents: 'none', backgroundImage: GRAIN, opacity: 0.55, backgroundPosition: `${random(`pg-${Math.floor(frame / 2)}`) * 320}px ${random(`ph-${Math.floor(frame / 2)}`) * 320}px`, mixBlendMode: 'multiply' }} />
           <AbsoluteFill style={{ pointerEvents: 'none', background: 'radial-gradient(ellipse at center, transparent 62%, rgba(60,40,10,0.22) 100%)' }} />
+        </>
+      )}
+      {list.includes('halftone') && (
+        // Printed paper: a fine halftone dot screen and a slight darkening towards the edges.
+        <>
+          <AbsoluteFill style={{ pointerEvents: 'none', opacity: T.dark ? 0.12 : 0.16, backgroundImage: halftone(T.dark ? 'rgba(255,255,255,0.9)' : 'rgba(29,34,48,0.9)', 1.3), backgroundSize: halftoneSize(9) }} />
+          <AbsoluteFill style={{ pointerEvents: 'none', background: 'radial-gradient(ellipse at center, transparent 60%, rgba(29,34,48,0.10) 100%)' }} />
+        </>
+      )}
+      {list.includes('cornerMarks') && (
+        // Registration marks in the corners and tiny labels, like a printed report page.
+        <>
+          {[['left', 'top'], ['right', 'top'], ['left', 'bottom'], ['right', 'bottom']].map(([x, y]) => (
+            <svg key={x + y} width={34} height={34} style={{ position: 'absolute', [x]: 26, [y]: 26, opacity: 0.55 }}>
+              <path d="M 17 2 V 32 M 2 17 H 32" stroke={T.text} strokeWidth={2} />
+              <circle cx={17} cy={17} r={7} fill="none" stroke={T.text} strokeWidth={2} />
+            </svg>
+          ))}
+          <div style={{ position: 'absolute', top: 30, left: 80, fontFamily: bodyFont(), fontSize: isShort ? 24 : 20, color: T.muted, letterSpacing: 2 }}>
+            {(brandLabel || kicker || '').toUpperCase()}
+          </div>
+          <div style={{ position: 'absolute', bottom: 34, right: 80, fontFamily: bodyFont(), fontSize: isShort ? 22 : 18, color: T.muted, letterSpacing: 2 }}>
+            {String(Math.floor(frame / 30 / 60)).padStart(2, '0')}:{String(Math.floor(frame / 30) % 60).padStart(2, '0')}
+          </div>
         </>
       )}
       {list.includes('channelPill') && (brandLabel || kicker) ? (

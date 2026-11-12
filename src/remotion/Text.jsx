@@ -215,6 +215,8 @@ export const Captions = ({ narration, wordFrames, frames, accent, isShort, onFoo
     underline: { background: T.dark || onFootage ? T.captionBg : 'transparent', borderRadius: 16, padding: isShort ? '16px 24px' : '10px 18px' },
     outline: { padding: '0 10px' },
     terminal: { background: T.captionBg, borderRadius: 4, border: `2px solid ${accent}`, padding: isShort ? '16px 24px' : '10px 18px' },
+    // Printed report: a near-black box with a red bar on the left, white words, the spoken word in red.
+    boxbar: { background: T.captionBg, borderRadius: 2, borderLeft: `14px solid ${T.accents[0]}`, padding: isShort ? '18px 30px 18px 26px' : '12px 26px 12px 22px', boxShadow: '0 3px 0 rgba(0,0,0,0.5)' },
     // Vox: a paper strip with a hard shadow, or ink on a plain paper label with a highlighter on the spoken word.
     strip: { backgroundColor: T.captionBg, backgroundImage: GRAIN, borderRadius: 2, boxShadow: '4px 6px 0 rgba(60,40,10,0.22)', padding: isShort ? '18px 26px' : '10px 22px' },
     marker: { background: T.captionBg, borderRadius: 8, padding: isShort ? '16px 24px' : '8px 18px' },
@@ -273,6 +275,13 @@ export const Captions = ({ narration, wordFrames, frames, accent, isShort, onFoo
           if (style === 'pill') {
             return (
               <span key={gi} style={{ ...base, color: on ? accent : T.captionText, textShadow: on ? `0 0 22px ${accent}` : 'none', transform: `scale(${on ? 1 + 0.12 * s : 1})` }}>
+                {w}
+              </span>
+            );
+          }
+          if (style === 'boxbar') {
+            return (
+              <span key={gi} style={{ ...base, opacity: gi <= active ? 1 : 0.8, color: on ? T.accents[0] : T.captionText, transform: `scale(${on ? 1 + 0.08 * s : 1})` }}>
                 {w}
               </span>
             );

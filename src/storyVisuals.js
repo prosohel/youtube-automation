@@ -15,7 +15,7 @@ const PROPS = [
 ];
 const CHAPTER_KINDS = ['number', 'title', 'book', 'dark'];
 
-const LIMIT = { line: 64, keyword: 16, value: 6, unit: 14, text: 48, sub: 40 };
+const LIMIT = { line: 64, keyword: 16, value: 6, unit: 36, text: 48, sub: 40 };
 
 const str = (v, max) => {
   if (typeof v !== 'string') return '';

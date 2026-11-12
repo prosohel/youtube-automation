@@ -931,5 +931,63 @@
       "book": "#141414",
       "dark": "#0b2a20"
     }
+  },
+  "decode": {
+    "label": "Decode: printed report",
+    "mood": "investigative explainers about companies, money, markets, AI and technology; a printed report with charts, crowds and metaphors",
+    "family": "reel",
+    "bgStyles": [
+      "plain"
+    ],
+    "card": "ink",
+    "radius": 6,
+    "caption": "boxbar",
+    "headline": "eyebrow",
+    "badge": false,
+    "thumbIntro": false,
+    "transitions": [
+      "cut",
+      "fade"
+    ],
+    "motion": "smooth",
+    "particles": false,
+    "leaks": false,
+    "leakHue": 0,
+    "glitch": false,
+    "overlays": [
+      "halftone",
+      "cornerMarks"
+    ],
+    "headingFont": "BalooDa2",
+    "headingWeight": "800",
+    "bodyFont": "NotoSansBengali",
+    "bodyWeight": "600",
+    "dark": false,
+    "bg": [
+      "#efe8da",
+      "#efe8da"
+    ],
+    "surface": "#f7f2e7",
+    "text": "#1d2230",
+    "muted": "rgba(29,34,48,0.6)",
+    "onAccent": "#f7f2e7",
+    "accents": [
+      "#e3342f",
+      "#2742ff",
+      "#1d2230",
+      "#e3342f"
+    ],
+    "track": "rgba(29,34,48,0.14)",
+    "captionBg": "#141821",
+    "captionText": "#f7f2e7",
+    "shadow": "0 2px 0 rgba(29,34,48,0.9)",
+    "highlight": "#ffe14d",
+    "chapter": {
+      "number": "#2742ff",
+      "title": "#efe8da",
+      "book": "#1d2230",
+      "dark": "#1d2230"
+    },
+    "chapterStripes": true
   }
 }
