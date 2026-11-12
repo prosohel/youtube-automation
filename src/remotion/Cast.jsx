@@ -465,9 +465,9 @@ const ChapterCard = ({ v, isShort, start }) => {
   const a = clamp01(pop(f, fps, start + 2, 16));
   const b = clamp01(pop(f, fps, start + 10, 16));
   const c = clamp01(pop(f, fps, start + 18, 16));
-  const big = isShort ? 300 : 220;
-  const mid = isShort ? 72 : 54;
-  const small = isShort ? 40 : 32;
+  const big = isShort ? 300 : 260;
+  const mid = isShort ? 72 : 84;
+  const small = isShort ? 40 : 44;
   return (
     <div style={{ position: 'fixed', inset: 0, background: bg, backgroundImage: GRAIN, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isShort ? '0 90px' : '0 200px', textAlign: 'center', color: ink }}>
       {v.kind === 'number' ? (

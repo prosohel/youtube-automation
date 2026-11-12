@@ -58,7 +58,9 @@ Every item of the gap-analysis list is now done.
 | 1. `ledger` / `ledger-green` themes (cream, green, red, ink-outlined cards; reel grammar; best in landscape) | done |
 | 2. Five flat graphics: `phoneApps`, `wireframe`, `orgTree`, `priceTag`, `iconGrid` (`src/remotion/library/Illustrations.jsx`, checks + prompt in `src/graphics.js`, gallery samples) | done |
 | 3. Silhouette figures: library graphic `figures` with scenes laptop, podium, group (count + highlight), phone, handshake (`src/remotion/library/Figures.jsx`) | done |
-| 4. `SCRIPT_MODE=essay`: a chaptered 5-10 minute argument | not started |
+| 4. `SCRIPT_MODE=essay`: thesis card, 3-5 numbered chapter cards, a counterpoint chapter, closing; prefers the illustrated graphics and the ledger themes. Tested end to end (5-minute landscape essay, 25 scenes, 11 visual types; came out at 3.7 min: Claude wrote 34% fewer words than asked, the warning fired) | done |
+
+Also fixed on the way: the critique contact sheet assumed vertical tiles (landscape sheets were mostly black); chapter cards and the reel eyebrow/icon were too small at 1080p.
 
 
 **Render speed trap found the same day:** `REMOTION_GL=swangle` had been copied into the Windows `.env` from the

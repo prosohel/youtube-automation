@@ -40,7 +40,7 @@ export const ReelEyebrow = ({ text, accent, isShort, start }) => {
   return (
     <div style={{ position: 'absolute', left: reelLeft(isShort), right: reelRight(isShort), top: isShort ? 250 : 90, display: 'flex', alignItems: 'center', gap: 22 }}>
       <div style={{ width: 10, height: isShort ? 44 : 34, background: accent, transform: `scaleY(${bar})`, transformOrigin: 'top' }} />
-      <div style={{ fontFamily: bodyFont(), fontSize: isShort ? 36 : 28, color: T.muted, letterSpacing: 1, textTransform: 'uppercase' }}>
+      <div style={{ fontFamily: bodyFont(), fontSize: isShort ? 36 : 34, color: T.muted, letterSpacing: 1, textTransform: 'uppercase' }}>
         <MaskedWord s={s}>{text}</MaskedWord>
       </div>
     </div>
@@ -97,7 +97,7 @@ const ReelIcon = ({ name, accent, isShort, start }) => {
   const T = theme();
   const Icon = icons[name] || icons.Sparkles;
   const s = pop(f, fps, start + 2, 15);
-  const size = isShort ? 300 : 220;
+  const size = isShort ? 300 : 300;
   return (
     <Stage isShort={isShort}>
       <Grow s={s}>

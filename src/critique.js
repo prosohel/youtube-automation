@@ -41,6 +41,10 @@ const SCHEMA = {
 async function contactSheet(videoFile, outDir, { every = 2.5, tile = 4 } = {}) {
   ensureDir(outDir);
   const dur = parseFloat((await run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', videoFile])).trim());
+  // Tile height follows the video's shape (vertical Shorts and landscape videos both get a tight grid).
+  const [vw, vh] = (await run('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', videoFile])).trim().split(',').map(Number);
+  const TW = 270;
+  const TH = Math.round((TW * (vh || 1920)) / (vw || 1080) / 2) * 2;
   // Long videos: spread the tiles so the sheet stays readable (at most ~60 tiles, 6 across).
   const MAX_TILES = 60;
   const step = Math.max(every, (dur - 1.5) / (MAX_TILES - 3));
@@ -50,7 +54,7 @@ async function contactSheet(videoFile, outDir, { every = 2.5, tile = 4 } = {}) {
   const frames = [];
   for (let i = 0; i < times.length; i++) {
     const f = path.join(outDir, `f-${String(i).padStart(2, '0')}.png`);
-    await run('ffmpeg', ['-y', '-loglevel', 'error', '-ss', String(times[i]), '-i', videoFile, '-frames:v', '1', '-vf', 'scale=270:-2', f]);
+    await run('ffmpeg', ['-y', '-loglevel', 'error', '-ss', String(times[i]), '-i', videoFile, '-frames:v', '1', '-vf', `scale=${TW}:${TH}`, f]);
     frames.push(f);
   }
   const rows = Math.ceil(frames.length / tile);
@@ -58,7 +62,7 @@ async function contactSheet(videoFile, outDir, { every = 2.5, tile = 4 } = {}) {
   const sheet = path.join(outDir, 'sheet.jpg');
   // xstack needs a full grid: pad the last row with the last frame
   while (frames.length < rows * tile) { inputs.push('-i', frames[frames.length - 1]); frames.push(frames[frames.length - 1]); }
-  const layout = frames.map((_, i) => `${(i % tile) * 270}_${Math.floor(i / tile) * 480}`).join('|');
+  const layout = frames.map((_, i) => `${(i % tile) * TW}_${Math.floor(i / tile) * TH}`).join('|');
   await run('ffmpeg', ['-y', '-loglevel', 'error', ...inputs, '-filter_complex', `xstack=inputs=${frames.length}:layout=${layout}`, '-q:v', '4', sheet]);
   return { sheet, times, tile };
 }
