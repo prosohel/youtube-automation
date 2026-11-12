@@ -47,7 +47,9 @@ does not yet show `skipped` as its own state (it shows the platform's error text
 
 | 7 synthesized sound effects (pop, tick, riser, impact, chime, swish, type), two new cue times (`build`, `exit`), better defaults (riser + impact on numbers, pops on list items, typing on the hacker headline) | `src/sfx.js` (made in code, no licence), `SOUNDS`/`CUE_TIMES` in `src/direction.js`, `Main.jsx` | DIRECT_SFX / SFX |
 
-Not done from that list: Hero3D lighting (RoomEnvironment/PMREM, RoundedBoxGeometry).
+| Hero3D lighting: RoomEnvironment reflections through PMREM (set in useLayoutEffect), rounded-box bodies, more metallic materials. swangle cost +20% on the 820 px canvas (251 frames: 186 s -> 224 s) | `src/remotion/Hero3D.jsx`; a HERO_OBJECTS sync test in `test/graphics.test.js` | - |
+
+Every item of the gap-analysis list is now done.
 
 **Render speed trap found the same day:** `REMOTION_GL=swangle` had been copied into the Windows `.env` from the
 deploy notes. On Windows/Mac that is software rendering and made every render ~10x slower (417 frames: 6.5 min
