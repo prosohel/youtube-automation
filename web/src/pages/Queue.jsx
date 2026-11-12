@@ -307,6 +307,7 @@ export default function Queue() {
                 </div>
                 <VideoStatus video={v} />
                 {Object.values(v.platforms || {}).some((p) => p.status === 'failed') && <Chip tone="danger">Post failed</Chip>}
+                {Object.values(v.platforms || {}).some((p) => p.status === 'skipped') && <Chip tone="warn">Skipped somewhere</Chip>}
                 <button type="button" className="btn btn-sm" aria-pressed={v.id === selected} onClick={() => setSelected(v.id)}>
                   Details
                 </button>
