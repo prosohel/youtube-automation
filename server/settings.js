@@ -72,6 +72,10 @@ const SETTINGS_SCHEMA = [
   // Channel
   { key: 'NICHE', scope: 'brand', cfg: 'niche', group: 'channel', type: 'string', default: 'technology tips', label: 'Channel niche (used to pick topics)' },
   { key: 'LANGUAGE', scope: 'brand', cfg: 'language', group: 'channel', type: 'string', default: 'English', label: 'Language' },
+  {
+    key: 'VIDEO_INSTRUCTIONS', scope: 'brand', cfg: 'instructions', group: 'channel', type: 'text', default: '', label: 'Video instructions (optional)',
+    hint: 'Free text for the script writer: tone, what to always or never do, who the viewer is, how to open and close, words to avoid. Claude follows it for every video of this brand.',
+  },
   { key: 'SCRIPT_MODE', scope: 'brand', cfg: 'scriptMode', group: 'channel', type: 'enum', options: ['idea', 'story', 'essay'], default: 'idea', label: 'Script mode', hint: 'idea = tips/explainers; story = a cartoon parable with one lesson (vox-story theme); essay = a chaptered argument for 5-10 minute videos' },
   { key: 'VIDEO_FORMAT', scope: 'brand', cfg: 'format', group: 'channel', type: 'enum', options: ['shorts', 'landscape'], default: 'landscape', label: 'Video format' },
   { key: 'TARGET_MINUTES', scope: 'brand', cfg: 'targetMinutes', group: 'channel', type: 'number', default: 3, label: 'Video length (min)', hint: 'Every video, Shorts included. YouTube counts vertical videos up to 3 minutes as Shorts.' },
@@ -147,6 +151,9 @@ function coerce(spec, value) {
       } catch {
         throw bad();
       }
+    case 'text':
+      // free text for prompts: trimmed, capped so one setting cannot crowd out the script prompt
+      return String(value ?? '').replace(/\r\n/g, '\n').trim().slice(0, 2000);
     default:
       return String(value);
   }

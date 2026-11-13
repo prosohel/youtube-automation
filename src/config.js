@@ -92,6 +92,8 @@ const cfg = (module.exports = {
   // 'idea' (default) = tips/explainer scripts; 'story' = a cartoon parable with a lesson (theme vox-story);
   // 'essay' = a chaptered argument with chapter cards, for 5-10 minute landscape explainers
   scriptMode: (process.env.SCRIPT_MODE || 'idea').toLowerCase(),
+  // optional free text from the brand's owner: how every video of this brand should be (tone, do / don't, viewer)
+  instructions: (process.env.VIDEO_INSTRUCTIONS || '').trim(),
   // Question mode: videos made from real exam questions on the owner's sites (src/questions).
   // '' = off (Claude finds topics), 'mathsuggestion.com', 'recentjobsolution.com' or 'both'.
   questionSource: (process.env.QUESTION_SOURCE || '').trim(),

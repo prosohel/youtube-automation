@@ -60,6 +60,10 @@ Every item of the gap-analysis list is now done.
 | 3. Silhouette figures: library graphic `figures` with scenes laptop, podium, group (count + highlight), phone, handshake (`src/remotion/library/Figures.jsx`) | done |
 | 4. `SCRIPT_MODE=essay`: thesis card, 3-5 numbered chapter cards, a counterpoint chapter, closing; prefers the illustrated graphics and the ledger themes. Tested end to end (5-minute landscape essay, 25 scenes, 11 visual types; came out at 3.7 min: Claude wrote 34% fewer words than asked, the warning fired) | done |
 
+## Per-brand video instructions, 2026-11-13
+
+Each brand card (Integrations → Brands → Channel) has an optional **Video instructions** box (`VIDEO_INSTRUCTIONS`, brand scope, type `text`, trimmed and capped at 2000 chars). The text goes into the script prompt as a "CHANNEL OWNER'S INSTRUCTIONS" block (`ownerInstructions` in src/script.js) and into the topic-picking prompt; empty adds nothing. Script mode was missing from the brand card and is now shown there too. Dashboard needs a rebuild (`docker compose up -d --build`).
+
 ## Printed-report family (reference: youtu.be/BPUJjgt5-wU, "Turag Decodes"), 2026-11-13
 
 | Item | State |

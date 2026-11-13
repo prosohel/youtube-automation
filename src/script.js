@@ -128,6 +128,15 @@ const SCRIPT_SCHEMA = {
 
 /* ---------- video length ---------- */
 
+/** The brand owner's standing instructions as a prompt block ('' when none). They shape the video but never override the format rules. */
+const ownerInstructions = (c) => {
+  const text = String(c.instructions || '').trim();
+  if (!text) return '';
+  return `- CHANNEL OWNER'S INSTRUCTIONS (follow them in every video; the rules above still apply):
+${text.split('\n').map((l) => `  ${l}`).join('\n')}
+`;
+};
+
 const minutesLabel = (m) => `${m} minute${Number(m) === 1 ? '' : 's'}`;
 
 /**
@@ -173,7 +182,7 @@ Rules:
 - Start with the hook, deliver real value, end with a one-line call to action to subscribe.
 - Only state facts you are confident are true. Do not invent statistics, quotes or studies.
 - Split into ${sceneCount} scenes. Each scene is 1-3 sentences of narration.
-${essay ? `- ESSAY MODE. This is a long explainer that argues ONE thesis, like a written essay read aloud:
+${ownerInstructions(cfg)}${essay ? `- ESSAY MODE. This is a long explainer that argues ONE thesis, like a written essay read aloud:
   1. Hook (1-2 scenes): a concrete scene, number or question that makes the thesis urgent, then the thesis in one sentence.
   2. Three to five numbered chapters. Each chapter opens with a full-screen chapter card and makes one point with evidence: a real example, a mechanism ("here is how this actually works"), a number only if you are sure of it, or a comparison. Name real companies, tools and places when you are confident.
   3. One counterpoint chapter ("but isn't it true that..."), answered honestly.
@@ -244,4 +253,4 @@ function scriptShortfall(actualWords, askedWords) {
   return Math.round((1 - actualWords / askedWords) * 100);
 }
 
-module.exports = { writeScript, lengthPlan, minutesLabel, SCRIPT_SCHEMA, scriptTimeoutSec, scriptShortfall };
+module.exports = { writeScript, lengthPlan, minutesLabel, SCRIPT_SCHEMA, scriptTimeoutSec, scriptShortfall, ownerInstructions };

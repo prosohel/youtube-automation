@@ -33,6 +33,15 @@ test('the script asks Claude for a short intro label, never the channel niche', 
   assert.match(prompt, /\bkicker\b/);
 });
 
+test("the brand owner's video instructions reach the script prompt, and an empty box adds nothing", async () => {
+  cfg.applySettings({ instructions: '' });
+  await writeScript(topic);
+  assert.doesNotMatch(asked[0].prompt, /OWNER'S INSTRUCTIONS/);
+  cfg.applySettings({ instructions: 'Talk to beginners.\nNever mention prices.' });
+  await writeScript(topic);
+  assert.match(asked[1].prompt, /CHANNEL OWNER'S INSTRUCTIONS[\s\S]*Talk to beginners\.\n  Never mention prices\./);
+});
+
 test('each scene can carry a transition, sound cues and a camera move', async () => {
   await writeScript(topic);
   const scene = asked[0].schema.properties.scenes.items.properties;

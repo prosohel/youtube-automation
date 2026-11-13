@@ -93,6 +93,15 @@ export function Field({ spec, value, draft, setDraft, values, effective, lang, i
       </label>
     );
   }
+  if (spec.type === 'text') {
+    return (
+      <label className="field" style={{ gridColumn: '1 / -1' }}>
+        {spec.label}
+        <textarea lang={lang} rows={5} value={v ?? ''} disabled={blocked} onChange={(e) => set(e.target.value)} placeholder="Optional. e.g. Talk to beginners. Always give one practical step at the end. Never mention prices. Keep a calm, friendly tone." />
+        {spec.hint && <span className="hint">{spec.hint}</span>}
+      </label>
+    );
+  }
   if (spec.type === 'json') {
     const text = Array.isArray(v) ? v.join('\n') : typeof v === 'string' ? v : JSON.stringify(v ?? '', null, 2);
     return (
