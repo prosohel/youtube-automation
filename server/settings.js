@@ -57,7 +57,7 @@ const SETTINGS_SCHEMA = [
   { key: 'DIRECT_GRAPHICS', cfg: 'directGraphics', group: 'visuals', subgroup: 'claude', type: 'boolean', default: true, label: 'Graphics', hint: 'Off: only icon, stat, list and compare.' },
   {
     key: 'THUMB_STYLE', scope: 'brand', cfg: 'thumbStyle', group: 'visuals', type: 'enum', options: ['', ...THUMB_STYLES], default: '', label: 'Thumbnail style',
-    optionLabels: { bigText: 'Big text', versus: 'Versus (two sides)', question: 'Question', number: 'Big number' },
+    optionLabels: { bigText: 'Big text', versus: 'Versus (two sides)', question: 'Question', number: 'Big number', warning: 'Warning', arrow: 'Before / after', reaction: 'Reaction face', paper: 'Paper note' },
     optionHints: {
       '': 'Claude picks per video and avoids the style of the last videos.',
       bigText: 'Photo, a bold line and its punch words in a coloured box.',
@@ -132,7 +132,7 @@ const BRAND_KEYS = new Set(SETTINGS_SCHEMA.filter((s) => s.scope === 'brand').ma
 const isBrandKey = (key) => BRAND_KEYS.has(key);
 
 /** Brand settings that one video may override from the "Add a video" form (its own choices, saved on the video). */
-const VIDEO_OPTION_KEYS = ['VIDEO_FORMAT', 'SCRIPT_MODE', 'DESIGN_MODE', 'THEME', 'VISUALS', 'TARGET_MINUTES', 'LANGUAGE'];
+const VIDEO_OPTION_KEYS = ['VIDEO_FORMAT', 'SCRIPT_MODE', 'DESIGN_MODE', 'THEME', 'THUMB_STYLE', 'VISUALS', 'TARGET_MINUTES', 'LANGUAGE'];
 
 /**
  * The overrides of one video, cleaned: only VIDEO_OPTION_KEYS, each coerced like a setting; '' / null = "brand

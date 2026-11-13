@@ -119,6 +119,22 @@ test('recent styles come from the last two videos that recorded one', (t) => {
   assert.deepEqual(T.recentThumbStyles(), ['bigText', 'versus']);
 });
 
+test('the new styles need what they draw: arrow two sides, reaction a face; warning and paper always work', () => {
+  const base = { text: 'এই লিংকে ক্লিক করবেন না', highlight: 'ক্লিক করবেন না' };
+  assert.equal(T.resolveThumbnail(script({ ...base, style: 'warning' }), ON).style, 'warning');
+  assert.equal(T.resolveThumbnail(script({ ...base, style: 'paper' }), ON).style, 'paper');
+  const arrow = T.resolveThumbnail(script({ ...base, style: 'arrow', left: 'Excel', right: 'AI' }), ON);
+  assert.equal(arrow.style, 'arrow');
+  assert.equal(arrow.left, 'Excel');
+  assert.equal(arrow.right, 'AI');
+  assert.equal(T.resolveThumbnail(script({ ...base, style: 'arrow', left: 'Excel' }), ON).style, 'bigText', 'arrow needs both sides');
+  const reaction = T.resolveThumbnail(script({ ...base, style: 'reaction', emoji: 'mind-blown' }), ON);
+  assert.equal(reaction.style, 'reaction');
+  assert.equal(reaction.emoji, 'mind-blown');
+  assert.equal(T.resolveThumbnail(script({ ...base, style: 'reaction' }), ON).style, 'bigText', 'reaction needs a face');
+  for (const s of T.STYLES) assert.ok(T.DEFAULT_COLOR[s], `default colour for ${s}`);
+});
+
 test('the composition draws every style, under the name the renderer asks for', () => {
   const fs = require('fs');
   const path = require('path');

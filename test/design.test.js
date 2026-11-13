@@ -51,10 +51,12 @@ test('readDesign keeps only the scenes whose file exists, is named safely, lints
   fs.writeFileSync(path.join(dir, 'scene-2.jsx'), GOOD.replace("const f = useCurrentFrame();", 'const f = Math.random();'));
   fs.writeFileSync(
     path.join(dir, 'manifest.json'),
-    JSON.stringify({ scenes: { 0: { file: 'scene-0.jsx', full: true }, 1: 'scene-1.jsx', 2: { file: 'scene-2.jsx' }, 3: { file: '../evil.jsx' }, 4: { file: 'missing.jsx' }, 9: { file: 'scene-0.jsx' } } })
+    JSON.stringify({ scenes: { 0: { file: 'scene-0.jsx', full: true }, 1: 'scene-1.jsx', 2: { file: 'scene-2.jsx' }, 3: { file: '../evil.jsx' }, 4: { file: 'missing.jsx' }, 9: { file: 'scene-0.jsx' } }, thumb: { file: 'thumb.jsx' } })
   );
-  const { scenes, report } = D.readDesign(dir, 6);
+  fs.writeFileSync(path.join(dir, 'thumb.jsx'), GOOD);
+  const { scenes, thumb, report } = D.readDesign(dir, 6);
   assert.deepEqual(Object.keys(scenes), ['0']);
+  assert.deepEqual(thumb, { file: 'thumb.jsx' });
   assert.equal(scenes[0].full, true);
   const by = Object.fromEntries(report.map((r) => [r.scene, r]));
   assert.match(by[1].problems.join(), /compile/);
@@ -62,17 +64,27 @@ test('readDesign keeps only the scenes whose file exists, is named safely, lints
   assert.match(by[3].problems.join(), /file name/);
   assert.match(by[4].problems.join(), /missing/);
   assert.match(by[9].problems.join(), /out of range/);
-  const index = D.writeIndex(dir, scenes);
+  const index = D.writeIndex(dir, scenes, thumb);
   const src = fs.readFileSync(index, 'utf8');
   assert.match(src, /import S0 from '\.\/scene-0\.jsx'/);
   assert.match(src, /'0': \{ Component: S0, full: true \}/);
+  assert.match(src, /import T from '\.\/thumb\.jsx'/);
+  assert.match(src, /export const thumb = T;/);
+  assert.match(fs.readFileSync(D.writeIndex(dir, scenes, null), 'utf8'), /export const thumb = null;/);
+  // a bad thumbnail file is rejected and the scenes stay
+  fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({ scenes: { 0: 'scene-0.jsx' }, thumb: '../x.jsx' }));
+  const again = D.readDesign(dir, 6);
+  assert.equal(again.thumb, null);
+  assert.deepEqual(Object.keys(again.scenes), ['0']);
+  assert.match(again.report.find((r) => r.thumb).problems.join(), /file name/);
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test('a missing manifest yields no scenes and one problem', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'design-'));
-  const { scenes, report } = D.readDesign(dir, 3);
+  const { scenes, thumb, report } = D.readDesign(dir, 3);
   assert.deepEqual(scenes, {});
+  assert.equal(thumb, null);
   assert.match(report[0].problem, /manifest\.json/);
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -109,12 +121,22 @@ test('the design prompt names the folder, the contract, the stage size and the o
   const short = D.designPrompt({ dir: 'd', isShort: true, fps: 30, sceneCount: 3, language: 'Bangla' });
   assert.match(short, /y=380/);
   assert.doesNotMatch(short, /owner's standing instructions/);
+  assert.doesNotMatch(short, /thumb\.jsx/);
+  const withThumb = D.designPrompt({ dir: 'd', isShort: false, fps: 30, sceneCount: 3, language: 'Bangla', thumbnail: { style: 'paper' } });
+  assert.match(withThumb, /thumb\.jsx/);
+  assert.match(withThumb, /\(paper; see ref\/remotion\/Thumbnail\.jsx/);
+  assert.match(withThumb, /photoUrl, photo2Url, emojiUrl/);
+  assert.match(withThumb, /"thumb": \{"file": "thumb\.jsx"/);
 });
 
 test('the composition imports custom-scenes and guards each bespoke scene with a fallback', () => {
   const read = (f) => fs.readFileSync(path.join(__dirname, '..', 'src', 'remotion', f), 'utf8');
   assert.match(read('Visuals.jsx'), /import CUSTOM from 'custom-scenes'/);
-  assert.match(read('Visuals.jsx'), /getDerivedStateFromError/);
+  assert.match(read('Guard.jsx'), /getDerivedStateFromError/);
   assert.match(read('Main.jsx'), /custom=\{scene\.custom/);
   assert.match(read('customEmpty.js'), /export default \{\}/);
+  assert.match(read('customEmpty.js'), /export const thumb = null/);
+  assert.match(read('Thumbnail.jsx'), /import \{ thumb as CUSTOM_THUMB \} from 'custom-scenes'/);
+  assert.match(read('Thumbnail.jsx'), /thumb\.custom/);
+  assert.match(read('Thumbnail.jsx'), /<Guard name="thumbnail"/);
 });

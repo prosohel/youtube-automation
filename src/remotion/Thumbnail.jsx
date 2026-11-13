@@ -1,13 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { AbsoluteFill, Easing, Img, continueRender, delayRender, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
 import { loadFont } from '@remotion/google-fonts/AnekBangla';
+import { thumb as CUSTOM_THUMB } from 'custom-scenes'; // this video's bespoke thumbnail (src/design.js), or null
+import { Guard } from './Guard';
 
 /*
  * The designed thumbnail (src/thumbnail.js checks what Claude wrote; src/render.js adds the photos, emoji
  * image and colour). One component draws both the still JPG (`still`: everything in place) and the video's
  * opening second, where the same design animates in and has fully landed by LANDED_FRAME. TikTok uses a
  * frame after that as the cover, so the two always match.
- * Layouts: bigText, versus, question, number (keep in sync with STYLES in src/thumbnail.js).
+ * Layouts: bigText, versus, question, number, warning, arrow, reaction, paper (keep in sync with STYLES in src/thumbnail.js).
+ * A video made in instant design mode may bring its own thumbnail component (src/design.js): ThumbCard renders it
+ * inside a Guard and falls back to the layout when it throws.
  */
 
 export const LANDED_FRAME = 32;
@@ -206,7 +210,7 @@ const Sticker = ({ src, size, style, rotate = 0, p = 1 }) =>
  * The hook: plain words in white with a black outline, the highlight in a coloured box. The pieces wrap like
  * words, so a long plain part takes its own line and the box drops below it.
  */
-const Hook = ({ thumb, avail, maxPlain, maxBox, align = 'center', box, pPlain = 1, pBox = 1 }) => {
+const Hook = ({ thumb, avail, maxPlain, maxBox, align = 'center', box, pPlain = 1, pBox = 1, ink = false }) => {
   const border = box.borderWidth || 0;
   const L = hookLayout(thumb, avail, maxPlain, maxBox, border);
   const plainStyle = {
@@ -214,8 +218,8 @@ const Hook = ({ thumb, avail, maxPlain, maxBox, align = 'center', box, pPlain = 
     fontWeight: 800,
     fontSize: L.sizePlain,
     lineHeight: 1.2,
-    color: '#ffffff',
-    textShadow: outline(Math.max(4, L.sizePlain * 0.045)),
+    color: ink ? INK : '#ffffff',
+    textShadow: ink ? 'none' : outline(Math.max(4, L.sizePlain * 0.045)),
     maxWidth: '100%',
     opacity: Math.min(1, pPlain * 1.4),
     transform: `translateY(${(1 - pPlain) * 80}px)`,
@@ -271,7 +275,7 @@ const Arrow = ({ style, scale = 1, p = 1 }) => {
   );
 };
 
-/* ---------- the four layouts ---------- */
+/* ---------- the layouts ---------- */
 
 const BigText = ({ thumb, isShort, still, W, H }) => {
   const at = useIn(still);
@@ -515,11 +519,258 @@ const NumberLayout = ({ thumb, isShort, still, W }) => {
   );
 };
 
-const LAYOUTS = { bigText: BigText, versus: Versus, question: Question, number: NumberLayout };
+/* ---------- four more layouts (keep LAYOUTS and STYLES in src/thumbnail.js in sync) ---------- */
+
+/** Hazard stripes, as a band. */
+const Stripes = ({ style }) => (
+  <div style={{ position: 'absolute', background: `repeating-linear-gradient(45deg, ${YELLOW} 0 60px, ${INK} 60px 120px)`, ...style }} />
+);
+
+/** A warning sign: yellow triangle with an exclamation mark (drawn, never an emoji character). */
+const Triangle = ({ size, p = 1, style }) => (
+  <svg viewBox="0 0 100 90" style={{ position: 'absolute', width: size, height: size * 0.9, transform: `scale(${p}) rotate(${(1 - p) * -30}deg)`, filter: 'drop-shadow(0 14px 0 #000)', ...style }} aria-hidden="true">
+    <polygon points="50,4 97,86 3,86" fill={YELLOW} stroke={INK} strokeWidth={6} strokeLinejoin="round" />
+    <rect x="44" y="28" width="12" height="34" rx="5" fill={INK} />
+    <circle cx="50" cy="74" r="7" fill={INK} />
+  </svg>
+);
+
+/** warning: a danger, scam or costly mistake. Hazard bands, a warning sign and the hook in red light. */
+const Warning = ({ thumb, isShort, still, W, H }) => {
+  const at = useIn(still);
+  const color = thumb.colorHex;
+  const box = { bg: color, color: textOn(color), rotate: -2 };
+  const band = isShort ? 70 : 56;
+  const tri = isShort ? 400 : 380;
+  const tag = thumb.tag ? <Chip text={thumb.tag} bg="#fff" color={VS_RED} max={isShort ? 62 : 52} maxW={900} rotate={-2} p={at(3)} /> : null;
+  return (
+    <AbsoluteFill style={{ background: '#1a0306' }}>
+      {thumb.photo ? (
+        <>
+          <Photo src={thumb.photo} still={still} filter="brightness(0.55) saturate(1.3) contrast(1.15)" />
+          <AbsoluteFill
+            style={{
+              background: isShort
+                ? 'linear-gradient(180deg, rgba(60,0,8,0.5) 0%, rgba(60,0,8,0.25) 35%, rgba(20,0,3,0.95) 70%)'
+                : 'linear-gradient(90deg, rgba(40,0,6,0.96) 0%, rgba(60,0,8,0.78) 55%, rgba(60,0,8,0.25) 100%)',
+            }}
+          />
+        </>
+      ) : (
+        <Rays colors={['#b3121f', '#5a0712', '#1a0306']} cx={isShort ? 50 : 72} cy={isShort ? 32 : 50} />
+      )}
+      <Stripes style={{ left: 0, right: 0, top: 0, height: band, transform: `translateY(${(1 - at(0, 14)) * -band}px)` }} />
+      <Stripes style={{ left: 0, right: 0, bottom: 0, height: band, transform: `translateY(${(1 - at(0, 14)) * band}px)` }} />
+      {isShort ? (
+        <>
+          <Triangle size={tri} p={at(4, 9)} style={{ left: (W - tri) / 2, top: 290 }} />
+          <div style={{ position: 'absolute', left: 40, right: 40, top: 290 + tri * 0.9 + 70, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 30 }}>
+            {tag}
+            <Hook thumb={thumb} avail={1000} maxPlain={160} maxBox={176} box={box} pPlain={at(8)} pBox={at(12, 9)} />
+          </div>
+          <Sticker src={thumb.emojiFile} size={300} rotate={10} p={at(16)} style={{ right: 50, bottom: band + 60 }} />
+        </>
+      ) : (
+        <>
+          <Triangle size={tri} p={at(4, 9)} style={{ right: 140, top: (H - tri * 0.9) / 2 - 40 }} />
+          <div style={{ position: 'absolute', left: 90, top: 0, bottom: 0, width: 1150, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'flex-start', gap: 32 }}>
+            {tag}
+            <Hook thumb={thumb} avail={1150} maxPlain={150} maxBox={168} align="left" box={box} pPlain={at(8)} pBox={at(12, 9)} />
+          </div>
+          <Sticker src={thumb.emojiFile} size={250} rotate={10} p={at(16)} style={{ right: 70, bottom: band + 24 }} />
+        </>
+      )}
+    </AbsoluteFill>
+  );
+};
+
+/** A fat white arrow with a black edge; `vertical` points down. */
+const BigArrow = ({ size, p = 1, vertical = false, style }) => (
+  <svg viewBox="0 0 200 120" style={{ width: size, height: size * 0.6, transform: `rotate(${vertical ? 90 : 0}deg) scale(${p})`, filter: 'drop-shadow(0 12px 0 #000)', ...style }} aria-hidden="true">
+    <polygon points="0,38 110,38 110,6 200,60 110,114 110,82 0,82" fill="#fff" stroke={INK} strokeWidth={8} strokeLinejoin="round" />
+  </svg>
+);
+
+/** arrow: before -> after. The old state crossed out in grey, the arrow, the new state in the highlight colour. */
+const Transform = ({ thumb, isShort, still, W }) => {
+  const at = useIn(still);
+  const color = thumb.colorHex;
+  const box = { bg: color, color: textOn(color) };
+  const side = isShort ? 900 : 700;
+  const tag = thumb.tag ? <Chip text={thumb.tag} bg="#fff" color={INK} max={isShort ? 58 : 48} maxW={900} rotate={-2} p={at(3)} shadow={false} /> : null;
+  const before = (
+    <Chip text={thumb.left} bg="#2b2f3a" color="#c7cbd6" max={isShort ? 150 : 140} maxW={side} rotate={-3} p={at(4)} style={{ textDecoration: 'line-through', textDecorationColor: VS_RED, textDecorationThickness: 10 }} />
+  );
+  const after = <Chip text={thumb.right} bg={color} color={textOn(color)} max={isShort ? 180 : 170} maxW={side} rotate={3} p={at(10)} style={{ boxShadow: `0 16px 0 #000, 0 0 70px ${color}` }} />;
+  return (
+    <AbsoluteFill style={{ background: '#05070f' }}>
+      {thumb.photo ? (
+        <>
+          <Photo src={thumb.photo} still={still} filter="brightness(0.5) saturate(1.2)" />
+          <AbsoluteFill style={{ background: 'linear-gradient(180deg, rgba(5,10,30,0.55) 0%, rgba(5,10,30,0.92) 100%)' }} />
+        </>
+      ) : (
+        <Rays colors={PLAIN_BG[thumb.color] || PLAIN_BG.green} cx={isShort ? 50 : 60} cy={isShort ? 40 : 40} />
+      )}
+      {isShort ? (
+        <>
+          <div style={{ position: 'absolute', left: 40, right: 40, top: 240, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
+            {before}
+            <BigArrow size={300} vertical p={at(7, 9)} style={{ margin: '50px 0' }} />
+            {after}
+          </div>
+          <div style={{ position: 'absolute', left: 40, right: 40, top: 1180, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 30 }}>
+            {tag}
+            <Hook thumb={thumb} avail={1000} maxPlain={140} maxBox={150} box={box} pPlain={at(13)} pBox={at(17, 9)} />
+          </div>
+        </>
+      ) : (
+        <>
+          <div style={{ position: 'absolute', left: 60, right: 60, top: 100, height: 380, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 60 }}>
+            {before}
+            <BigArrow size={320} p={at(7, 9)} />
+            {after}
+          </div>
+          <div style={{ position: 'absolute', left: 0, right: 0, top: 600, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 26 }}>
+            {tag}
+            <Hook thumb={thumb} avail={1700} maxPlain={130} maxBox={140} box={box} pPlain={at(13)} pBox={at(17, 9)} />
+          </div>
+        </>
+      )}
+      <Sticker src={thumb.emojiFile} size={isShort ? 260 : 220} rotate={12} p={at(16)} style={isShort ? { right: 40, top: 1560 } : { right: 60, top: 60 }} />
+    </AbsoluteFill>
+  );
+};
+
+/** A white speech bubble with a tail; children are the hook in ink. */
+const Bubble = ({ children, tail, p = 1, style }) => (
+  <div style={{ position: 'relative', background: '#fff', borderRadius: 60, padding: '46px 60px 36px', boxShadow: '0 18px 0 #000', transform: `scale(${p})`, opacity: Math.min(1, p * 1.5), ...style }}>
+    {children}
+    <svg viewBox="0 0 100 100" style={{ position: 'absolute', width: 120, height: 120, ...tail }} aria-hidden="true">
+      <polygon points="0,0 100,0 20,100" fill="#fff" />
+    </svg>
+  </div>
+);
+
+/** When the emoji image is missing: a big coloured disc with "!?" so the layout never looks empty. */
+const Face = ({ src, size, color, p, style }) =>
+  src ? (
+    <Sticker src={src} size={size} rotate={-6} p={p} style={style} />
+  ) : (
+    <div style={{ position: 'absolute', width: size, height: size, borderRadius: '50%', background: color, border: '16px solid #fff', boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', transform: `scale(${p})`, boxShadow: '0 20px 0 #000', ...style }}>
+      <span style={{ fontFamily: FONT, fontWeight: 800, fontSize: size * 0.5, color: textOn(color), paddingTop: size * 0.05 }}>!?</span>
+    </div>
+  );
+
+/** reaction: a big face reacting to the hook, which sits in a speech bubble. For surprising or funny hooks. */
+const Reaction = ({ thumb, isShort, still, W, H }) => {
+  const at = useIn(still);
+  const color = thumb.colorHex;
+  const box = { bg: color, color: textOn(color), rotate: -2 };
+  const tag = thumb.tag ? <Chip text={thumb.tag} bg={INK} color="#fff" max={isShort ? 56 : 48} maxW={800} rotate={-2} p={at(3)} shadow={false} /> : null;
+  const face = isShort ? 620 : 560;
+  return (
+    <AbsoluteFill style={{ background: '#120826' }}>
+      {thumb.photo ? (
+        <>
+          <Photo src={thumb.photo} still={still} filter="brightness(0.5) saturate(1.3)" />
+          <AbsoluteFill style={{ background: 'radial-gradient(circle at 50% 45%, rgba(40,10,80,0.2) 0%, rgba(10,4,30,0.9) 100%)' }} />
+        </>
+      ) : (
+        <Rays colors={PLAIN_BG[thumb.color] || PLAIN_BG.pink} cx={isShort ? 50 : 28} cy={isShort ? 30 : 50} />
+      )}
+      {isShort ? (
+        <>
+          <Face src={thumb.emojiFile} size={face} color={color} p={at(4, 9)} style={{ left: (W - face) / 2, top: 300 }} />
+          <div style={{ position: 'absolute', left: 50, right: 50, top: 300 + face + 110, display: 'flex', justifyContent: 'center' }}>
+            <Bubble p={at(10, 10)} tail={{ left: 120, top: -70, transform: 'rotate(180deg)' }} style={{ width: 980, boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 22 }}>
+                {tag}
+                <Hook ink thumb={thumb} avail={860} maxPlain={140} maxBox={150} box={box} pPlain={at(13)} pBox={at(17, 9)} />
+              </div>
+            </Bubble>
+          </div>
+        </>
+      ) : (
+        <>
+          <Face src={thumb.emojiFile} size={face} color={color} p={at(4, 9)} style={{ left: 120, top: (H - face) / 2 + 30 }} />
+          <div style={{ position: 'absolute', left: 760, right: 70, top: 0, bottom: 0, display: 'flex', alignItems: 'center' }}>
+            <Bubble p={at(10, 10)} tail={{ left: -60, bottom: 60, transform: 'rotate(60deg)' }} style={{ width: '100%', boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 22 }}>
+                {tag}
+                <Hook ink thumb={thumb} avail={960} maxPlain={130} maxBox={140} align="left" box={box} pPlain={at(13)} pBox={at(17, 9)} />
+              </div>
+            </Bubble>
+          </div>
+        </>
+      )}
+    </AbsoluteFill>
+  );
+};
+
+const Tape = ({ style }) => <div style={{ position: 'absolute', width: 240, height: 64, background: 'rgba(255,228,120,0.85)', boxShadow: '0 2px 6px rgba(0,0,0,0.3)', ...style }} />;
+
+/** paper: the hook in ink on a taped, ruled note. Calm and personal: tips, lists, confessions. */
+const Paper = ({ thumb, isShort, still, W, H }) => {
+  const at = useIn(still);
+  const color = thumb.colorHex;
+  const box = { bg: color, color: textOn(color), rotate: -2 };
+  const noteW = isShort ? 960 : 1240;
+  const inner = noteW - 160;
+  const maxPlain = isShort ? 150 : 140;
+  const L = hookLayout(thumb, inner, maxPlain, maxPlain + 10);
+  const tagH = thumb.tag ? chipHeight(thumb.tag, 800, isShort ? 56 : 48) + 26 : 0;
+  const noteH = L.height + tagH + 180;
+  const p = at(4, 10);
+  const top = isShort ? Math.max(420, (H - noteH) / 2 - 60) : (H - noteH) / 2;
+  const emoji = isShort ? 300 : 260;
+  return (
+    <AbsoluteFill style={{ background: '#1b1b1f' }}>
+      {thumb.photo ? (
+        <>
+          <Photo src={thumb.photo} still={still} filter="brightness(0.6) saturate(0.9)" />
+          <AbsoluteFill style={{ background: 'rgba(10,10,20,0.45)' }} />
+        </>
+      ) : (
+        <Rays colors={PLAIN_BG[thumb.color] || PLAIN_BG.red} cx={50} cy={isShort ? 30 : 50} />
+      )}
+      <div
+        style={{
+          position: 'absolute',
+          left: (W - noteW) / 2,
+          top,
+          width: noteW,
+          minHeight: noteH,
+          backgroundColor: '#fff8e6',
+          backgroundImage: 'repeating-linear-gradient(180deg, rgba(40,60,120,0) 0 70px, rgba(40,60,120,0.12) 70px 73px)',
+          transform: `rotate(-2.5deg) scale(${0.85 + 0.15 * p})`,
+          opacity: Math.min(1, p * 1.5),
+          boxShadow: '0 30px 60px rgba(0,0,0,0.5)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 26,
+          padding: '70px 80px',
+          boxSizing: 'border-box',
+        }}
+      >
+        <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 6, background: 'rgba(220,60,60,0.5)', marginLeft: 70 }} />
+        {thumb.tag ? <Chip text={thumb.tag} bg={INK} color="#fff" max={isShort ? 56 : 48} maxW={800} rotate={-1} p={at(8)} shadow={false} /> : null}
+        <Hook ink thumb={thumb} avail={inner} maxPlain={maxPlain} maxBox={maxPlain + 10} box={box} pPlain={at(10)} pBox={at(14, 9)} />
+        <Tape style={{ left: -70, top: -26, transform: 'rotate(-35deg)' }} />
+        <Tape style={{ right: -70, top: -26, transform: 'rotate(35deg)' }} />
+      </div>
+      <Sticker src={thumb.emojiFile} size={emoji} rotate={14} p={at(18)} style={isShort ? { right: 30, top: top + noteH + 10 } : { right: 80, bottom: 60 }} />
+    </AbsoluteFill>
+  );
+};
+
+const LAYOUTS = { bigText: BigText, versus: Versus, question: Question, number: NumberLayout, warning: Warning, arrow: Transform, reaction: Reaction, paper: Paper };
 
 /** The design for one video. still = everything in place (the JPG); otherwise it animates in (the intro). */
 export const ThumbCard = ({ thumb, isShort, still = false }) => {
-  const { width: W, height: H } = useVideoConfig();
+  const { width: W, height: H, fps } = useVideoConfig();
   // Text is measured, so nothing is laid out until the font has loaded.
   const [ready, setReady] = useState(false);
   const [handle] = useState(() => delayRender('Thumbnail font'));
@@ -535,7 +786,17 @@ export const ThumbCard = ({ thumb, isShort, still = false }) => {
   }, [handle]);
   if (!ready) return null;
   const Layout = LAYOUTS[thumb.style] || BigText;
-  return <Layout thumb={thumb} isShort={isShort} still={still} W={W} H={H} />;
+  const stock = <Layout thumb={thumb} isShort={isShort} still={still} W={W} H={H} />;
+  if (!thumb.custom || !CUSTOM_THUMB) return stock;
+  // Instant design: the component gets ready-to-use image URLs (it may not call staticFile itself).
+  const own = { ...thumb, photoUrl: thumb.photo ? staticFile(thumb.photo) : null, photo2Url: thumb.photo2 ? staticFile(thumb.photo2) : null, emojiUrl: thumb.emojiFile ? staticFile(thumb.emojiFile) : null };
+  return (
+    <Guard name="thumbnail" fallback={stock}>
+      <AbsoluteFill>
+        <CUSTOM_THUMB thumb={own} isShort={isShort} still={still} W={W} H={H} fps={fps} landed={LANDED_FRAME} />
+      </AbsoluteFill>
+    </Guard>
+  );
 };
 
 /** The `Thumbnail` composition: one frame, rendered to the JPG uploaded to YouTube. */

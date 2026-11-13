@@ -9,9 +9,9 @@ const { fitKicker } = require('./direction');
  */
 
 // Must match the layouts in src/remotion/Thumbnail.jsx (a test checks this).
-const STYLES = ['bigText', 'versus', 'question', 'number'];
+const STYLES = ['bigText', 'versus', 'question', 'number', 'warning', 'arrow', 'reaction', 'paper'];
 const COLORS = { yellow: '#FFD400', red: '#FF1E3C', cyan: '#00E5FF', green: '#22E06B', orange: '#FF8A00', pink: '#FF3EA5' };
-const DEFAULT_COLOR = { bigText: 'yellow', versus: 'red', question: 'red', number: 'yellow' };
+const DEFAULT_COLOR = { bigText: 'yellow', versus: 'red', question: 'red', number: 'yellow', warning: 'yellow', arrow: 'green', reaction: 'pink', paper: 'red' };
 
 const TEXT_MAX_WORDS = 6;
 const TEXT_MAX_CHARS = 40;
@@ -65,15 +65,22 @@ function resolveThumbnail(script, opts = {}) {
   const num = clean(raw.number);
   const number = num && num.length <= NUMBER_MAX_CHARS && /[0-9০-৯]/.test(num) ? num : null;
 
+  const emojiOf = (name) => (EMOJI_LIST.includes(name) ? name : null);
+  const emoji = emojiOf(raw.emoji) || (fromClaude ? null : emojiOf(first.emoji));
+
   const wanted = STYLES.includes(opts.thumbStyle) ? opts.thumbStyle : raw.style;
   const usable = {
     bigText: true,
     question: true,
     versus: Boolean(left && right),
     number: Boolean(number),
+    warning: true,
+    arrow: Boolean(left && right),
+    reaction: Boolean(emoji),
+    paper: true,
   };
   const style = STYLES.includes(wanted) && usable[wanted] ? wanted : 'bigText';
-  const emojiOf = (name) => (EMOJI_LIST.includes(name) ? name : null);
+  const sides = style === 'versus' || style === 'arrow';
 
   return {
     style,
@@ -81,9 +88,9 @@ function resolveThumbnail(script, opts = {}) {
     highlight: hl && text.includes(hl) ? hl : null,
     tag: fit(raw.tag, TAG_MAX_CHARS, TAG_MAX_WORDS) || fitKicker(script && script.kicker),
     number: style === 'number' ? number : null,
-    left: style === 'versus' ? left : null,
-    right: style === 'versus' ? right : null,
-    emoji: style === 'versus' ? null : emojiOf(raw.emoji) || (fromClaude ? null : emojiOf(first.emoji)),
+    left: sides ? left : null,
+    right: sides ? right : null,
+    emoji: style === 'versus' ? null : emoji,
     color: COLORS[raw.color] ? raw.color : DEFAULT_COLOR[style],
     scene: index(raw.scene, scenes.length),
     scene2: style === 'versus' ? index(raw.scene2, scenes.length) : null,
@@ -128,13 +135,17 @@ function thumbnailPrompt(opts, recent = []) {
     `  - versus: the video pits two things against each other. Also give "left" and "right": 1-2 words each (max ${SIDE_MAX_CHARS} characters), e.g. "AI" and "ফ্রিল্যান্সার".`,
     '  - question: a provocative yes/no question the video answers (e.g. "জুনিয়রদের দিন শেষ?"). The question mark goes in text.',
     `  - number: one striking figure the video states. Also give "number": just the figure (max ${NUMBER_MAX_CHARS} characters, e.g. "৩০", "৯০%"); text is the rest of the hook.`,
+    '  - warning: a danger, scam, loss or costly mistake the viewer must avoid (hazard stripes and a warning sign).',
+    `  - arrow: a change from one state to another (before -> after, old way -> new way). Also give "left" (before) and "right" (after): 1-2 words each (max ${SIDE_MAX_CHARS} characters).`,
+    '  - reaction: a big face reacting to the hook, which sits in a speech bubble; needs "emoji" (the face). For surprising or funny hooks.',
+    '  - paper: the hook written on a taped note. Calm and personal: tips, lists, confessions, lessons learned.',
     forced
       ? `  Use the style "${forced}" for this video.`
       : recent.length
         ? `  The last videos used ${recent.join(', ')}: pick a different style unless this topic clearly calls for one of them.`
         : '',
     `- tag (optional): 1-${TAG_MAX_WORDS} words (max ${TAG_MAX_CHARS} characters) of context shown small, e.g. a product name or the interview question.`,
-    '- emoji (optional, not for versus): the strongest emotion of the hook, one of the emoji names listed for scenes.',
+    '- emoji (optional, not for versus; required for reaction): the strongest emotion of the hook, one of the emoji names listed for scenes.',
     `- color: the highlight colour, one of ${Object.keys(COLORS).join(', ')}. Pick what suits the mood (red for danger, green for money or success).`,
   ];
   if (opts.visuals !== 'motion') {

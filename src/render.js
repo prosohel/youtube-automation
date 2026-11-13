@@ -340,6 +340,7 @@ async function prepareRender({ scenes, workDir, title, theme, direction, thumbna
   }
 
   const thumb = await prepThumbnail(thumbnail, sceneProps, publicDir);
+  if (thumb && design && design.thumb) thumb.custom = true; // instant design: ThumbCard renders the design folder's thumb.jsx
   const sfx = thumbOnly ? false : await prepSfx(publicDir);
   const music = thumbOnly ? null : plan ? prepSynthMusic(plan, grid, sceneProps, introSeconds, outroSeconds, fps, publicDir) : cfg.music === 'folder' ? prepMusic(publicDir) : null;
   const credits = [];

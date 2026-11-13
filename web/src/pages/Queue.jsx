@@ -13,7 +13,7 @@ const TABS = [
 ];
 
 // The brand settings one video may override from this form; must match VIDEO_OPTION_KEYS in server/settings.js.
-const VIDEO_OPTION_KEYS = ['VIDEO_FORMAT', 'TARGET_MINUTES', 'SCRIPT_MODE', 'LANGUAGE', 'DESIGN_MODE', 'THEME', 'VISUALS']; // form order
+const VIDEO_OPTION_KEYS = ['VIDEO_FORMAT', 'TARGET_MINUTES', 'SCRIPT_MODE', 'LANGUAGE', 'DESIGN_MODE', 'THEME', 'THUMB_STYLE', 'VISUALS']; // form order
 const optionName = (spec, v) => (spec.optionLabels && spec.optionLabels[v]) || (v === '' ? 'Claude picks' : v);
 
 /** One per-video override: a select over the setting's options (or a number / text box), with "Brand default" first. */
@@ -158,7 +158,7 @@ const REDO = [
   ['voice', 'Voice + video', 'Records every scene again (voice credits), then renders the video.'],
   ['script', 'Script + voice + video', 'Writes a new script for the same topic (AI call), records it, renders it.'],
 ];
-const THUMB_STYLES = [['', 'Next style'], ['bigText', 'Big text'], ['question', 'Question'], ['number', 'Number'], ['versus', 'Versus']];
+const THUMB_STYLES = [['', 'Next style'], ['bigText', 'Big text'], ['question', 'Question'], ['number', 'Number'], ['versus', 'Versus'], ['warning', 'Warning'], ['arrow', 'Before / after'], ['reaction', 'Reaction face'], ['paper', 'Paper note']];
 /** Posted or posting somewhere: a remade file would no longer match the copy there, so no redo. */
 const postedSomewhere = (v) => Object.values(v.platforms || {}).some((p) => ['pending', 'uploading', 'processing', 'published'].includes(p.status));
 

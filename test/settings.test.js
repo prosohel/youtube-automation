@@ -219,7 +219,9 @@ test('pronunciation fixes are one shared list in the Voice card', () => {
 
 test('the thumbnail settings feed the config: style empty = Claude picks, the intro on by default', () => {
   const style = S.SETTINGS_SCHEMA.find((s) => s.key === 'THUMB_STYLE');
-  assert.deepEqual(style.options, ['', 'bigText', 'versus', 'question', 'number']);
+  assert.deepEqual(style.options, ['', ...require('../src/thumbnail').STYLES]);
+  for (const o of style.options.slice(1)) assert.ok(style.optionLabels[o], `label for ${o}`);
+  assert.ok(S.VIDEO_OPTION_KEYS.includes('THUMB_STYLE'));
   assert.equal(style.default, '');
   assert.equal(style.cfg, 'thumbStyle');
   const intro = S.SETTINGS_SCHEMA.find((s) => s.key === 'THUMB_INTRO');

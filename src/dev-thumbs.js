@@ -30,6 +30,14 @@ const SAMPLES = [
   { style: 'question', text: 'চ্যাটজিপিটি কি আপনার তথ্য বিক্রি করছে?', highlight: 'বিক্রি করছে?', emoji: 'eyes', color: 'pink', photos: [] },
   { style: 'versus', text: 'কোনটা কিনবেন?', highlight: 'কিনবেন?', left: 'iPhone', right: 'Samsung', color: 'cyan', photos: [] },
   { style: 'number', number: '৯০%', text: 'মানুষ এই ভুলটা করে', highlight: 'এই ভুলটা', emoji: 'skull', color: 'orange', photos: ['cybersecurity-hacker-hacking-hoodie-computer-dark'] },
+  { style: 'warning', text: 'এই লিংকে ক্লিক করবেন না!', highlight: 'ক্লিক করবেন না!', tag: 'নতুন প্রতারণা', emoji: 'scared', color: 'yellow', photos: ['cybersecurity-hacker-hacking-hoodie-computer-dark'] },
+  { style: 'warning', text: 'ফ্রি ওয়াইফাই, বড় বিপদ', highlight: 'বড় বিপদ', color: 'yellow', photos: [] },
+  { style: 'arrow', text: 'তিন মাসে বদলে গেল', highlight: 'বদলে গেল', left: 'বেকার', right: 'ফ্রিল্যান্সার', emoji: 'money-face', color: 'green', photos: ['programmer-typing-code-laptop-night'] },
+  { style: 'arrow', text: 'পুরনো পদ্ধতি বাদ দিন', highlight: 'বাদ দিন', left: 'Excel', right: 'AI', color: 'cyan', photos: [] },
+  { style: 'reaction', text: 'চ্যাটজিপিটি এটাও পারে?', highlight: 'এটাও পারে?', tag: 'নতুন আপডেট', emoji: 'mind-blown', color: 'pink', photos: ['ai-robot-humanoid-face-artificial-intelligence-future'] },
+  { style: 'reaction', text: 'আমি ভুল ছিলাম', highlight: 'ভুল', emoji: 'monocle', color: 'orange', photos: [] },
+  { style: 'paper', text: 'যা আগে জানলে ভালো হতো', highlight: 'আগে জানলে', tag: 'পাঁচটি শিক্ষা', emoji: 'thinking-face', color: 'red', photos: ['programmer-typing-code-laptop-night'] },
+  { style: 'paper', text: 'প্রতিদিন সকালের তিনটি অভ্যাস', highlight: 'তিনটি অভ্যাস', color: 'green', photos: [] },
 ];
 
 (async () => {

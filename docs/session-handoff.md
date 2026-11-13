@@ -79,6 +79,25 @@ Claude designed 2 scenes in 163 s (a 10×10 crowd grid with one figure walking t
 against a tiny profit block), both accepted and rendered (output/work/test-decode-video-073546/design/). Settings: DESIGN_MODE and
 DESIGN_MINUTES in the Look section of the brand card.
 
+## Thumbnails: eight styles, per-video choice, bespoke in instant mode, 2026-11-13
+
+- **Four more library styles** in src/remotion/Thumbnail.jsx (`STYLES` in src/thumbnail.js): `warning` (hazard bands, a
+  drawn warning sign), `arrow` (before crossed out, fat arrow, after in the highlight colour; needs `left`/`right` like versus),
+  `reaction` (big emoji face, hook in a speech bubble; needs `emoji`, else falls back to bigText), `paper` (hook in ink on a
+  taped ruled note). `Hook` got an `ink` prop for light panels. Gallery: `npm run render:thumbs -- --only=warning,arrow,reaction,paper`
+  (samples added to src/dev-thumbs.js); the redo "Next style" rotation and the THUMB_STYLE setting pick them up from `STYLES`.
+- **Thumbnail style is a per-video option** (`THUMB_STYLE` in `VIDEO_OPTION_KEYS`): the Add form shows it next to Design theme,
+  "Brand default (Claude picks)" by default.
+- **Bespoke thumbnail in instant design mode**: the same design pass may write `thumb.jsx` and list it in manifest.json as
+  `"thumb": {"file": "thumb.jsx"}`. `readDesign` checks it like a scene; `writeIndex` exports it as `thumb` from index.jsx
+  (customEmpty.js exports `null`). `prepareRender` sets `thumb.custom` when the design has one; `ThumbCard` then renders the
+  component (props `{ thumb, isShort, still, W, H, fps, landed }`, with `photoUrl`/`photo2Url`/`emojiUrl` ready for `<Img>`)
+  inside `Guard` (now src/remotion/Guard.jsx, shared with the scenes) and falls back to the library layout if it throws. Both the
+  JPG and the video's opening second use it (themes with `thumbIntro: false`, e.g. decode, keep their own title card as before).
+  The design brief carries `thumbnail` (hook, highlight, tag, colour, library style) and the prompt has a thumbnail section.
+  "Redo thumbnail" renders a library style (it asks for one), never the bespoke file. Verified locally with a hand-made
+  `thumb.jsx` in output/work/guard-test/design via `--design-dir`: the JPG came from it.
+
 ## Per-video prompt and options in the Add form, 2026-11-13
 
 The "Add a video to the queue" form has an **Options for this video** block: a custom prompt textarea and one select

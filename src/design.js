@@ -1,11 +1,13 @@
 // Instant design (DESIGN_MODE=instant): after the script is written, Claude Code designs bespoke Remotion scene
 // components for this one video, with the repo's skills and helpers to read. Each component is linted and
 // compiled here; a scene whose file fails keeps its library visual, and a component that throws while rendering
-// falls back the same way (Guard in src/remotion/Visuals.jsx). So the design pass can only improve a video.
+// falls back the same way (Guard in src/remotion/Guard.jsx). So the design pass can only improve a video.
+// The same pass may design the thumbnail (thumb.jsx): ThumbCard in src/remotion/Thumbnail.jsx renders it the same way.
 const fs = require('fs');
 const path = require('path');
 const cfg = require('./config');
 const { log } = require('./util');
+const { COLORS: THUMB_COLORS } = require('./thumbnail');
 
 const REMOTION_DIR = path.join(__dirname, 'remotion');
 const EMPTY_SCENES = path.join(REMOTION_DIR, 'customEmpty.js');
@@ -57,18 +59,36 @@ function compileError(src, file) {
   }
 }
 
+/** Lint + compile one named file of the design folder; pushes the problems onto `item`. Returns true when clean. */
+function checkFile(dir, file, item) {
+  if (!/^[\w-]+\.jsx$/.test(file)) item.problems.push('file name must be <name>.jsx inside the design folder');
+  if (item.problems.length) return false;
+  let src;
+  try {
+    src = fs.readFileSync(path.join(dir, file), 'utf8');
+  } catch {
+    item.problems.push('file missing');
+    return false;
+  }
+  item.problems.push(...lintSource(src));
+  const ce = compileError(src, file);
+  if (ce) item.problems.push(`does not compile: ${ce}`);
+  return item.problems.length === 0;
+}
+
 /**
- * Read and check manifest.json + the files it names. Returns { scenes: { [index]: { file, full } }, report: [...] }.
- * manifest: {"scenes": {"3": {"file": "scene-3.jsx", "full": false, "note": "..."}}} (a bare string is also a file).
+ * Read and check manifest.json + the files it names. Returns { scenes: { [index]: { file, full } }, thumb: { file } | null, report: [...] }.
+ * manifest: {"scenes": {"3": {"file": "scene-3.jsx", "full": false, "note": "..."}}, "thumb": {"file": "thumb.jsx"}} (a bare string is also a file).
  */
 function readDesign(dir, sceneCount) {
   const report = [];
   const scenes = {};
+  let thumb = null;
   let manifest;
   try {
     manifest = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
   } catch (e) {
-    return { scenes, report: [{ problem: `manifest.json: ${e.message}` }] };
+    return { scenes, thumb, report: [{ problem: `manifest.json: ${e.message}` }] };
   }
   const entries = Object.entries((manifest && manifest.scenes) || {}).slice(0, MAX_SCENES);
   for (const [key, raw] of entries) {
@@ -78,30 +98,30 @@ function readDesign(dir, sceneCount) {
     const item = { scene: i, file, ok: false, problems: [] };
     report.push(item);
     if (!Number.isInteger(i) || i < 0 || i >= sceneCount) item.problems.push('scene index out of range');
-    if (!/^[\w-]+\.jsx$/.test(file)) item.problems.push('file name must be <name>.jsx inside the design folder');
-    if (item.problems.length) continue;
-    let src;
-    try {
-      src = fs.readFileSync(path.join(dir, file), 'utf8');
-    } catch {
-      item.problems.push('file missing');
-      continue;
-    }
-    item.problems.push(...lintSource(src));
-    const ce = compileError(src, file);
-    if (ce) item.problems.push(`does not compile: ${ce}`);
-    if (item.problems.length) continue;
+    if (!checkFile(dir, file, item)) continue;
     item.ok = true;
     scenes[i] = { file, full: Boolean(entry.full) };
   }
-  return { scenes, report };
+  if (manifest && manifest.thumb) {
+    const entry = typeof manifest.thumb === 'string' ? { file: manifest.thumb } : manifest.thumb;
+    const file = String((entry && entry.file) || '');
+    const item = { thumb: true, file, ok: false, problems: [] };
+    report.push(item);
+    if (checkFile(dir, file, item)) {
+      item.ok = true;
+      thumb = { file };
+    }
+  }
+  return { scenes, thumb, report };
 }
 
-/** Write index.jsx in the design folder: the map the composition imports as 'custom-scenes'. */
-function writeIndex(dir, scenes) {
+/** Write index.jsx in the design folder: the map the composition imports as 'custom-scenes' (default) and the thumbnail (`thumb`). */
+function writeIndex(dir, scenes, thumb = null) {
   const keys = Object.keys(scenes);
   const lines = keys.map((k, n) => `import S${n} from './${scenes[k].file}';`);
+  if (thumb) lines.push(`import T from './${thumb.file}';`);
   lines.push(`export default { ${keys.map((k, n) => `'${k}': { Component: S${n}, full: ${scenes[k].full} }`).join(', ')} };`);
+  lines.push(`export const thumb = ${thumb ? 'T' : 'null'};`);
   const file = path.join(dir, 'index.jsx');
   fs.writeFileSync(file, `${lines.join('\n')}\n`);
   return file;
@@ -126,7 +146,7 @@ const STAGE = {
   shorts: { width: 1080, height: 1920, top: 380, bottom: 600, tallTop: 260 },
 };
 
-function designPrompt({ dir, isShort, fps, sceneCount, language }) {
+function designPrompt({ dir, isShort, fps, sceneCount, language, thumbnail = null }) {
   const st = isShort ? STAGE.shorts : STAGE.landscape;
   // the design folder is the agent's working directory: every path in the prompt is relative to it
   const owner = String(cfg.instructions || '').trim();
@@ -154,8 +174,14 @@ What to design (quality over quantity, at most ${Math.min(MAX_SCENES, sceneCount
 - Skip scenes where the stock visual (see "visual" in the brief) already fits: hooks with an icon, plain lists, the subscribe scene. Vary the compositions across the video; never two similar scenes in a row.
 - Everything must be truthful to the narration: no numbers or names that the sentence does not say.
 ${owner ? `- The channel owner's standing instructions (follow them): ${owner.replace(/\s*\n\s*/g, ' / ')}\n` : ''}${own ? `- The owner's request for this video (it comes first): ${own.replace(/\s*\n\s*/g, ' / ')}\n` : ''}
+${thumbnail ? `The thumbnail (thumb.jsx, optional but worth it): the image people see before they decide to watch, and the video's first second. brief.json has "thumbnail": the hook text, its highlight words, tag, colour, and the library style it would get (${thumbnail.style}; see ref/remotion/Thumbnail.jsx for how the eight library styles look). Design one bespoke thumbnail for this video when you can beat that: a picture of the idea, not just type.
+- export default a component with props { thumb, isShort, still, W, H, fps, landed }. thumb = the brief's thumbnail plus photoUrl, photo2Url, emojiUrl (image URLs, or null): use them with <Img src=...> from remotion; never staticFile or other files.
+- Fill the whole frame (W x H). The hook text must be huge and readable at 20% size: at most 2 lines of plain words plus the highlight in a coloured box, font weight 800, use loadFont from '@remotion/google-fonts/AnekBangla' (or headFont() from yt/shared). On-screen text is ${language}; do not add words the hook does not have.
+- still = true draws the finished image (the JPG). Otherwise it is the opening of the video: everything must have fully landed by frame \`landed\` (${32}) and then hold; animate with useCurrentFrame() only.
+- Honest and bold: strong contrast, one focal point, no tiny details, no emoji characters, no watermarks or logos.
+` : ''}
 When done, write manifest.json:
-{"scenes": {"3": {"file": "scene-3.jsx", "full": false, "note": "one line on the idea"}, ...}}
+{"scenes": {"3": {"file": "scene-3.jsx", "full": false, "note": "one line on the idea"}, ...}${thumbnail ? ', "thumb": {"file": "thumb.jsx", "note": "one line"}' : ''}}
 Then re-read each file against the contract (imports, default export, no forbidden calls, text in ${language}, fits the stage) and fix what you find. Finish with one line: how many scenes you designed. Do not run anything.`;
 }
 
@@ -163,7 +189,7 @@ Then re-read each file against the contract (imports, default export, no forbidd
  * Run the design pass for one video. scenes: the voiced scenes (narration, headline, visual, duration, frames when known).
  * Returns { dir, index, scenes: { [i]: { file, full } }, report } or null when nothing usable came out.
  */
-async function designScenes({ script, scenes, theme, workDir, isShort = cfg.format === 'shorts', fps = cfg.fps, say = log }) {
+async function designScenes({ script, scenes, theme, workDir, thumbnail = null, isShort = cfg.format === 'shorts', fps = cfg.fps, say = log }) {
   const { runAgent } = require('./llm');
   const dir = path.join(workDir, DESIGN_DIR);
   fs.rmSync(dir, { recursive: true, force: true });
@@ -181,6 +207,8 @@ async function designScenes({ script, scenes, theme, workDir, isShort = cfg.form
     },
     ownerInstructions: String(cfg.instructions || '').trim() || null,
     videoPrompt: String(cfg.videoPrompt || '').trim() || null,
+    // the checked thumbnail (src/thumbnail.js): what the hook says and the library style it would get
+    thumbnail: thumbnail ? { style: thumbnail.style, text: thumbnail.text, highlight: thumbnail.highlight, tag: thumbnail.tag, number: thumbnail.number, left: thumbnail.left, right: thumbnail.right, emoji: thumbnail.emoji, color: thumbnail.color, colorHex: THUMB_COLORS[thumbnail.color] || THUMB_COLORS.yellow, photoScene: thumbnail.scene } : null,
     scenes: scenes.map((s, i) => {
       const seconds = Number(s.duration) || 0;
       const frames = s.frames || (seconds ? Math.round(seconds * fps) + 15 : null);
@@ -196,7 +224,7 @@ async function designScenes({ script, scenes, theme, workDir, isShort = cfg.form
     if (fs.existsSync(from)) fs.cpSync(from, path.join(dir, 'ref', 'skills', sk), { recursive: true });
   }
 
-  const prompt = designPrompt({ dir, isShort, fps, sceneCount: scenes.length, language: cfg.language });
+  const prompt = designPrompt({ dir, isShort, fps, sceneCount: scenes.length, language: cfg.language, thumbnail: brief.thumbnail });
   const timeoutSec = Math.max(120, Math.round(cfg.designMinutes * 60));
   say(`Design: Claude is designing scenes (up to ${cfg.designMinutes} min)...`);
   const t0 = Date.now();
@@ -210,12 +238,12 @@ async function designScenes({ script, scenes, theme, workDir, isShort = cfg.form
   const design = readDesign(dir, scenes.length);
   const ok = Object.keys(design.scenes);
   const bad = design.report.filter((r) => !r.ok);
-  for (const r of bad) say(`Design: scene ${r.scene !== undefined ? r.scene + 1 : '?'} ${r.file || ''} rejected: ${(r.problems || [r.problem]).join('; ')}`);
+  for (const r of bad) say(`Design: ${r.thumb ? 'thumbnail' : `scene ${r.scene !== undefined ? r.scene + 1 : '?'}`} ${r.file || ''} rejected: ${(r.problems || [r.problem]).join('; ')}`);
   fs.writeFileSync(path.join(dir, 'design-report.json'), JSON.stringify({ summary, seconds: Math.round((Date.now() - t0) / 1000), report: design.report }, null, 2));
-  say(`Design: ${ok.length} bespoke scene${ok.length === 1 ? '' : 's'} accepted${bad.length ? `, ${bad.length} rejected` : ''} in ${Math.round((Date.now() - t0) / 1000)}s`);
-  if (!ok.length) return null;
-  const index = writeIndex(dir, design.scenes);
-  return { dir, index, scenes: design.scenes, report: design.report };
+  say(`Design: ${ok.length} bespoke scene${ok.length === 1 ? '' : 's'}${design.thumb ? ' and the thumbnail' : ''} accepted${bad.length ? `, ${bad.length} rejected` : ''} in ${Math.round((Date.now() - t0) / 1000)}s`);
+  if (!ok.length && !design.thumb) return null;
+  const index = writeIndex(dir, design.scenes, design.thumb);
+  return { dir, index, scenes: design.scenes, thumb: design.thumb, report: design.report };
 }
 
 module.exports = { designScenes, designPrompt, readDesign, lintSource, compileError, writeIndex, withCustomScenes, DESIGN_DIR, MAX_SCENES, IMPORT_OK };

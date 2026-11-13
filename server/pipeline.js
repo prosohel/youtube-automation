@@ -166,7 +166,7 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
     // redo of the render (or the critique's second pass) uses the same design.
     if (cfg.designMode === 'instant' && v.design === undefined) {
       await say('Designing bespoke scenes with Claude Code...');
-      const design = await deps.designScenes({ script: v.script, scenes: v.scenes, theme: v.theme, workDir, say });
+      const design = await deps.designScenes({ script: v.script, scenes: v.scenes, theme: v.theme, workDir, thumbnail, say });
       v = await save({ design });
     }
     const res = await deps.renderAny({ scenes: v.scenes, workDir, slug: v.slug, title: v.title, theme: v.theme, direction: v.direction, thumbnail, sourceLabel: sourceLabel(v.topicInfo && v.topicInfo.siteName), extraLabel: extraLabel(cfg.extraLink), design: v.design || null });
