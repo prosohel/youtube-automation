@@ -2,6 +2,7 @@ import React from 'react';
 import { Hero3D } from '../Hero3D';
 import { IconGrid, OrgTree, PhoneApps, PriceTag, Wireframe } from './Illustrations';
 import { Figures } from './Figures';
+import { Cityscape, Crowd, Metaphor, WorldMap } from './Report';
 import { BigNumber } from './BigNumber';
 import { Bars } from './Bars';
 import { LineChart } from './LineChart';
@@ -9,7 +10,7 @@ import { Donut } from './Donut';
 import { Timeline } from './Timeline';
 
 /** Library graphic types that have a component. A test keeps this in step with src/graphics.js. */
-export const LIBRARY_RENDERED = ['bigNumber', 'bars', 'line', 'donut', 'timeline', 'hero3d', 'phoneApps', 'wireframe', 'orgTree', 'priceTag', 'iconGrid', 'figures'];
+export const LIBRARY_RENDERED = ['bigNumber', 'bars', 'line', 'donut', 'timeline', 'hero3d', 'phoneApps', 'wireframe', 'orgTree', 'priceTag', 'iconGrid', 'figures', 'crowd', 'cityscape', 'worldMap', 'metaphor'];
 
 /** One validated library graphic (shapes: src/graphics.js). null for a type without a component. */
 export const LibraryVisual = ({ visual, accent, isShort, start }) => {
@@ -37,6 +38,14 @@ export const LibraryVisual = ({ visual, accent, isShort, start }) => {
       return <IconGrid {...props} />;
     case 'figures':
       return <Figures {...props} />;
+    case 'crowd':
+      return <Crowd {...props} />;
+    case 'cityscape':
+      return <Cityscape {...props} />;
+    case 'worldMap':
+      return <WorldMap {...props} />;
+    case 'metaphor':
+      return <Metaphor {...props} />;
     case 'hero3d':
       return <Hero3D object={visual.object} label={visual.label} accent={accent} isShort={isShort} start={start} />;
     default:

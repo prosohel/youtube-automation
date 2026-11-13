@@ -64,8 +64,8 @@ Every item of the gap-analysis list is now done.
 
 | Item | State |
 |---|---|
-| 1. `decode` theme: cream halftone paper, navy/red/blue, corner registration marks + labels + timecode, black caption box with a red bar (`caption: boxbar`), blue chapter card with a huge striped number (`chapterStripes`) | done |
-| 2. Graphics `crowd`, `cityscape`, `worldMap`, `metaphor`; a person pointing at `bars` | not started |
+| 1. `decode` theme: cream halftone paper, navy/red/blue, corner registration marks + labels + timecode, black caption box with a red bar (`caption: boxbar`), blue chapter card with a huge striped number (`chapterStripes`); Atma 700 headings + Anek Bangla 700 body | done |
+| 2. Graphics `crowd` (8-20 silhouettes: walk / queue / gather, one in red), `cityscape` (skyline, lit building, halftone sun, dotted line), `worldMap` (flat map, 2-4 lat/lon markers, dotted route), `metaphor` (castle, bubble, balance, fire, bridge); `bars` with `"pointer":true` adds a presenter pointing at the stressed bar (landscape only). All in `src/remotion/library/Report.jsx`, validated in `src/graphics.js`, gallery samples + sync tests added. Checked as decode stills in both formats | done 2026-11-13 |
 | 3. Dotted path lines and walk-in motion | not started |
 
 Also fixed on the way: the critique contact sheet assumed vertical tiles (landscape sheets were mostly black); chapter cards and the reel eyebrow/icon were too small at 1080p.

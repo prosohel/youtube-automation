@@ -12,7 +12,7 @@ import { ITEM_STAGGER } from './timing';
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
 
 /** One standing silhouette in a 100×240 box: head, shoulders, body, legs. `arms`: down | up | phone | out */
-const Silhouette = ({ color, arms = 'down', x = 0, y = 0, scale = 1, bob = 0 }) => (
+export const Silhouette = ({ color, arms = 'down', x = 0, y = 0, scale = 1, bob = 0 }) => (
   <g transform={`translate(${x} ${y + bob}) scale(${scale})`} fill={color}>
     <circle cx={50} cy={28} r={24} />
     <path d="M 22 62 Q 50 50 78 62 L 84 150 L 16 150 Z" />

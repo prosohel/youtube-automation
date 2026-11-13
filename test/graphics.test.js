@@ -165,6 +165,34 @@ test('every library type the validator accepts has a component, and LIBRARY_REND
   assert.deepEqual(rendered, cases);
 });
 
+test('crowd modes and metaphor kinds match the Report component', () => {
+  const src = readRemotion('library/Report.jsx');
+  const modes = [...src.match(/CROWD_MODES = \[([^\]]*)\]/)[1].matchAll(/'(\w+)'/g)].map((m) => m[1]).sort();
+  assert.deepEqual(modes, [...G.CROWD_MODES].sort());
+  const kinds = [...src.match(/const METAPHORS = \{([^}]*)\}/)[1].matchAll(/(\w+):/g)].map((m) => m[1]).sort();
+  assert.deepEqual(kinds, [...G.METAPHOR_KINDS].sort());
+  const prompt = G.graphicsPrompt(ON, []);
+  for (const m of G.CROWD_MODES) assert.match(prompt, new RegExp(`\\b${m} \\(`), `crowd mode ${m} explained`);
+  for (const k of G.METAPHOR_KINDS) assert.match(prompt, new RegExp(`\\b${k} \\(`), `metaphor ${k} explained`);
+});
+
+test('printed-report scenes are checked: crowd clamps, worldMap needs coordinates, metaphor needs a known kind, bars keeps pointer', () => {
+  const crowd = G.validateVisual({ type: 'crowd', mode: 'nope', count: 99, highlight: 50, label: 'x' }, ON);
+  assert.deepEqual(crowd, { type: 'crowd', mode: 'walk', count: 20, highlight: 19, label: 'x' });
+  assert.equal(G.validateVisual({ type: 'crowd' }, ON).count, 12);
+  assert.equal(G.validateVisual({ type: 'worldMap', markers: [{ label: 'a', lat: 1, lon: 2 }] }, ON).type, 'icon');
+  assert.equal(G.validateVisual({ type: 'worldMap', markers: [{ label: 'a', lat: 1, lon: 2 }, { label: 'b', lat: 1 }] }, ON).type, 'icon');
+  assert.equal(G.validateVisual({ type: 'worldMap', markers: [{ label: 'a', lat: 1, lon: 2 }, { label: 'b', lat: 100, lon: 2 }] }, ON).type, 'icon');
+  const map = G.validateVisual({ type: 'worldMap', markers: [{ label: 'a', lat: 1, lon: 2 }, { label: 'b', lat: '3', lon: 4 }] }, ON);
+  assert.deepEqual(map.markers, [{ label: 'a', lat: 1, lon: 2 }, { label: 'b', lat: 3, lon: 4 }]);
+  assert.equal(G.validateVisual({ type: 'metaphor', kind: 'dragon' }, ON).type, 'icon');
+  assert.equal(G.validateVisual({ type: 'metaphor', kind: 'bubble' }, ON).kind, 'bubble');
+  assert.equal(G.validateVisual({ type: 'cityscape' }, ON).type, 'cityscape');
+  const bars = G.validateVisual({ type: 'bars', pointer: true, bars: [{ label: 'a', value: 1 }, { label: 'b', value: 2 }] }, ON);
+  assert.equal(bars.pointer, true);
+  assert.equal('pointer' in G.validateVisual({ type: 'bars', pointer: 'yes', bars: [{ label: 'a', value: 1 }, { label: 'b', value: 2 }] }, ON), false);
+});
+
 test('SceneVisual hands library graphics to LibraryVisual', () => {
   assert.match(readRemotion('Visuals.jsx'), /import \{[^}]*\bLibraryVisual\b[^}]*\} from '\.\/library'/);
 });

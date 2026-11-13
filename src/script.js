@@ -94,6 +94,11 @@ const SCRIPT_SCHEMA = {
               count: { type: 'integer' },
               highlight: { type: 'integer' },
               cards: { type: 'array', items: { type: 'object', properties: { icon: { type: 'string' }, label: { type: 'string' } }, required: ['label'] } },
+              // printed-report scenes
+              mode: { type: 'string' },
+              kind: { type: 'string' },
+              pointer: { type: 'boolean' },
+              markers: { type: 'array', items: { type: 'object', properties: { label: { type: 'string' }, lat: { type: 'number' }, lon: { type: 'number' } }, required: ['label', 'lat', 'lon'] } },
               unit: { type: 'string' },
               highlight: { type: 'integer' },
               bars: { type: 'array', items: { type: 'object', properties: { label: { type: 'string' }, value: { type: 'number' } }, required: ['label', 'value'] } },

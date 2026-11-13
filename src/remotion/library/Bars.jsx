@@ -4,6 +4,7 @@ import { bodyFont, fitSize, headFont, isVox, pop, theme, twos } from '../shared'
 import { Panel } from './Panel';
 import { ITEM_STAGGER } from './timing';
 import { withUnit } from './format';
+import { Silhouette } from './Figures';
 
 const GROW = 18; // frames one bar takes to grow
 const grow = (f, at) => interpolate(f, [at, at + GROW], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: Easing.out(Easing.cubic) });
@@ -51,10 +52,12 @@ export const Bars = ({ visual, accent, isShort, start }) => {
     );
   }
 
-  const W = 1500;
+  // pointer: a silhouette presenter stands left of the chart and points at the stressed bar (the printed-report look)
+  const pointer = !!visual.pointer;
+  const W = pointer ? 1240 : 1500;
   const slot = (W - 2 * 56) / bars.length;
   const barMax = 300;
-  return (
+  const chart = (
     <Panel accent={accent} style={{ ...panel, width: W, padding: '36px 56px 30px' }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', borderBottom: `3px solid ${T.track}` }}>
         {bars.map((b, i) => {
@@ -78,5 +81,18 @@ export const Bars = ({ visual, accent, isShort, start }) => {
         ))}
       </div>
     </Panel>
+  );
+  if (!pointer) return chart;
+  const ink = T.dark ? T.text : '#1d2230';
+  const walk = Math.min(1, pop(f0, fps, start + 6, 14));
+  const stressed = bars.findIndex((_, i) => i === hi);
+  const lean = stressed >= 0 ? -6 + (stressed / Math.max(1, bars.length - 1)) * 10 : 0;
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
+      <svg viewBox="0 0 170 250" width={272} height={400} style={{ overflow: 'visible', opacity: walk, transform: `translateX(${(1 - walk) * -60}px) rotate(${lean}deg)`, transformOrigin: 'bottom center' }}>
+        <Silhouette color={ink} arms="out" x={0} y={0} scale={1} bob={Math.sin(f / 14) * 2} />
+      </svg>
+      {chart}
+    </div>
   );
 };

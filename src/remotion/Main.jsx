@@ -458,6 +458,9 @@ const cueFrames = (scene, start, at) => {
     if (v.type === 'orgTree') return (v.children || []).slice(0, 4).map((_, i) => start + VISUAL_START + 20 + i * ITEM_STAGGER);
     if (v.type === 'iconGrid') return each(v.cards, 4);
     if (v.type === 'figures' && v.scene === 'group') return Array.from({ length: v.count || 3 }).map((_, i) => start + VISUAL_START + i * ITEM_STAGGER);
+    // a crowd ticks for the first few arrivals only; map markers land 12 frames apart (Report.jsx)
+    if (v.type === 'crowd') return Array.from({ length: Math.min(6, v.count || 12) }).map((_, i) => start + VISUAL_START + 8 + i * ITEM_STAGGER);
+    if (v.type === 'worldMap') return (v.markers || []).slice(0, 4).map((_, i) => start + VISUAL_START + 10 + i * 12);
     return [landed];
   }
   if (at === 'emoji') return scene.emoji ? [start + VISUAL_START + 10] : [];

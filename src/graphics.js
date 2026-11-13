@@ -8,8 +8,11 @@ const { EXAM_TYPES, checkExamVisual } = require('./examVisuals');
 const { STORY_TYPES, checkStoryVisual } = require('./storyVisuals');
 
 const BASIC_TYPES = ['icon', 'stat', 'list', 'compare'];
-const LIBRARY_TYPES = ['bigNumber', 'bars', 'line', 'donut', 'timeline', 'hero3d', 'phoneApps', 'wireframe', 'orgTree', 'priceTag', 'iconGrid', 'figures'];
+const LIBRARY_TYPES = ['bigNumber', 'bars', 'line', 'donut', 'timeline', 'hero3d', 'phoneApps', 'wireframe', 'orgTree', 'priceTag', 'iconGrid', 'figures', 'crowd', 'cityscape', 'worldMap', 'metaphor'];
 const FIGURE_SCENES = ['laptop', 'podium', 'group', 'phone', 'handshake'];
+// printed-report scenes (src/remotion/library/Report.jsx); a test keeps these lists in step with the component
+const CROWD_MODES = ['walk', 'queue', 'gather'];
+const METAPHOR_KINDS = ['castle', 'bubble', 'balance', 'fire', 'bridge'];
 const LUCIDE = require('lucide-react').icons;
 const HERO_OBJECTS = ['phone', 'coin', 'laptop', 'rocket', 'shield', 'lock', 'chip', 'cube'];
 
@@ -84,7 +87,7 @@ const CHECK = {
     });
     if (bars.includes(null) || bars.every((b) => b.value === 0)) return null;
     const highlight = Number.isInteger(v.highlight) && v.highlight >= 0 && v.highlight < bars.length ? v.highlight : null;
-    return { type: 'bars', bars, unit: clip(v.unit, 14), highlight };
+    return { type: 'bars', bars, unit: clip(v.unit, 14), highlight, ...(v.pointer === true ? { pointer: true } : {}) };
   },
 
   line(v, bangla) {
@@ -159,6 +162,37 @@ const CHECK = {
     return out;
   },
 
+  /* printed-report scenes (src/remotion/library/Report.jsx) */
+  crowd(v) {
+    const count = parseNumber(v.count);
+    const out = { type: 'crowd', mode: CROWD_MODES.includes(v.mode) ? v.mode : 'walk', count: count === null ? 12 : Math.max(8, Math.min(20, Math.round(count))) };
+    const hi = parseNumber(v.highlight);
+    if (hi !== null) out.highlight = Math.max(0, Math.min(out.count - 1, Math.round(hi)));
+    const label = clip(v.label, 60);
+    return label ? { ...out, label } : out;
+  },
+  cityscape(v) {
+    const label = clip(v.label, 60);
+    return { type: 'cityscape', ...(label ? { label } : {}) };
+  },
+  worldMap(v) {
+    if (!inRange(v.markers, 2, 4)) return null;
+    const markers = v.markers.map((m) => {
+      const label = clip(m && m.label, 16);
+      const lat = parseNumber(m && m.lat);
+      const lon = parseNumber(m && m.lon);
+      return label && lat !== null && lon !== null && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? { label, lat, lon } : null;
+    });
+    if (markers.includes(null)) return null;
+    const label = clip(v.label, 60);
+    return { type: 'worldMap', markers, ...(label ? { label } : {}) };
+  },
+  metaphor(v) {
+    if (!METAPHOR_KINDS.includes(v.kind)) return null;
+    const label = clip(v.label, 60);
+    return { type: 'metaphor', kind: v.kind, ...(label ? { label } : {}) };
+  },
+
   hero3d(v) {
     if (!HERO_OBJECTS.includes(v.object)) return null;
     const label = clip(v.label, 30);
@@ -230,7 +264,7 @@ function graphicsPrompt(opts, recent = []) {
   if (!opts || !opts.directGraphics) return '';
   const lines = [
     `  - {"type":"bigNumber","value":"১৬ জন","label":"প্রতি মিনিটে প্রতারিত","pre":"এখন:"}: one huge figure. value: the number with at most a one-word unit (max 12 characters); label: a short phrase (max 40); pre: optional, 1-3 words (max 24). ${REAL}`,
-    `  - {"type":"bars","bars":[{"label":"ঢাকা","value":70},{"label":"চট্টগ্রাম","value":30}],"unit":"%","highlight":0}: 2-6 bars comparing amounts. labels: 1-3 short words (max 18 characters); values 0 or more; unit: 1-2 short words such as %, লাখ, কোটি টাকা (max 14); highlight = index of the bar to stress, omit for none. ${REAL}`,
+    `  - {"type":"bars","bars":[{"label":"ঢাকা","value":70},{"label":"চট্টগ্রাম","value":30}],"unit":"%","highlight":0}: 2-6 bars comparing amounts. labels: 1-3 short words (max 18 characters); values 0 or more; unit: 1-2 short words such as %, লাখ, কোটি টাকা (max 14); highlight = index of the bar to stress, omit for none; "pointer":true adds a silhouette presenter pointing at the stressed bar (landscape only). ${REAL}`,
     `  - {"type":"line","points":[{"label":"২০২২","value":10},{"label":"২০২৪","value":25},{"label":"২০২৬","value":60}],"unit":"লাখ"}: 3-8 points of a change over time. labels: a year or a short month and year (max 16 characters); unit: 1-2 short words (max 14). ${REAL}`,
     `  - {"type":"donut","slices":[{"label":"হ্যাঁ","share":60},{"label":"না","share":40}]}: 2-5 shares of a whole, adding up to 100. labels: 1-3 short words (max 18 characters). ${REAL}`,
     '  - {"type":"hero3d","object":"phone","label":"আপনার ফোন"}: a lit, slowly turning 3D object for a scene about one real thing. object: one of phone, coin, laptop, rocket, shield, lock, chip, cube (phone = apps/devices, coin = money, laptop = work/software, rocket = launches/growth, shield = safety, lock = privacy/passwords, chip = AI/hardware, cube = abstract). label: optional, 1-3 words (max 30). At most one hero3d scene per video.',
@@ -240,6 +274,10 @@ function graphicsPrompt(opts, recent = []) {
     '  - {"type":"priceTag","value":"$১০,০০০","label":"একটা প্রজেক্টের দাম"}: a red stamp with a price or figure (value max 12 characters), label optional (max 60). Only when the narration itself states that figure.',
     '  - {"type":"iconGrid","cards":[{"icon":"Stethoscope","label":"ডাক্তার"},{"icon":"Scale","label":"আইনজীবী"}]}: 2-4 cards with a line icon and a short label (max 24). icon is a lucide icon name (Smartphone, Laptop, Briefcase, GraduationCap, DollarSign, Shield, Users, Globe, Heart, Home, Scale, Stethoscope, Wrench, Car, ShoppingCart, Camera). For "these kinds of people, things or jobs".',
     '  - {"type":"figures","scene":"laptop","label":"রাতে বসে কাজ"}: flat silhouette people. scene: laptop (someone working), podium (someone speaking or announcing), group (2-5 people standing; "count" and the 0-based "highlight" index of the one who matters), phone (someone scrolling), handshake (a deal or a client). label optional (max 60). For human moments: workers, clients, bosses, crowds, announcements.',
+    '  - {"type":"crowd","mode":"walk","count":12,"highlight":3,"label":"প্রতি দশজনে একজন"}: 8-20 silhouette people. mode: walk (they walk in: workers, users, the public), queue (standing in line with phones: waiting, applying, buying), gather (a loose crowd: a market, a company, a country). highlight: 0-based index of the one person drawn in red, omit for none. label optional (max 60). For "millions of people", "every worker", "the public".',
+    '  - {"type":"cityscape","label":"ডেটা সেন্টারের শহর"}: a city skyline with one lit building and a red halftone sun. label optional (max 60). For cities, data centres, offices, "the industry", economies.',
+    '  - {"type":"worldMap","markers":[{"label":"ঢাকা","lat":23.8,"lon":90.4},{"label":"সিলিকন ভ্যালি","lat":37.4,"lon":-122}],"label":"টাকা কোথায় যায়"}: a flat world map with 2-4 markers (label max 16; lat and lon as numbers) and a dotted route drawn between them in order. label optional (max 60). For countries, trade, outsourcing, supply chains, "from here to there".',
+    '  - {"type":"metaphor","kind":"bubble","label":"এআই বাবল"}: one drawn metaphor. kind: castle (a moat or defence, a company that cannot be attacked), bubble (a bubble about to burst, hype), balance (two sides weighed, a trade-off), fire (money burning, losses), bridge (a connection, a transition). label optional (max 60). Only when the narration uses that image.',
     '  - {"type":"timeline","events":[{"when":"২০১৯","text":"প্রথম সংস্করণ"},{"when":"২০২১","text":"বড় আপডেট"},{"when":"২০২৪","text":"সবার জন্য খোলা"}]}: 3-5 dated events. when: a year or a short date (max 12 characters); text: a short phrase of up to 6 words (max 32). Only dates the narration itself gives.',
     '  Never use the same graphic type on two scenes in a row (icon is exempt; a B-roll scene in between is fine).' +
       (recent.length ? ` The last videos relied most on ${recent.join(', ')}: use them less this time.` : ''),
@@ -252,6 +290,8 @@ module.exports = {
   LIBRARY_TYPES,
   HERO_OBJECTS,
   FIGURE_SCENES,
+  CROWD_MODES,
+  METAPHOR_KINDS,
   isBangla,
   parseNumber,
   formatNumber,
