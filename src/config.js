@@ -92,6 +92,10 @@ const cfg = (module.exports = {
   // 'idea' (default) = tips/explainer scripts; 'story' = a cartoon parable with a lesson (theme vox-story);
   // 'essay' = a chaptered argument with chapter cards, for 5-10 minute landscape explainers
   scriptMode: (process.env.SCRIPT_MODE || 'idea').toLowerCase(),
+  // 'library' (default) = visuals from the built-in graphic library; 'instant' = Claude Code also designs bespoke
+  // Remotion scene components for this video (src/design.js), each falling back to the library visual if it fails
+  designMode: (process.env.DESIGN_MODE || 'library').toLowerCase(),
+  designMinutes: Number(process.env.DESIGN_MINUTES || 12), // time the design pass may take per video
   // optional free text from the brand's owner: how every video of this brand should be (tone, do / don't, viewer)
   instructions: (process.env.VIDEO_INSTRUCTIONS || '').trim(),
   // Question mode: videos made from real exam questions on the owner's sites (src/questions).

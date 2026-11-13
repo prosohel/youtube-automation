@@ -60,6 +60,25 @@ Every item of the gap-analysis list is now done.
 | 3. Silhouette figures: library graphic `figures` with scenes laptop, podium, group (count + highlight), phone, handshake (`src/remotion/library/Figures.jsx`) | done |
 | 4. `SCRIPT_MODE=essay`: thesis card, 3-5 numbered chapter cards, a counterpoint chapter, closing; prefers the illustrated graphics and the ledger themes. Tested end to end (5-minute landscape essay, 25 scenes, 11 visual types; came out at 3.7 min: Claude wrote 34% fewer words than asked, the warning fired) | done |
 
+## Instant design mode (DESIGN_MODE=instant), 2026-11-13
+
+Per brand: **Design mode** = `library` (default, unchanged) or `instant`. In instant mode, after the script and voice,
+`designScenes` in src/design.js runs Claude Code headless **with tools** (`runAgent` in src/llm.js: Read/Glob/Grep/Write confined to
+`output/work/<video>/design/` as its working directory; path-pattern permission rules were found not to work in this CLI build,
+so the folder is the sandbox and gets a copy of src/remotion and the two Remotion skills under `ref/`; no Bash, MCP or
+network, `DESIGN_MINUTES` time limit). It reads `brief.json` (scenes, theme, owner instructions), the skill and the helpers, then writes `scene-<i>.jsx` files and `manifest.json`. Each file is linted (allowed imports only; no
+Math.random, Date, timers, fetch, require, emoji, CSS animation) and compiled with esbuild; survivors go into `index.jsx`, which
+the composition imports as `custom-scenes` through a webpack alias (`withCustomScenes`; `yt/` = src/remotion). `SceneVisual`
+renders a bespoke scene inside a React error boundary (`Guard`) and falls back to the stock visual if it throws; a bundle
+failure retries without the design. The pipeline stores `design` on the video record so redo and critique re-renders reuse it.
+
+Local testing: `npm run render:test -- output/<script>.json --scenes=4 --theme=decode --design` runs the pass;
+`--design-dir=<folder>` reuses a folder holding manifest.json and scene files. Verified with a hand-made good scene plus a
+throwing scene (bespoke renders, failure falls back, render finishes) and with a real pass on the 4-scene decode test script:
+Claude designed 2 scenes in 163 s (a 10×10 crowd grid with one figure walking to a door marked কাজ; a halftone market-value slab
+against a tiny profit block), both accepted and rendered (output/work/test-decode-video-073546/design/). Settings: DESIGN_MODE and
+DESIGN_MINUTES in the Look section of the brand card.
+
 ## Per-brand video instructions, 2026-11-13
 
 Each brand card (Integrations → Brands → Channel) has an optional **Video instructions** box (`VIDEO_INSTRUCTIONS`, brand scope, type `text`, trimmed and capped at 2000 chars). The text goes into the script prompt as a "CHANNEL OWNER'S INSTRUCTIONS" block (`ownerInstructions` in src/script.js) and into the topic-picking prompt; empty adds nothing. Script mode was missing from the brand card and is now shown there too. Dashboard needs a rebuild (`docker compose up -d --build`).

@@ -68,6 +68,15 @@ const SETTINGS_SCHEMA = [
   },
   { key: 'THUMB_INTRO', scope: 'brand', cfg: 'thumbIntro', group: 'visuals', type: 'boolean', default: true, label: 'Open the video with the thumbnail', hint: 'TikTok uses this first second as the cover. Off: the old title card.' },
   { key: 'VISUALS', scope: 'brand', cfg: 'visuals', group: 'visuals', type: 'enum', options: ['mixed', 'motion', 'footage'], default: 'mixed', label: 'Visuals' },
+  {
+    key: 'DESIGN_MODE', scope: 'brand', cfg: 'designMode', group: 'visuals', type: 'enum', options: ['library', 'instant'], default: 'library', label: 'Design mode',
+    optionLabels: { library: 'Library (built-in graphics)', instant: 'Instant (Claude designs each video)' },
+    optionHints: {
+      library: 'Claude picks every scene\'s graphic from the built-in library. Fast and predictable.',
+      instant: 'After the script, Claude Code designs bespoke animated scenes for this video with the repo\'s skills. Slower (minutes per video); any scene that fails falls back to the library. Needs the Claude Code script writer.',
+    },
+  },
+  { key: 'DESIGN_MINUTES', scope: 'brand', cfg: 'designMinutes', group: 'visuals', type: 'number', default: 12, label: 'Design time limit (min)', hint: 'Instant mode: how long Claude may spend designing one video.' },
   { key: 'CAPTION_FONT', cfg: 'captionFont', group: 'visuals', type: 'string', default: 'DejaVu Sans', label: 'Caption font (ffmpeg fallback)' },
   // Channel
   { key: 'NICHE', scope: 'brand', cfg: 'niche', group: 'channel', type: 'string', default: 'technology tips', label: 'Channel niche (used to pick topics)' },

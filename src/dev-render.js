@@ -1,5 +1,6 @@
 // Re-render a saved script through voice + Remotion without calling Claude or uploading.
-// Usage: npm run render:test -- output/<slug>.script.json [--scenes=4] [--theme=news] [--seed=123]
+// Usage: npm run render:test -- output/<slug>.script.json [--scenes=4] [--theme=news] [--seed=123] [--design | --design-dir=<folder>]
+//   --design: run the instant design pass first (Claude Code designs bespoke scene components; DESIGN_MODE=instant does the same)
 const fs = require('fs');
 const path = require('path');
 const cfg = require('./config');
@@ -27,7 +28,19 @@ const { validateVisuals } = require('./graphics');
 
   const scenes = await makeVoice(script.scenes, workDir);
   const direction = resolveDirection(script, cfg);
-  const renderArgs = { scenes, workDir, slug, title: script.title, theme, direction, thumbnail: resolveThumbnail(script, cfg) };
+  // --design runs the design pass; --design-dir=<folder> reuses a design folder (manifest.json + scene files) already there
+  const instant = process.argv.includes('--design') || cfg.designMode === 'instant';
+  const D = require('./design');
+  const reuse = arg('design-dir');
+  let design = null;
+  if (reuse) {
+    const dir = path.resolve(reuse);
+    const d = D.readDesign(dir, scenes.length);
+    for (const r of d.report.filter((x) => !x.ok)) log(`Design: scene ${r.scene} rejected: ${(r.problems || [r.problem]).join('; ')}`);
+    design = Object.keys(d.scenes).length ? { dir, index: D.writeIndex(dir, d.scenes), scenes: d.scenes } : null;
+  } else if (instant) design = await D.designScenes({ script, scenes, theme, workDir });
+  if (design) log(`Design: bespoke scenes ${Object.keys(design.scenes).join(', ')}`);
+  const renderArgs = { scenes, workDir, slug, title: script.title, theme, direction, thumbnail: resolveThumbnail(script, cfg), design };
   let out = await renderWithRemotion(renderArgs);
   if (process.argv.includes('--critique')) {
     const { reviewAndFix } = require('./critique');

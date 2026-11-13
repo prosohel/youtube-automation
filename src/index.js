@@ -55,7 +55,8 @@ async function main() {
 
   // 4. Video
   log('Rendering video...');
-  const { videoFile, thumbFile, credits = [] } = await renderAny({ scenes, workDir, slug, title: script.title, theme, direction, thumbnail });
+  const design = cfg.designMode === 'instant' ? await require('./design').designScenes({ script, scenes, theme, workDir }) : null;
+  const { videoFile, thumbFile, credits = [] } = await renderAny({ scenes, workDir, slug, title: script.title, theme, direction, thumbnail, design });
   // Licence attributions (e.g. CC BY emoji) go at the end of the YouTube description.
   if (credits.length) script.description = `${script.description}\n\n${credits.join('\n')}`;
   log(`Video ready: ${videoFile}`);

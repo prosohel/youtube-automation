@@ -65,7 +65,7 @@ const sceneTiming = (visual) => {
   const { renderStill, selectComposition, ensureBrowser } = require('@remotion/renderer');
   await ensureBrowser();
   log('Gallery: bundling composition...');
-  const serveUrl = await bundle({ entryPoint: path.join(__dirname, 'remotion', 'index.jsx'), publicDir });
+  const serveUrl = await bundle({ entryPoint: path.join(__dirname, 'remotion', 'index.jsx'), publicDir, webpackOverride: require('./design').withCustomScenes(null) });
 
   for (const format of formats) {
     const size = FORMATS[format];

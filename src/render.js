@@ -306,7 +306,7 @@ async function renderThumbStill({ serveUrl, composition, inputProps, thumb, thum
  * bundled composition and its input props. opts.thumbOnly skips sound and music (only the still is wanted).
  * Returns { serveUrl, inputProps, credits, thumb, theme }.
  */
-async function prepareRender({ scenes, workDir, title, theme, direction, thumbnail, sourceLabel = null, extraLabel = null }, { thumbOnly = false } = {}) {
+async function prepareRender({ scenes, workDir, title, theme, direction, thumbnail, sourceLabel = null, extraLabel = null, design = null }, { thumbOnly = false } = {}) {
   const { bundle } = require('@remotion/bundler');
   const { ensureBrowser } = require('@remotion/renderer');
 
@@ -334,7 +334,9 @@ async function prepareRender({ scenes, workDir, title, theme, direction, thumbna
     const emoji = await prepEmoji(sc.emoji, publicDir);
     // Real word starts from the voice (seconds -> frames from the scene's first voice frame), when the provider gave them.
     const wordFrames = Array.isArray(sc.wordTimes) ? sc.wordTimes.map((t) => Math.round(t * fps)) : null;
-    sceneProps.push({ frames, voiceFrames, narration: sc.narration, headline: sc.headline || '', visual: sc.visual || null, emoji, bg, audio, wordFrames, ...sceneDirection(direction, i) });
+    // instant design: the bespoke component for this scene (index into the design folder's map), if one was accepted
+    const custom = design && design.scenes && design.scenes[i] ? String(i) : null;
+    sceneProps.push({ frames, voiceFrames, narration: sc.narration, headline: sc.headline || '', visual: sc.visual || null, emoji, bg, audio, wordFrames, custom, ...sceneDirection(direction, i) });
   }
 
   const thumb = await prepThumbnail(thumbnail, sceneProps, publicDir);
@@ -372,10 +374,18 @@ async function prepareRender({ scenes, workDir, title, theme, direction, thumbna
   await ensureBrowser();
 
   log('Remotion: bundling composition...');
-  const serveUrl = await bundle({
-    entryPoint: path.join(__dirname, 'remotion', 'index.jsx'),
-    publicDir,
-  });
+  const { withCustomScenes } = require('./design');
+  const entryPoint = path.join(__dirname, 'remotion', 'index.jsx');
+  let serveUrl;
+  try {
+    serveUrl = await bundle({ entryPoint, publicDir, webpackOverride: withCustomScenes(design) });
+  } catch (e) {
+    if (!design) throw e;
+    // A bespoke file that esbuild accepted but webpack does not: drop the design, keep the video.
+    log(`Remotion: bundle failed with the bespoke scenes (${String(e.message).split('\n')[0]}); rendering with the library visuals`);
+    for (const s of inputProps.scenes) s.custom = null;
+    serveUrl = await bundle({ entryPoint, publicDir, webpackOverride: withCustomScenes(null) });
+  }
 
   return { serveUrl, inputProps, credits, thumb, theme };
 }

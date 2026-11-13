@@ -77,7 +77,7 @@ const SAMPLES = [
   const { renderStill, selectComposition, ensureBrowser } = require('@remotion/renderer');
   await ensureBrowser();
   log('Thumbs: bundling composition...');
-  const serveUrl = await bundle({ entryPoint: path.join(__dirname, 'remotion', 'index.jsx'), publicDir });
+  const serveUrl = await bundle({ entryPoint: path.join(__dirname, 'remotion', 'index.jsx'), publicDir, webpackOverride: require('./design').withCustomScenes(null) });
   const { theme } = resolveStyle({}, { forceTheme: 'news', seed: 5 }); // the news ticker must not cover a thumbnail intro
 
   for (const format of formats) {

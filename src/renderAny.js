@@ -10,13 +10,13 @@ const hasExamScenes = (scenes) => (scenes || []).some((s) => s && s.visual && EX
  * without its question on screen. That video fails instead.
  * Returns { videoFile, thumbFile, credits[], coverMs }.
  */
-async function renderAny({ scenes, workDir, slug, title, theme, direction, thumbnail, sourceLabel, extraLabel }) {
+async function renderAny({ scenes, workDir, slug, title, theme, direction, thumbnail, sourceLabel, extraLabel, design = null }) {
   const exam = hasExamScenes(scenes);
   const refuse = (why) => new Error(`Remotion failed on a question video; not falling back to the plain render: ${why}`);
   if (cfg.useRemotion) {
     try {
       const { renderWithRemotion } = require('./render');
-      const args = { scenes, workDir, slug, title, theme, direction, thumbnail, sourceLabel, extraLabel };
+      const args = { scenes, workDir, slug, title, theme, direction, thumbnail, sourceLabel, extraLabel, design };
       const first = await renderWithRemotion(args);
       // The critique loop: score the contact sheet, re-render once with the critic's adjustments if it is weak.
       const { reviewAndFix } = require('./critique');

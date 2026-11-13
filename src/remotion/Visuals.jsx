@@ -8,6 +8,25 @@ import { LibraryVisual, LIBRARY_RENDERED } from './library';
 import { EXAM_FULL_CARD, EXAM_RENDERED, ExamVisual } from './exam';
 import { STORY_RENDERED, StoryVisual } from './Cast';
 import { ReelVisual } from './Reel';
+import CUSTOM from 'custom-scenes'; // this video's bespoke scenes (src/design.js), or {} (customEmpty.js)
+
+/** A bespoke component that throws falls back to the stock visual instead of failing the render. */
+class Guard extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { failed: false };
+  }
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(e) {
+    // eslint-disable-next-line no-console
+    console.warn(`custom scene ${this.props.name} failed: ${e && e.message}`);
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
 
 // Visuals start while the transition is still revealing the scene, so no frame is ever a bare background
 // (the kit's rule: the incoming scene takes over at once; nothing holds empty).
@@ -276,7 +295,22 @@ const CompareVisual = ({ left, right, isShort }) => {
  * Picks the visual for a scene from the script's `visual` object; always falls back to an icon.
  * voiceFrames, frames and narration time the exam scenes (the countdown, the solution lines).
  */
-export const SceneVisual = ({ visual, accent, isShort, voiceFrames, frames, narration, wordFrames }) => {
+export const SceneVisual = ({ visual, accent, isShort, voiceFrames, frames, narration, wordFrames, custom = null, scene = null }) => {
+  const stock = <StockVisual visual={visual} accent={accent} isShort={isShort} voiceFrames={voiceFrames} frames={frames} narration={narration} wordFrames={wordFrames} />;
+  const entry = custom !== null && custom !== undefined ? CUSTOM[String(custom)] : null;
+  if (!entry || !entry.Component) return stock;
+  const Bespoke = entry.Component;
+  return (
+    <Guard name={custom} fallback={stock}>
+      <Stage isShort={isShort} tall={Boolean(entry.full)}>
+        <Bespoke scene={scene} accent={accent} isShort={isShort} start={START} frames={frames} voiceFrames={voiceFrames} fps={useVideoConfig().fps} />
+      </Stage>
+    </Guard>
+  );
+};
+
+/** The built-in visuals: exam cards, story scenes, library graphics, the theme families, then the basics. */
+const StockVisual = ({ visual, accent, isShort, voiceFrames, frames, narration, wordFrames }) => {
   const v = visual || {};
   if (EXAM_RENDERED.includes(v.type)) {
     // Exam cards draw every theme themselves, like the library graphics.

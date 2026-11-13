@@ -135,4 +135,58 @@ async function viaApi({ prompt, schema, name, description, maxTokens, images = [
   return block ? block.input : parseJson(msg.content.map((b) => b.text || '').join(''));
 }
 
-module.exports = { askJson, claudeEnv };
+/* ---------- Claude Code headless with tools: the design pass ---------- */
+
+/**
+ * Run Claude Code as an agent confined to cwd: Read/Glob/Grep/Write work only inside that folder (path-pattern
+ * permission rules are not honoured by this CLI build, so the folder itself is the sandbox: put copies of what it
+ * may read in there). No MCP servers, no Bash, no network tools. Resolves { text, costUsd, turns, seconds }.
+ */
+function runAgent({ prompt, cwd, timeoutSec = 600, maxTurns = 100, tools = ['Read', 'Glob', 'Grep', 'Write'] }) {
+  if (cfg.llmProvider === 'api') return Promise.reject(new Error('DESIGN_MODE=instant needs LLM_PROVIDER=claude-code (the design pass runs Claude Code with tools)'));
+  const env = claudeEnv();
+  const args = [
+    '-p',
+    '--output-format', 'json',
+    '--model', cfg.model,
+    '--tools', tools.join(','),
+    '--allowedTools', ...tools, // inside cwd only; anything else is denied without asking
+    '--permission-mode', 'default',
+    '--max-turns', String(maxTurns),
+    '--strict-mcp-config',
+    '--setting-sources', '', // the design folder has no settings; the skills are read as files
+    '--disable-slash-commands',
+    '--no-session-persistence',
+  ];
+  return new Promise((resolve, reject) => {
+    const t0 = Date.now();
+    const p = spawn(cfg.claudeBin, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
+    let out = '';
+    let err = '';
+    const timer = setTimeout(() => {
+      p.kill();
+      reject(new Error(`design pass timed out after ${timeoutSec}s`));
+    }, timeoutSec * 1000);
+    p.stdout.on('data', (d) => (out += d));
+    p.stderr.on('data', (d) => (err += d));
+    p.on('error', (e) => {
+      clearTimeout(timer);
+      reject(new Error(`Could not start "${cfg.claudeBin}": ${e.message}`));
+    });
+    p.on('close', (code) => {
+      clearTimeout(timer);
+      let res;
+      try {
+        res = JSON.parse(out);
+      } catch {
+        return reject(new Error(`claude CLI exited with ${code}: ${(err || out).slice(-800)}`));
+      }
+      if (res.is_error) return reject(new Error(`claude CLI error: ${res.result || res.subtype || err.slice(-400)}`));
+      // error_max_turns still leaves the files it wrote: the caller checks what is there
+      resolve({ text: String(res.result || ''), subtype: res.subtype, costUsd: res.total_cost_usd || null, turns: res.num_turns || null, seconds: Math.round((Date.now() - t0) / 1000) });
+    });
+    p.stdin.end(prompt, 'utf8');
+  });
+}
+
+module.exports = { askJson, claudeEnv, runAgent };

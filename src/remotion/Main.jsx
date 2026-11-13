@@ -163,6 +163,8 @@ const Scene = ({ scene, index, total, isShort, kicker }) => {
                 frames={scene.frames}
                 narration={scene.narration}
                 wordFrames={scene.wordFrames}
+                custom={scene.custom ?? null}
+                scene={scene}
               />
             )}
             {/* A question, solution or reveal card is the content itself: no headline over it. */}

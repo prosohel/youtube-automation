@@ -28,6 +28,7 @@ function realDeps() {
     synthScene: (...a) => require('../src/voice').synthScene(...a),
     audioDuration: (file) => require('../src/voice').audioDuration(file),
     renderAny: (args) => require('../src/renderAny').renderAny(args),
+    designScenes: (args) => require('../src/design').designScenes(args),
     // "Redo thumbnail": only the still, for a video that is already rendered.
     renderThumbnail: (args) => require('../src/render').renderThumbnail(args),
   };
@@ -161,7 +162,14 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
     fs.rmSync(path.join(outDir, `${v.slug}.mp4`), { force: true });
     // Videos scripted before thumbnails existed get one from their script now.
     const thumbnail = v.thumbnail || resolveThumbnail(v.script, cfg);
-    const res = await deps.renderAny({ scenes: v.scenes, workDir, slug: v.slug, title: v.title, theme: v.theme, direction: v.direction, thumbnail, sourceLabel: sourceLabel(v.topicInfo && v.topicInfo.siteName), extraLabel: extraLabel(cfg.extraLink) });
+    // Instant design: Claude Code designs bespoke scene components once; the record keeps the result so a
+    // redo of the render (or the critique's second pass) uses the same design.
+    if (cfg.designMode === 'instant' && v.design === undefined) {
+      await say('Designing bespoke scenes with Claude Code...');
+      const design = await deps.designScenes({ script: v.script, scenes: v.scenes, theme: v.theme, workDir, say });
+      v = await save({ design });
+    }
+    const res = await deps.renderAny({ scenes: v.scenes, workDir, slug: v.slug, title: v.title, theme: v.theme, direction: v.direction, thumbnail, sourceLabel: sourceLabel(v.topicInfo && v.topicInfo.siteName), extraLabel: extraLabel(cfg.extraLink), design: v.design || null });
     const credits = res.credits || [];
     // Cloudflare R2: the finished files go to the bucket; the dashboard streams from there, local copies expire.
     let r2 = null;
