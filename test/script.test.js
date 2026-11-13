@@ -124,7 +124,7 @@ test('the script asks for a thumbnail, with the style fields Claude can fill', a
   const { prompt, schema } = asked[0];
   assert.ok(schema.required.includes('thumbnail'));
   const t = schema.properties.thumbnail;
-  assert.deepEqual(t.properties.style.enum, ['bigText', 'versus', 'question', 'number']);
+  assert.deepEqual(t.properties.style.enum, require('../src/thumbnail').STYLES);
   for (const k of ['text', 'highlight', 'tag', 'number', 'left', 'right', 'emoji', 'color']) assert.equal(t.properties[k].type, 'string', k);
   for (const k of ['scene', 'scene2']) assert.equal(t.properties[k].type, 'integer', k);
   assert.deepEqual(t.required, ['style', 'text', 'highlight', 'color']);

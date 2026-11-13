@@ -44,7 +44,8 @@ test('redoPatch: thumbnail keeps the video and picks the next style unless one i
   const v = finished();
   assert.deepEqual(redoPatch(v, 'thumbnail'), { redo: { thumbnail: { style: 'versus' } } });
   assert.deepEqual(redoPatch(v, 'thumbnail', { style: 'number' }), { redo: { thumbnail: { style: 'number' } } });
-  assert.equal(nextThumbStyle('number'), 'bigText', 'wraps around');
+  assert.equal(nextThumbStyle('paper'), 'bigText', 'wraps around');
+  assert.equal(nextThumbStyle('number'), 'warning');
   assert.equal(nextThumbStyle(undefined), 'bigText');
   assert.throws(() => redoPatch(v, 'thumbnail', { style: 'neon' }), /style must be one of/);
 });
