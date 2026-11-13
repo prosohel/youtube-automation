@@ -239,10 +239,29 @@ function Editor({ initial, brands, brandName, onSaved, onCancel, setToast }) {
   );
 }
 
+/** How far ahead the week view goes (in weeks after this one). */
+const MAX_WEEKS = 12;
+
 export default function Schedule() {
   const { brands, picked, brandName } = useBrands();
   const { data: rules, reload } = usePoll(withBrand('/api/rules', picked), 15000);
-  const { data: week, reload: reloadWeek } = usePoll(withBrand('/api/schedule/week', picked), 30000);
+  // Which week the calendar shows: 0 = the next 7 days from today, 1 = the 7 after, ... up to MAX_WEEKS ahead.
+  const [offset, setOffset] = useState(0);
+  const start = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + offset * 7);
+    return d;
+  }, [offset]);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 7);
+  const weekPath = offset === 0 ? '/api/schedule/week' : `/api/schedule/week?from=${encodeURIComponent(start.toISOString())}&to=${encodeURIComponent(end.toISOString())}`;
+  const { data: week, reload: reloadWeek } = usePoll(withBrand(weekPath, picked), 30000);
+  const lastDay = new Date(end);
+  lastDay.setDate(lastDay.getDate() - 1);
+  const short = (d) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const range = offset === 0 ? 'next 7 days' : `${short(start)} – ${short(lastDay)}`;
+  const Range = range[0].toUpperCase() + range.slice(1);
   const [editing, setEditing] = useState(null);
   const [toast, setToast] = useToast();
   const chip = (id) => (picked === ALL ? <BrandChip name={brandName(id)} lang={nameLang(brandName(id))} /> : null);
@@ -274,14 +293,13 @@ export default function Schedule() {
   const days = useMemo(() => {
     const out = [];
     for (let i = 0; i < 7; i++) {
-      const d = new Date();
-      d.setHours(0, 0, 0, 0);
+      const d = new Date(start);
       d.setDate(d.getDate() + i);
       const key = d.toDateString();
       out.push({ d, key, slots: (week || []).filter((s) => new Date(s.at).toDateString() === key) });
     }
     return out;
-  }, [week]);
+  }, [week, start]);
 
   // Summary numbers, all from the rules and the slots the calendar below shows (today + 6 days).
   const summary = useMemo(() => {
@@ -326,9 +344,9 @@ export default function Schedule() {
       </header>
 
       {summary && (
-        <section className="kpis" aria-label="Next 7 days in numbers">
+        <section className="kpis" aria-label={`${Range} in numbers`}>
           <div className="kpi hero">
-            <span className="kpi-label">Posts in the next 7 days</span>
+            <span className="kpi-label">{offset === 0 ? 'Posts in the next 7 days' : `Posts, ${range}`}</span>
             <span className="kpi-value">{summary.posts}</span>
             <span className="kpi-note">
               {summary.posts === 0
@@ -339,7 +357,7 @@ export default function Schedule() {
             </span>
           </div>
           <div className="kpi gold">
-            <span className="kpi-label">Videos to make, next 7 days</span>
+            <span className="kpi-label">Videos to make, {range}</span>
             <span className="kpi-value">{summary.toMake}</span>
             <span className="kpi-note">{summary.makeRules ? `From ${plural(summary.makeRules, 'make rule')}` : 'No make rule is on'}</span>
           </div>
@@ -412,17 +430,30 @@ export default function Schedule() {
 
       <section className="card sc-week-card" aria-labelledby="week-h">
         <div className="sc-card-head">
-          <h2 id="week-h" className="eyebrow">Next 7 days</h2>
-          {localZone && <span className="faint">Shown in this device’s time ({localZone})</span>}
+          <div className="stack sc-tight">
+            <h2 id="week-h" className="eyebrow">{Range}</h2>
+            {localZone && <span className="faint">Shown in this device’s time ({localZone})</span>}
+          </div>
+          <div className="sc-week-nav" role="group" aria-label="Choose a week">
+            <button type="button" className="btn btn-sm" onClick={() => setOffset((o) => Math.max(0, o - 1))} disabled={offset === 0} aria-label="Previous week">
+              <Icon d={ICONS.chevronLeft} size={16} />
+            </button>
+            <button type="button" className="btn btn-sm" onClick={() => setOffset(0)} disabled={offset === 0}>
+              This week
+            </button>
+            <button type="button" className="btn btn-sm" onClick={() => setOffset((o) => Math.min(MAX_WEEKS, o + 1))} disabled={offset === MAX_WEEKS} aria-label="Next week">
+              <Icon d={ICONS.chevronRight} size={16} />
+            </button>
+          </div>
         </div>
         <div className="table-wrap sc-week-wrap">
           <div className="week">
             {days.map(({ d, key, slots }, i) => (
-              <div key={key} className={`day${i === 0 ? ' today' : ''}`}>
+              <div key={key} className={`day${offset === 0 && i === 0 ? ' today' : ''}`}>
                 <div className="sc-day-head">
-                  <strong className="sc-day-name">{i === 0 ? 'Today' : d.toLocaleDateString('en-GB', { weekday: 'short' })}</strong>
+                  <strong className="sc-day-name">{offset === 0 && i === 0 ? 'Today' : d.toLocaleDateString('en-GB', { weekday: 'short' })}</strong>
                   <span className="faint">
-                    {i === 0 && <span className="sr-only">{d.toLocaleDateString('en-GB', { weekday: 'long' })} </span>}
+                    {offset === 0 && i === 0 && <span className="sr-only">{d.toLocaleDateString('en-GB', { weekday: 'long' })} </span>}
                     {d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                   </span>
                 </div>

@@ -187,6 +187,21 @@ test('schedule week lists every slot of enabled rules for the next 7 days', asyn
   const times = res.json.map((s) => Date.parse(s.at));
   assert.deepEqual(times, [...times].sort((a, b) => a - b));
   assert.ok(times[times.length - 1] - Date.now() <= 7 * 24 * 3600 * 1000);
+
+  // Another week: from/to pick the window (never before now, at most 14 days).
+  const DAY = 24 * 3600 * 1000;
+  const from = new Date(Date.now() + 7 * DAY);
+  const to = new Date(from.getTime() + 7 * DAY);
+  const next = await call('GET', `/api/schedule/week?from=${from.toISOString()}&to=${to.toISOString()}`);
+  assert.equal(next.status, 200);
+  assert.equal(next.json.length, 14, 'two runs a day for 7 days');
+  assert.ok(next.json.every((s) => Date.parse(s.at) >= from.getTime() && Date.parse(s.at) <= to.getTime()));
+  const past = await call('GET', `/api/schedule/week?from=${new Date(Date.now() - 30 * DAY).toISOString()}&to=${new Date(Date.now() + DAY).toISOString()}`);
+  assert.ok(past.json.every((s) => Date.parse(s.at) >= Date.now() - 5000), 'nothing before now');
+  const long = await call('GET', `/api/schedule/week?from=${from.toISOString()}&to=${new Date(from.getTime() + 60 * DAY).toISOString()}`);
+  assert.ok(long.json.length <= 28, 'at most 14 days');
+  assert.equal((await call('GET', '/api/schedule/week?from=soon')).status, 400);
+  assert.equal((await call('GET', `/api/schedule/week?from=${new Date(Date.now() + 400 * DAY).toISOString()}`)).status, 400);
 });
 
 test('overview counts posts that are still private, and settings report the values Docker really uses', async (t) => {

@@ -96,7 +96,8 @@ Mockup (Design canvas, private): https://claude.ai/artifact/F57R7hz7EUUaxxoFQnaH
   Overview has a "Videos made this week" chart from `week`/`weekTotal`/`lastWeekTotal` in server/overview.js
   (`videosPerDay`, by `createdAt`, server-local days; test/overview.test.js). Queue header has Pause/Resume queue.
   StageBar labels use `.stage-label.is-done/.is-active/.is-todo`.
-- Not done: Schedule week navigation (the API only serves the next 7 days).
+- Schedule week navigation: GET /api/schedule/week takes ?from=&to= (ISO; never before now, at most 14 days, within a
+  year); the page has previous / This week / next buttons, up to 12 weeks ahead (MAX_WEEKS in Schedule.jsx).
 
 ## YouTube upload defaults from the Studio page, 2026-11-14
 

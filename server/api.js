@@ -253,12 +253,25 @@ function createApp({ redis, queues, password = '', secureCookies = false }) {
 
   app.get('/api/rules', async (req, res) => res.json((await rulesOf(req.query.brand || undefined)).map(withNext)));
 
-  // Every run of every enabled rule in the next 7 days (the Schedule page's week view).
+  // Every run of every enabled rule in a window (the Schedule page's week view): by default the next 7 days.
+  // ?from=&to= (ISO times, the page's local midnights) pick another week. The window never starts before now,
+  // lasts at most 14 days and starts at most a year ahead; a bad time is a 400.
+  const DAY = 24 * 3600 * 1000;
+  const MAX_SLOTS = 500; // per rule: an every-15-minutes rule fills a week with 672, enough to see it is busy
   app.get('/api/schedule/week', async (req, res) => {
-    const until = Date.now() + 7 * 24 * 3600 * 1000;
+    const now = Date.now();
+    const time = (v, name) => {
+      const t = Date.parse(String(v));
+      if (!Number.isFinite(t)) throw bad(`${name} must be a date and time`);
+      return t;
+    };
+    const from = req.query.from ? Math.max(time(req.query.from, 'from'), now) : now;
+    if (from > now + 366 * DAY) throw bad('from must be within a year');
+    const until = req.query.to ? Math.min(time(req.query.to, 'to'), from + 14 * DAY) : from + 7 * DAY;
+    if (until <= from) return res.json([]);
     const slots = [];
     for (const r of (await rulesOf(req.query.brand || undefined)).filter((x) => x.enabled && validateRule(x).ok)) {
-      for (const at of nextRuns(r, 60)) {
+      for (const at of nextRuns(r, MAX_SLOTS, new Date(from))) {
         if (at.getTime() > until) break;
         slots.push({ at: at.toISOString(), ruleId: r.id, brandId: r.brandId, kind: r.kind, platform: r.platform || null, count: r.count || null });
       }

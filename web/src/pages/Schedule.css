@@ -86,3 +86,7 @@
   .sc-week-wrap .week { min-width: 0; grid-template-columns: repeat(7, minmax(124px, 1fr)); gap: 8px; }
   .sc-week-wrap .day { min-height: 170px; }
 }
+
+/* week navigation */
+.sc-week-nav { display: flex; gap: 6px; }
+.sc-week-nav .btn-sm { min-height: 40px; min-width: 40px; }
