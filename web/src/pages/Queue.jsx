@@ -12,11 +12,39 @@ const TABS = [
   ['failed', 'Failed', (v) => v.status === 'failed' || Object.values(v.platforms || {}).some((p) => p.status === 'failed')],
 ];
 
+// The brand settings one video may override from this form; must match VIDEO_OPTION_KEYS in server/settings.js.
+const VIDEO_OPTION_KEYS = ['VIDEO_FORMAT', 'TARGET_MINUTES', 'SCRIPT_MODE', 'LANGUAGE', 'DESIGN_MODE', 'THEME', 'VISUALS']; // form order
+const optionName = (spec, v) => (spec.optionLabels && spec.optionLabels[v]) || (v === '' ? 'Claude picks' : v);
+
+/** One per-video override: a select over the setting's options (or a number / text box), with "Brand default" first. */
+function VideoOption({ spec, value, brandValue, onChange }) {
+  const current = brandValue === '' || brandValue === null || brandValue === undefined ? '' : String(brandValue);
+  const label = spec.label.replace(/ \(empty.*\)$/, ''); // "Design theme (empty = Claude picks)" -> "Design theme"; "Video length (min)" stays
+  return (
+    <label className="field" style={{ flex: '1 1 230px' }}>
+      {label}
+      {spec.type === 'enum' ? (
+        <select value={value} onChange={(e) => onChange(e.target.value)}>
+          <option value="">Brand default ({optionName(spec, current)})</option>
+          {spec.options.filter((o) => o !== '').map((o) => (
+            <option key={o} value={o}>{optionName(spec, o)}</option>
+          ))}
+        </select>
+      ) : (
+        <input type={spec.type === 'number' ? 'number' : 'text'} min={spec.type === 'number' ? 1 : undefined} step={spec.type === 'number' ? 0.5 : undefined} value={value} onChange={(e) => onChange(e.target.value)} placeholder={`Brand default (${current})`} />
+      )}
+    </label>
+  );
+}
+
 function AddVideo({ brands, picked, onAdded, setToast }) {
   const [topic, setTopic] = useState('');
   const [chosen, setChosen] = useState(null);
   const [category, setCategory] = useState('');
   const [platforms, setPlatforms] = useState(PLATFORMS.map((p) => p.id));
+  const [prompt, setPrompt] = useState('');
+  const [overrides, setOverrides] = useState({}); // SETTING_KEY -> value chosen for this video only ('' = brand default)
+  const [more, setMore] = useState(false);
   const [busy, setBusy] = useState(false);
   // The brand follows the one picked in the sidebar (or the only brand there is) until it is chosen here.
   const defaultId = brands.some((b) => b.id === picked) ? picked : brands.length === 1 ? brands[0].id : '';
@@ -25,13 +53,20 @@ function AddVideo({ brands, picked, onAdded, setToast }) {
   const { data: brandPage } = usePoll(brandId ? `/api/brands/${brandId}/settings` : null, 60000);
   const categories = (brandPage && brandPage.values.TOPIC_CATEGORIES) || [];
   const lang = contentLang(brandPage && brandPage.values.LANGUAGE);
+  // The brand settings one video may change (the server lists them in the schema as option keys).
+  const options = VIDEO_OPTION_KEYS.map((k) => ((brandPage && brandPage.schema) || []).find((s) => s.key === k)).filter(Boolean);
+  const chosenCount = Object.values(overrides).filter((v) => v !== '').length + (prompt.trim() ? 1 : 0);
+  const setOverride = (key, value) => setOverrides((o) => ({ ...o, [key]: value }));
   const flip = (id) => setPlatforms((ps) => (ps.includes(id) ? ps.filter((x) => x !== id) : [...ps, id]));
   const add = async (e) => {
     e.preventDefault();
     setBusy(true);
     try {
-      await api.send('POST', '/api/videos', { brandId, topic, category: categories.includes(category) ? category : '', platforms });
+      const own = Object.fromEntries(Object.entries(overrides).filter(([, v]) => v !== ''));
+      await api.send('POST', '/api/videos', { brandId, topic, category: categories.includes(category) ? category : '', platforms, prompt: prompt.trim(), overrides: own });
       setTopic('');
+      setPrompt('');
+      setOverrides({});
       setToast('Added to the queue');
       onAdded();
     } catch (err) {
@@ -67,6 +102,35 @@ function AddVideo({ brands, picked, onAdded, setToast }) {
             ))}
           </select>
         </label>
+      </div>
+      <div className="stack" style={{ gap: 10 }}>
+        <button type="button" className="link-btn" aria-expanded={more} aria-controls="video-options" onClick={() => setMore((m) => !m)} style={{ alignSelf: 'flex-start' }}>
+          {more ? 'Hide options for this video' : 'Options for this video'}{chosenCount ? ` · ${chosenCount} set` : ''}
+        </button>
+        {more && (
+          <div id="video-options" className="stack" style={{ gap: 12 }}>
+            <label className="field">
+              Custom prompt for this video (optional)
+              <textarea
+                lang={lang}
+                rows={3}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                maxLength={2000}
+                placeholder="What this video should do, e.g. compare two options and end with one clear recommendation; mention our free course"
+              />
+              <span className="hint">Goes to the script writer with the brand's standing instructions. It shapes this video only.</span>
+            </label>
+            {options.length > 0 && (
+              <div className="inline" style={{ alignItems: 'flex-end', gap: 14, flexWrap: 'wrap' }}>
+                {options.map((spec) => (
+                  <VideoOption key={spec.key} spec={spec} value={overrides[spec.key] ?? ''} brandValue={brandPage.values[spec.key]} onChange={(v) => setOverride(spec.key, v)} />
+                ))}
+              </div>
+            )}
+            <span className="faint">Each option left on "Brand default" uses the brand's setting at the time the video is made.</span>
+          </div>
+        )}
       </div>
       <div className="between" style={{ alignItems: 'flex-end' }}>
         <fieldset style={{ border: 'none', margin: 0, padding: 0 }}>
@@ -164,6 +228,14 @@ function Detail({ id, onChanged, setToast }) {
           <span className="faint">{v.category || 'Any category'} · added {fmtTime(v.createdAt)}</span>
         </div>
         {v.error && <div className="banner tone-danger">{v.error}</div>}
+        {(v.prompt || (v.overrides && Object.keys(v.overrides).length > 0)) && (
+          <div className="stack" style={{ gap: 4 }}>
+            {v.overrides && Object.keys(v.overrides).length > 0 && (
+              <span className="faint">Own options: {Object.entries(v.overrides).map(([k, val]) => `${k.toLowerCase().replace(/_/g, ' ')} = ${val}`).join(' · ')}</span>
+            )}
+            {v.prompt && <p className="faint bn" lang="bn" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>Prompt: {v.prompt}</p>}
+          </div>
+        )}
       </div>
       <StageBar video={v} />
       {v.renderer === 'plain' && v.status === 'ready' && (

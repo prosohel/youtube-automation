@@ -100,6 +100,9 @@ test('the design prompt names the folder, the contract, the stage size and the o
   assert.match(p, /yt\/shared/);
   assert.match(p, /y=150/);
   assert.match(p, /Calm tone\. \/ No prices\./);
+  cfg.applySettings({ videoPrompt: 'Compare two phones' });
+  assert.match(D.designPrompt({ dir: 'd', isShort: false, fps: 30, sceneCount: 3, language: 'Bangla' }), /request for this video \(it comes first\): Compare two phones/);
+  cfg.applySettings({ videoPrompt: '' });
   assert.match(p, /ref\/skills\/remotion-scene-authoring\/SKILL\.md/);
   assert.match(p, /ref\/remotion\/shared\.js/);
   cfg.applySettings({ instructions: '' });

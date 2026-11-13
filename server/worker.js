@@ -36,11 +36,21 @@ async function loadConfig(redis) {
   return s;
 }
 
-/** Load the brand's full settings once, then keep them fixed for the whole video job. Only for making videos. */
-async function runWithVideoConfig(redis, brandId, fn) {
+/**
+ * Load the brand's full settings once, then keep them fixed for the whole video job. Only for making videos.
+ * video: the record being made; its `overrides` (from the Add form) replace the brand's values for this job only,
+ * and its `prompt` becomes cfg.videoPrompt (the brand's instructions box stays in cfg.instructions).
+ */
+async function runWithVideoConfig(redis, brandId, fn, video = {}) {
   const brand = await brands.getBrand(redis, brandId);
   const own = await brands.brandSettings(redis, brandId); // throws (config) for an unknown brand
-  cfg.applySettings({ ...settings.toConfig(own), brandName: brand.name });
+  let overrides = {};
+  try {
+    overrides = settings.videoOverrides(video.overrides);
+  } catch {
+    overrides = {}; // a stale record with a value the schema no longer accepts: the brand's value is used
+  }
+  cfg.applySettings({ ...settings.toConfig({ ...own, ...overrides }), brandName: brand.name, videoPrompt: settings.videoPrompt(video.prompt) });
   activeVideoJobs++;
   try {
     return await fn();
@@ -142,10 +152,11 @@ function createVideoProcessor({ redis, deps, outDir, log: say = log, ready = Pro
     }
     return runWithVideoConfig(redis, brand.id, async () => {
       await loadHistory(redis, videoId, brand.id);
-      say(`Video ${videoId}: attempt ${job.attemptsMade + 1}`);
+      const own = Object.keys(video.overrides || {}).map((k) => `${k}=${video.overrides[k]}`).join(', ');
+      say(`Video ${videoId}: attempt ${job.attemptsMade + 1}${own ? ` (own options: ${own})` : ''}${video.prompt ? ' (custom prompt)' : ''}`);
       await runVideoJob(videoId, { redis, deps, outDir, log: (l) => say(`${videoId}: ${l}`) });
       return 'ready';
-    });
+    }, video);
   };
 }
 

@@ -140,6 +140,17 @@ test('the video length setting applies to every video and warns about the 3-minu
   assert.match(spec.hint, /3 minutes/);
 });
 
+test('a video may override only the option keys, cleaned like settings; blanks mean brand default', () => {
+  assert.deepEqual(S.videoOverrides(undefined), {});
+  assert.deepEqual(S.videoOverrides({ VIDEO_FORMAT: 'Shorts', TARGET_MINUTES: '1.5', THEME: '', DESIGN_MODE: null }), { VIDEO_FORMAT: 'shorts', TARGET_MINUTES: 1.5 });
+  assert.throws(() => S.videoOverrides({ NICHE: 'x' }), /cannot be set per video/);
+  assert.throws(() => S.videoOverrides({ VIDEO_FORMAT: 'square' }), /Invalid value/);
+  assert.throws(() => S.videoOverrides(['VIDEO_FORMAT']), /object/);
+  assert.ok(S.VIDEO_OPTION_KEYS.every((k) => S.isBrandKey(k)), 'every option key is a brand key');
+  assert.equal(S.videoPrompt('  a\r\nb  '), 'a\nb');
+  assert.equal(S.videoPrompt('x'.repeat(3000)).length, 2000);
+});
+
 test('BRAND_KEYS is exactly what each brand keeps for itself', () => {
   const expected = [
     // channel

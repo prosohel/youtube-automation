@@ -55,6 +55,28 @@ test('a video is made with its own brand\'s settings', async () => {
   });
 });
 
+test('a video\'s own options and prompt apply over its brand\'s settings for that job only', async () => {
+  const r = await freshRedis();
+  const a = await seedBrand(r, { name: 'A', settings: { VIDEO_FORMAT: 'landscape', DESIGN_MODE: 'library', VIDEO_INSTRUCTIONS: 'Calm tone.' } });
+  const own = await store.createVideo(r, { brandId: a.id, prompt: 'Compare two phones', overrides: { VIDEO_FORMAT: 'shorts', DESIGN_MODE: 'instant', TARGET_MINUTES: 1 } });
+  await runWithVideoConfig(r, a.id, async () => {
+    assert.equal(cfg.format, 'shorts');
+    assert.equal(cfg.width, 1080);
+    assert.equal(cfg.designMode, 'instant');
+    assert.equal(cfg.targetMinutes, 1);
+    assert.equal(cfg.instructions, 'Calm tone.');
+    assert.equal(cfg.videoPrompt, 'Compare two phones');
+  }, own);
+  const plain = await store.createVideo(r, { brandId: a.id });
+  await runWithVideoConfig(r, a.id, async () => {
+    assert.equal(cfg.format, 'landscape');
+    assert.equal(cfg.designMode, 'library');
+    assert.equal(cfg.videoPrompt, '');
+  }, plain);
+  // a stale record whose value the schema no longer accepts falls back to the brand's value instead of failing
+  await runWithVideoConfig(r, a.id, async () => assert.equal(cfg.format, 'landscape'), { overrides: { VIDEO_FORMAT: 'square' } });
+});
+
 test('history only holds the brand\'s own videos', async () => {
   const r = await freshRedis();
   const a = await seedBrand(r, { name: 'A' });

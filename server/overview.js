@@ -19,6 +19,8 @@ const slim = (v) => ({
   title: v.title || '',
   topic: v.topic || '',
   category: v.category || '',
+  prompt: v.prompt || '',
+  overrides: v.overrides || null,
   status: v.status,
   stage: v.stage,
   done: v.done,

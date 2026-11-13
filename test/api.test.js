@@ -95,7 +95,17 @@ test('videos: create queues a job; retry and delete work', async (t) => {
   assert.deepEqual(res.json.targets, ['youtube', 'tiktok']);
   assert.equal(res.json.brandId, brandId);
   assert.equal((await call('GET', `/api/videos/${id}`)).json.topic, 'হোয়াটসঅ্যাপ নিরাপত্তা');
+  assert.equal(res.json.prompt, '');
+  assert.equal(res.json.overrides, null);
   assert.equal((await call('GET', '/api/videos/v_nope000000')).status, 404);
+
+  // A custom prompt and per-video options are kept on the record, cleaned; anything else is a 400.
+  const own = await call('POST', '/api/videos', { brandId, topic: 'x', prompt: '  Compare two phones\r\n', overrides: { VIDEO_FORMAT: 'shorts', THEME: '', TARGET_MINUTES: '2' } });
+  assert.equal(own.status, 201);
+  assert.equal(own.json.prompt, 'Compare two phones');
+  assert.deepEqual(own.json.overrides, { VIDEO_FORMAT: 'shorts', TARGET_MINUTES: 2 });
+  assert.equal((await call('POST', '/api/videos', { brandId, topic: 'x', overrides: { NICHE: 'y' } })).status, 400);
+  assert.equal((await call('POST', '/api/videos', { brandId, topic: 'x', overrides: { VIDEO_FORMAT: 'square' } })).status, 400);
 
   await store.updateVideo(redis, id, { status: 'failed', error: 'boom' });
   await (await queues.videos.getJob(id)).remove();

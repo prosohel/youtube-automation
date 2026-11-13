@@ -130,6 +130,7 @@ function designPrompt({ dir, isShort, fps, sceneCount, language }) {
   const st = isShort ? STAGE.shorts : STAGE.landscape;
   // the design folder is the agent's working directory: every path in the prompt is relative to it
   const owner = String(cfg.instructions || '').trim();
+  const own = String(cfg.videoPrompt || '').trim();
   return `You are the motion designer for one ${isShort ? 'vertical Shorts' : 'landscape'} explainer video (${st.width}x${st.height}, ${fps} fps, ${language}).
 The pipeline already has the narration, the voice, a design theme, captions, headlines, transitions and a library of stock graphics.
 Your job: design bespoke Remotion scene components for the scenes where a made-for-this-sentence visual says more than the stock graphic, and write them to the current working directory (this folder: scene files and manifest.json at its top level).
@@ -152,7 +153,7 @@ What to design (quality over quantity, at most ${Math.min(MAX_SCENES, sceneCount
 - Pick the scenes whose sentence has a specific picture in it: a mechanism, a comparison, a place, a process, a before/after, a number with meaning, a metaphor. Design that picture: diagrams that build step by step, labelled parts, flows with moving dots, split screens, maps, timelines with a twist, device mock-ups, typographic reveals of the key word, silhouettes in a situation.
 - Skip scenes where the stock visual (see "visual" in the brief) already fits: hooks with an icon, plain lists, the subscribe scene. Vary the compositions across the video; never two similar scenes in a row.
 - Everything must be truthful to the narration: no numbers or names that the sentence does not say.
-${owner ? `- The channel owner's standing instructions (follow them): ${owner.replace(/\s*\n\s*/g, ' / ')}\n` : ''}
+${owner ? `- The channel owner's standing instructions (follow them): ${owner.replace(/\s*\n\s*/g, ' / ')}\n` : ''}${own ? `- The owner's request for this video (it comes first): ${own.replace(/\s*\n\s*/g, ' / ')}\n` : ''}
 When done, write manifest.json:
 {"scenes": {"3": {"file": "scene-3.jsx", "full": false, "note": "one line on the idea"}, ...}}
 Then re-read each file against the contract (imports, default export, no forbidden calls, text in ${language}, fits the stage) and fix what you find. Finish with one line: how many scenes you designed. Do not run anything.`;
@@ -179,6 +180,7 @@ async function designScenes({ script, scenes, theme, workDir, isShort = cfg.form
       headingFont: theme.headingFont, bodyFont: theme.bodyFont, card: theme.card, caption: theme.caption,
     },
     ownerInstructions: String(cfg.instructions || '').trim() || null,
+    videoPrompt: String(cfg.videoPrompt || '').trim() || null,
     scenes: scenes.map((s, i) => {
       const seconds = Number(s.duration) || 0;
       const frames = s.frames || (seconds ? Math.round(seconds * fps) + 15 : null);

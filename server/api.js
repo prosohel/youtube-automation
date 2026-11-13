@@ -150,10 +150,18 @@ function createApp({ redis, queues, password = '', secureCookies = false }) {
   app.get('/api/videos/:id', async (req, res) => res.json(await getVideoOr404(req.params.id)));
 
   app.post('/api/videos', async (req, res) => {
-    const { brandId, topic, category, platforms } = req.body || {};
+    const { brandId, topic, category, platforms, prompt, overrides } = req.body || {};
     if (platforms !== undefined && !Array.isArray(platforms)) throw bad('platforms must be a list');
+    let own;
+    try {
+      own = settings.videoOverrides(overrides);
+    } catch (e) {
+      throw bad(e.message);
+    }
     const brand = await activeBrandOr4xx(brandId);
-    const v = await store.createVideo(redis, { brandId: brand.id, topic: String(topic || '').trim(), category: String(category || ''), platforms });
+    const v = await store.createVideo(redis, {
+      brandId: brand.id, topic: String(topic || '').trim(), category: String(category || ''), platforms, prompt: settings.videoPrompt(prompt), overrides: own,
+    });
     await enqueueVideo(queues, v.id);
     res.status(201).json(v);
   });

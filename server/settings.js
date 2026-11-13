@@ -130,6 +130,28 @@ const BY_KEY = new Map(SETTINGS_SCHEMA.map((s) => [s.key, s]));
 /** Keys each brand keeps for itself, in its own hash (server/brands.js). */
 const BRAND_KEYS = new Set(SETTINGS_SCHEMA.filter((s) => s.scope === 'brand').map((s) => s.key));
 const isBrandKey = (key) => BRAND_KEYS.has(key);
+
+/** Brand settings that one video may override from the "Add a video" form (its own choices, saved on the video). */
+const VIDEO_OPTION_KEYS = ['VIDEO_FORMAT', 'SCRIPT_MODE', 'DESIGN_MODE', 'THEME', 'VISUALS', 'TARGET_MINUTES', 'LANGUAGE'];
+
+/**
+ * The overrides of one video, cleaned: only VIDEO_OPTION_KEYS, each coerced like a setting; '' / null = "brand
+ * default" and is dropped. Throws on a value the setting would not accept, or a key that is not an option.
+ */
+function videoOverrides(input) {
+  if (input === undefined || input === null) return {};
+  if (typeof input !== 'object' || Array.isArray(input)) throw new Error('overrides must be an object');
+  const out = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (!VIDEO_OPTION_KEYS.includes(key)) throw new Error(`${key} cannot be set per video`);
+    if (value === '' || value === null || value === undefined) continue;
+    out[key] = coerce(SETTINGS_SCHEMA.find((s) => s.key === key), value);
+  }
+  return out;
+}
+
+/** The custom prompt of one video: trimmed and capped like the brand's instructions box. */
+const videoPrompt = (text) => String(text ?? '').replace(/\r\n/g, '\n').trim().slice(0, 2000);
 const HASH = 'settings';
 const IMPORTED_FLAG = 'settings:imported';
 
@@ -315,6 +337,9 @@ module.exports = {
   IMPORTED_FLAG,
   BRAND_KEYS,
   isBrandKey,
+  VIDEO_OPTION_KEYS,
+  videoOverrides,
+  videoPrompt,
   parseHash,
   planPatch,
   effectiveValues,

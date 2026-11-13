@@ -32,7 +32,11 @@ async function getVideo(redis, id) {
   return raw ? JSON.parse(raw) : null;
 }
 
-/** input: { brandId, topic?, category?, platforms?: string[] } (target platforms; per-platform state lives in `platforms`). */
+/**
+ * input: { brandId, topic?, category?, platforms?: string[], prompt?, overrides? }. platforms: target platforms (per-platform
+ * state lives in `platforms`). prompt: instructions for this one video; overrides: { SETTING_KEY: value } applied over
+ * the brand's settings while this video is made (already cleaned by settings.videoOverrides).
+ */
 async function createVideo(redis, input = {}) {
   const now = new Date().toISOString();
   const video = {
@@ -40,6 +44,8 @@ async function createVideo(redis, input = {}) {
     brandId: input.brandId || null,
     topic: input.topic || '',
     category: input.category || '',
+    prompt: input.prompt || '',
+    overrides: input.overrides && Object.keys(input.overrides).length ? input.overrides : null,
     targets: (input.platforms || PLATFORMS).filter((p) => PLATFORMS.includes(p)),
     status: 'queued',
     stage: 'queued',

@@ -79,6 +79,20 @@ Claude designed 2 scenes in 163 s (a 10×10 crowd grid with one figure walking t
 against a tiny profit block), both accepted and rendered (output/work/test-decode-video-073546/design/). Settings: DESIGN_MODE and
 DESIGN_MINUTES in the Look section of the brand card.
 
+## Per-video prompt and options in the Add form, 2026-11-13
+
+The "Add a video to the queue" form has an **Options for this video** block: a custom prompt textarea and one select
+(or number/text box) per overridable brand setting, each starting on "Brand default (current value)". The keys are
+`VIDEO_OPTION_KEYS` in server/settings.js (VIDEO_FORMAT, TARGET_MINUTES, SCRIPT_MODE, LANGUAGE, DESIGN_MODE, THEME,
+VISUALS; the same list in web/src/pages/Queue.jsx sets the form order). POST /api/videos takes `prompt` and
+`overrides`; `settings.videoOverrides` cleans them (only those keys, coerced like settings; blanks dropped; anything
+else is a 400) and the record keeps `prompt` and `overrides`. The worker's `runWithVideoConfig(redis, brandId, fn, video)`
+applies `toConfig({ ...brandSettings, ...video.overrides })` for that job only and sets `cfg.videoPrompt` (the brand's
+instructions box stays `cfg.instructions`). The prompt reaches the script writer (`ownerInstructions`: an "INSTRUCTIONS
+FOR THIS VIDEO" block that outranks the standing ones), the topic finder and the instant design pass. Redo and retry
+keep the same options because they live on the video. The detail panel shows "Own options" and the prompt.
+"Make videos" rules do not use overrides (brand settings only).
+
 ## Per-brand video instructions, 2026-11-13
 
 Each brand card (Integrations → Brands → Channel) has an optional **Video instructions** box (`VIDEO_INSTRUCTIONS`, brand scope, type `text`, trimmed and capped at 2000 chars). The text goes into the script prompt as a "CHANNEL OWNER'S INSTRUCTIONS" block (`ownerInstructions` in src/script.js) and into the topic-picking prompt; empty adds nothing. Script mode was missing from the brand card and is now shown there too. Dashboard needs a rebuild (`docker compose up -d --build`).

@@ -98,6 +98,7 @@ const cfg = (module.exports = {
   designMinutes: Number(process.env.DESIGN_MINUTES || 12), // time the design pass may take per video
   // optional free text from the brand's owner: how every video of this brand should be (tone, do / don't, viewer)
   instructions: (process.env.VIDEO_INSTRUCTIONS || '').trim(),
+  videoPrompt: '', // instructions typed for one video in the Add form (set by the worker per job; never from .env)
   // Question mode: videos made from real exam questions on the owner's sites (src/questions).
   // '' = off (Claude finds topics), 'mathsuggestion.com', 'recentjobsolution.com' or 'both'.
   questionSource: (process.env.QUESTION_SOURCE || '').trim(),

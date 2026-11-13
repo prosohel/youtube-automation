@@ -40,6 +40,12 @@ test("the brand owner's video instructions reach the script prompt, and an empty
   cfg.applySettings({ instructions: 'Talk to beginners.\nNever mention prices.' });
   await writeScript(topic);
   assert.match(asked[1].prompt, /CHANNEL OWNER'S INSTRUCTIONS[\s\S]*Talk to beginners\.\n  Never mention prices\./);
+  assert.doesNotMatch(asked[1].prompt, /INSTRUCTIONS FOR THIS VIDEO/);
+  cfg.applySettings({ instructions: '', videoPrompt: 'Compare two phones.' });
+  await writeScript(topic);
+  assert.match(asked[2].prompt, /INSTRUCTIONS FOR THIS VIDEO[\s\S]*  Compare two phones\./);
+  assert.doesNotMatch(asked[2].prompt, /CHANNEL OWNER'S INSTRUCTIONS/);
+  cfg.applySettings({ videoPrompt: '' });
 });
 
 test('each scene can carry a transition, sound cues and a camera move', async () => {

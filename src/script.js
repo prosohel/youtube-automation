@@ -128,13 +128,19 @@ const SCRIPT_SCHEMA = {
 
 /* ---------- video length ---------- */
 
-/** The brand owner's standing instructions as a prompt block ('' when none). They shape the video but never override the format rules. */
+const indent = (text) => text.split('\n').map((l) => `  ${l}`).join('\n');
+
+/**
+ * The brand owner's standing instructions, then the prompt typed for this one video, as prompt blocks ('' when
+ * neither). They shape the video but never override the format rules.
+ */
 const ownerInstructions = (c) => {
-  const text = String(c.instructions || '').trim();
-  if (!text) return '';
-  return `- CHANNEL OWNER'S INSTRUCTIONS (follow them in every video; the rules above still apply):
-${text.split('\n').map((l) => `  ${l}`).join('\n')}
-`;
+  const standing = String(c.instructions || '').trim();
+  const own = String(c.videoPrompt || '').trim();
+  let out = '';
+  if (standing) out += `- CHANNEL OWNER'S INSTRUCTIONS (follow them in every video; the rules above still apply):\n${indent(standing)}\n`;
+  if (own) out += `- INSTRUCTIONS FOR THIS VIDEO (the owner typed them for this video; they come before the standing instructions when the two disagree, the rules above still apply):\n${indent(own)}\n`;
+  return out;
 };
 
 const minutesLabel = (m) => `${m} minute${Number(m) === 1 ? '' : 's'}`;
