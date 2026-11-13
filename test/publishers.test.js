@@ -387,10 +387,10 @@ test('authFor builds its client only from the settings it is given', (t) => {
 });
 
 test('uploadVideo uses the category, AI flag and Shorts title it is given', async (t) => {
-  applyCfg(t, { categoryId: '28', syntheticMedia: true, format: 'landscape', privacy: 'public' });
+  applyCfg(t, { categoryId: '28', syntheticMedia: true, format: 'landscape', privacy: 'public', language: 'English', playlist: '', notifySubscribers: true });
   const google = fakeGoogle(t);
   const auth = { credentials: { refresh_token: 'given' } };
-  const url = await uploadVideo({ videoFile: file, title: 'Title', description: 'd', tags: ['x'], privacy: 'unlisted', auth, categoryId: '27', syntheticMedia: false, isShort: true });
+  const url = await uploadVideo({ videoFile: file, title: 'Title', description: 'd', tags: ['x'], privacy: 'unlisted', auth, categoryId: '27', syntheticMedia: false, isShort: true, language: 'Bangla' });
   assert.equal(url, 'https://youtu.be/yt_new');
   assert.ok(google.made[0] === auth, 'the client is made with the auth it is given'); // never print an auth object: it may hold a real token
   const [body] = google.inserts;
@@ -398,6 +398,12 @@ test('uploadVideo uses the category, AI flag and Shorts title it is given', asyn
   assert.equal(body.snippet.categoryId, '27');
   assert.equal(body.status.privacyStatus, 'unlisted');
   assert.equal(body.status.containsSyntheticMedia, false);
+  assert.equal(body.status.license, 'youtube');
+  assert.equal(body.status.embeddable, true);
+  assert.equal(body.status.publicStatsViewable, true);
+  assert.equal(body.snippet.defaultLanguage, 'bn', 'the brand language names the title/description language');
+  assert.equal(body.snippet.defaultAudioLanguage, 'bn');
+  assert.equal(body.params.notifySubscribers, false, 'an unlisted upload never notifies');
 
   // The CLI passes none of them: they come from cfg (.env), as before.
   await uploadVideo({ videoFile: file, title: 'Title', description: 'd', tags: [], auth });
@@ -406,4 +412,45 @@ test('uploadVideo uses the category, AI flag and Shorts title it is given', asyn
   assert.equal(cli.snippet.categoryId, '28');
   assert.equal(cli.status.privacyStatus, 'public');
   assert.equal(cli.status.containsSyntheticMedia, true);
+  assert.equal(cli.snippet.defaultLanguage, 'en', 'cfg.language (English) by default');
+  assert.equal(cli.params.notifySubscribers, true, 'a public upload notifies (YT_NOTIFY_SUBSCRIBERS default)');
+  assert.deepEqual(google.added(), [], 'no playlist set: none touched');
 });
+
+test('uploadVideo adds the video to the named playlist, making it once, and a sign-in without playlist access only logs', async (t) => {
+  applyCfg(t, { privacy: 'public', notifySubscribers: false, language: 'English' });
+  const google = fakeGoogle(t);
+  const auth = { credentials: { refresh_token: 'given' } };
+  await uploadVideo({ videoFile: file, title: 'One', description: 'd', tags: [], auth, playlist: 'Math Tips' });
+  assert.deepEqual(google.playlists, [{ id: 'PL_1', title: 'Math Tips' }], 'made public, once');
+  assert.deepEqual(google.added(), [{ playlistId: 'PL_1', videoId: 'yt_new' }]);
+  assert.equal(google.inserts[0].params.notifySubscribers, false, 'YT_NOTIFY_SUBSCRIBERS off: a public upload stays quiet');
+  await uploadVideo({ videoFile: file, title: 'Two', description: 'd', tags: [], auth, playlist: 'math tips ' });
+  assert.equal(google.playlists.length, 1, 'found by title, whatever the case and spaces');
+  assert.equal(google.added().length, 2);
+
+  // An old token (upload + readonly only): the playlist step fails with 403 and the upload still counts.
+  const { languageCode, addToPlaylist } = require('../src/upload');
+  const denied = { playlists: { list: async () => { throw Object.assign(new Error('Request had insufficient authentication scopes.'), { code: 403 }); } } };
+  await assert.rejects(addToPlaylist(denied, 'yt_new', 'X'), /insufficient/);
+  const real = google_youtube_denied(t, denied);
+  const url = await uploadVideo({ videoFile: file, title: 'Three', description: 'd', tags: [], auth: { credentials: { refresh_token: 'old' } }, playlist: 'Math Tips' });
+  assert.equal(url, 'https://youtu.be/yt_new');
+  real();
+  assert.equal(languageCode('Bangla'), 'bn');
+  assert.equal(languageCode('Bengali (Bangladesh)'), 'bn');
+  assert.equal(languageCode('Hindi'), 'hi');
+  assert.equal(languageCode('English'), 'en');
+  assert.equal(languageCode('Klingon'), 'en');
+  assert.equal(languageCode(''), 'en');
+});
+
+/** google.youtube that uploads fine but has no playlist access: returns a restore function. */
+function google_youtube_denied(t, denied) {
+  const { google } = require('googleapis');
+  const prev = google.youtube;
+  google.youtube = () => ({ ...fakeYoutubeApi({ id: 'UC', name: 'c' }), playlists: denied.playlists });
+  return () => {
+    google.youtube = prev;
+  };
+}

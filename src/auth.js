@@ -8,7 +8,7 @@ const http = require('http');
 const { google } = require('googleapis');
 const cfg = require('./config');
 
-const SCOPES = ['https://www.googleapis.com/auth/youtube.upload'];
+const SCOPES = ['https://www.googleapis.com/auth/youtube.upload', 'https://www.googleapis.com/auth/youtube']; // 'youtube': playlists
 const PORT = 3000;
 
 function loadClient(redirectUri = `http://localhost:${PORT}/oauth2callback`) {

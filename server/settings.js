@@ -91,6 +91,8 @@ const SETTINGS_SCHEMA = [
   { key: 'PRIVACY_STATUS', scope: 'brand', cfg: 'privacy', group: 'channel', type: 'enum', options: ['private', 'unlisted', 'public'], default: 'private', label: 'YouTube privacy' },
   { key: 'YT_CATEGORY_ID', scope: 'brand', cfg: 'categoryId', group: 'channel', type: 'string', default: '28', label: 'YouTube category ID' },
   { key: 'SYNTHETIC_MEDIA', scope: 'brand', cfg: 'syntheticMedia', group: 'channel', type: 'boolean', default: true, label: 'Mark as AI-made content' },
+  { key: 'YT_PLAYLIST', scope: 'brand', cfg: 'playlist', group: 'channel', type: 'string', default: '', label: 'YouTube playlist', hint: 'Every upload is added to the playlist with this title (made public when the channel has none). Empty: no playlist. Sign-ins from before 2026-11-14 need Reconnect YouTube once.' },
+  { key: 'YT_NOTIFY_SUBSCRIBERS', scope: 'brand', cfg: 'notifySubscribers', group: 'channel', type: 'boolean', default: true, label: 'Notify subscribers', hint: 'Public uploads go to the subscriptions feed and send the bell notification. Private and unlisted uploads never notify.' },
   { key: 'BRAND_HANDLE', cfg: 'brandHandle', scope: 'brand', requires: 'SHOW_BRAND', group: 'channel', type: 'string', default: '', label: 'Brand handle (shown on the video)' },
   { key: 'SHOW_BRAND', cfg: 'showBrand', scope: 'brand', group: 'channel', type: 'boolean', default: false, label: 'Show brand on video' },
   { key: 'TOPIC_CATEGORIES', scope: 'brand', group: 'channel', type: 'json', default: ['AI', 'নতুন প্রযুক্তি ও আবিষ্কার', 'চাকরি হারানো', 'Privacy', 'AI বনাম মানুষ', 'Cybersecurity', 'Tech updates'], label: 'Topic categories for auto-picked videos' },

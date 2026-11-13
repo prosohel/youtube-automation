@@ -77,6 +77,9 @@ async function publish(ctx) {
     categoryId: s.YT_CATEGORY_ID,
     syntheticMedia: s.SYNTHETIC_MEDIA,
     isShort: s.VIDEO_FORMAT === 'shorts',
+    language: s.LANGUAGE,
+    playlist: s.YT_PLAYLIST,
+    notifySubscribers: s.YT_NOTIFY_SUBSCRIBERS,
   });
   const id = url.split('/').pop();
   await ctx.onRemoteId(id);

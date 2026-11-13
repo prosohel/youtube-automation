@@ -116,6 +116,8 @@ const cfg = (module.exports = {
   // Tick YouTube's "altered or synthetic content" box (realistic AI clips in ./footage)
   syntheticMedia: (process.env.SYNTHETIC_MEDIA || 'true').toLowerCase() !== 'false',
   categoryId: process.env.YT_CATEGORY_ID || '28',
+  playlist: (process.env.YT_PLAYLIST || '').trim(), // a playlist title; every upload is added to it (made when missing)
+  notifySubscribers: (process.env.YT_NOTIFY_SUBSCRIBERS || 'true').toLowerCase() !== 'false', // public uploads only
 
   // The brand a dashboard video is made for (server/brands.js); the CLI has none.
   brandName: '',

@@ -4,7 +4,8 @@ const brands = require('./brands');
 const youtube = require('./publishers/youtube');
 
 // Upload, plus read access for status sync and for finding an upload after a crash.
-const SCOPES = ['https://www.googleapis.com/auth/youtube.upload', 'https://www.googleapis.com/auth/youtube.readonly'];
+// 'youtube' (playlists) came 2026-11-14; upload and readonly stay so that older tokens are a strict subset.
+const SCOPES = ['https://www.googleapis.com/auth/youtube.upload', 'https://www.googleapis.com/auth/youtube.readonly', 'https://www.googleapis.com/auth/youtube'];
 
 function oauthClient(s, redirectUri) {
   const raw = s.YOUTUBE_CLIENT_SECRET;

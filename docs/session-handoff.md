@@ -79,6 +79,27 @@ Claude designed 2 scenes in 163 s (a 10×10 crowd grid with one figure walking t
 against a tiny profit block), both accepted and rendered (output/work/test-decode-video-073546/design/). Settings: DESIGN_MODE and
 DESIGN_MINUTES in the Look section of the brand card.
 
+## YouTube upload defaults from the Studio page, 2026-11-14
+
+Compared the Studio "Video details" page of a published Short with what `uploadVideo` (src/upload.js) sends. Already set:
+title (+#Shorts), description, tags, category, not made for kids, AI label, thumbnail. Added:
+
+- **Language**: `snippet.defaultLanguage` (title/description language, was hard-coded `en`, so Bangla videos showed
+  "English" in Studio) and `snippet.defaultAudioLanguage` (Video language) now come from the brand's `LANGUAGE` via
+  `languageCode()` (Bangla → bn, Hindi → hi, ...; unknown → en).
+- **Notify subscribers**: `YT_NOTIFY_SUBSCRIBERS` (brand, default on). Only a public upload notifies (`notifySubscribers`
+  was always false before).
+- **Playlist**: `YT_PLAYLIST` (brand, default empty): a title; `addToPlaylist` finds it among the channel's playlists
+  (case/space-insensitive) or makes it public, then adds the video. Needs the `youtube` scope, now in `SCOPES` of
+  server/youtubeAuth.js and src/auth.js; tokens from before only get a "Playlist skipped ... Reconnect YouTube" log,
+  the upload still counts.
+- Explicit `license: 'youtube'`, `embeddable: true`, `publicStatsViewable: true` (YouTube's defaults, now stated).
+
+Not in the Data API (set once in Studio → Settings → Upload defaults, or per video): comments on/off and sort,
+Shorts remixing, automatic chapters/places/concepts, paid promotion, age restriction, related video, brand
+partnerships, the Education "Type / Academic system / Level" fields. Captions are burned in by Remotion, none uploaded.
+Test stand-in: `fakeYoutubeApi` in test/helpers/fakeGoogle.js now has playlists/playlistItems and records insert params.
+
 ## Question mix (QUESTION_MIX), 2026-11-13
 
 Brand setting **Question videos** under "Questions from your site" (shown only when a source is on): `all` (default, every
