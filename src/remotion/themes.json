@@ -993,6 +993,8 @@
       "dark": "#1d2230"
     },
     "chapterStripes": true,
-    "fixedAccents": true
+    "fixedAccents": true,
+    "dottedPaths": true,
+    "walkIn": true
   }
 }

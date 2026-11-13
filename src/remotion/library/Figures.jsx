@@ -1,6 +1,6 @@
 import React from 'react';
 import { useCurrentFrame, useVideoConfig } from 'remotion';
-import { accentFor, bodyFont, fitSize, isVox, pop, theme, twos } from '../shared';
+import { accentFor, bodyFont, fitSize, isVox, pop, theme, twos, walkIn } from '../shared';
 import { ITEM_STAGGER } from './timing';
 
 /*
@@ -86,7 +86,7 @@ const Podium = ({ ink, accent, f }) => {
   );
 };
 
-const Group = ({ ink, accent, f, fps, start, count, highlight }) => {
+const Group = ({ ink, accent, f, fps, start, count, highlight, walk }) => {
   const n = count;
   const gap = Math.min(190, 820 / n);
   const x0 = 500 - (gap * (n - 1)) / 2 - 50;
@@ -95,8 +95,10 @@ const Group = ({ ink, accent, f, fps, start, count, highlight }) => {
       {Array.from({ length: n }).map((_, i) => {
         const s = clamp01(pop(f, fps, start + i * ITEM_STAGGER, 11));
         const hi = i === highlight;
+        // walk: each one walks in from the left (later ones from further away); otherwise they rise into place
+        const move = walk ? `translate(${(1 - s) * -(160 + i * 40)} 0)` : `translate(0 ${(1 - s) * 60})`;
         return (
-          <g key={i} transform={`translate(0 ${(1 - s) * 60})`} opacity={s}>
+          <g key={i} transform={move} opacity={s}>
             <Silhouette color={hi ? accent : ink} arms={hi ? 'up' : 'down'} x={x0 + i * gap} y={hi ? 240 : 270} scale={hi ? 1.25 : 1.1} bob={Math.sin(f / 16 + i) * 3} />
           </g>
         );
@@ -152,14 +154,17 @@ export const Figures = ({ visual, accent, isShort, start }) => {
   const W = isShort ? 960 : 1000;
   const H = W * 0.56;
   const scene = visual.scene;
+  // printed report: the figure walks in from the side; the ground line stays put
+  const walk = walkIn();
+  const enter = walk ? `translateX(${(1 - s) * -140}px)` : `translateY(${(1 - s) * 30}px)`;
   const count = Math.max(2, Math.min(5, visual.count || 3));
   const highlight = Number.isInteger(visual.highlight) ? Math.max(0, Math.min(count - 1, visual.highlight)) : Math.floor(count / 2);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, opacity: s, transform: `translateY(${(1 - s) * 30}px)` }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, opacity: s, transform: enter }}>
       <svg viewBox="0 0 1000 560" width={W} height={H} style={{ overflow: 'visible' }}>
         {scene === 'laptop' && <Laptop ink={ink} accent={accentFor(0)} f={f} />}
         {scene === 'podium' && <Podium ink={ink} accent={accentFor(0)} f={f} />}
-        {scene === 'group' && <Group ink={ink} accent={accentFor(0)} f={f0} fps={fps} start={start} count={count} highlight={highlight} />}
+        {scene === 'group' && <Group ink={ink} accent={accentFor(0)} f={f0} fps={fps} start={start} count={count} highlight={highlight} walk={walk} />}
         {scene === 'phone' && <Phone ink={ink} accent={accentFor(0)} f={f} />}
         {scene === 'handshake' && <Handshake ink={ink} accent={accentFor(0)} f={f0} fps={fps} start={start} />}
       </svg>

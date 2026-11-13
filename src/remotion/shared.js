@@ -64,6 +64,11 @@ export const energy = () => ({ calm: 0.5, normal: 1, high: 1.5 })[T.energy] || 1
 export const isVox = () => T.family === 'vox';
 /** Reel family: one accent, left-aligned masked type, hard cuts, micro push; no fades or effects. */
 export const isReel = () => T.family === 'reel';
+/** Printed-report motion: connectors as dotted accent lines (theme.dottedPaths) and figures that walk in (theme.walkIn). */
+export const dottedPaths = () => !!T.dottedPaths;
+export const walkIn = () => !!T.walkIn;
+/** CSS background for a dotted connector bar; angle 90 for a horizontal bar, 180 for a vertical one. */
+export const dottedBar = (color, angle = 90) => `repeating-linear-gradient(${angle}deg, ${color} 0 10px, transparent 10px 22px)`;
 
 /** Hold every other frame (stop-motion "on twos"). */
 export const twos = (frame) => Math.floor(frame / 2) * 2;

@@ -1,6 +1,6 @@
 import React from 'react';
 import { interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
-import { bodyFont, estWidth, fitSize, headFont, isVox, pop, theme, twos } from '../shared';
+import { bodyFont, dottedBar, dottedPaths, estWidth, fitSize, headFont, isVox, pop, theme, twos } from '../shared';
 import { Panel } from './Panel';
 import { ITEM_STAGGER } from './timing';
 
@@ -35,7 +35,7 @@ export const Timeline = ({ visual, accent, isShort, start }) => {
     return (
       <Panel accent={accent} style={{ ...panel, width: 920, padding: '40px 48px 40px 40px' }}>
         <div style={{ position: 'relative', height: row * n }}>
-          <div style={{ position: 'absolute', left: 21, top: row / 2, width: 6, height: row * (n - 1) * line, background: accent, borderRadius: 3 }} />
+          <div style={{ position: 'absolute', left: 21, top: row / 2, width: 6, height: row * (n - 1) * line, background: dottedPaths() ? dottedBar(accent, 180) : accent, borderRadius: 3 }} />
           {events.map((e, i) => (
             <div key={i} style={{ position: 'absolute', left: 0, right: 0, top: i * row, height: row, display: 'flex', alignItems: 'center' }}>
               <div style={{ ...dot(i, 48), flexShrink: 0 }} />
@@ -55,7 +55,7 @@ export const Timeline = ({ visual, accent, isShort, start }) => {
   return (
     <Panel accent={accent} style={{ ...panel, width: W, padding: '44px 40px 40px' }}>
       <div style={{ position: 'relative', height: 44 }}>
-        <div style={{ position: 'absolute', left: slot / 2, top: 19, height: 6, width: slot * (n - 1) * line, background: accent, borderRadius: 3 }} />
+        <div style={{ position: 'absolute', left: slot / 2, top: 19, height: 6, width: slot * (n - 1) * line, background: dottedPaths() ? dottedBar(accent) : accent, borderRadius: 3 }} />
         {events.map((e, i) => (
           <div key={i} style={{ position: 'absolute', left: slot * i + slot / 2 - 22, top: 0, ...dot(i, 44) }} />
         ))}

@@ -10,6 +10,13 @@ const shared = read('shared.js');
 const text = read('Text.jsx');
 const backgrounds = read('Backgrounds.jsx');
 
+test('decode is the printed-report look: dotted connectors and walk-in figures are drawn where the flags say', () => {
+  assert.equal(THEMES.decode.dottedPaths, true);
+  assert.equal(THEMES.decode.walkIn, true);
+  for (const f of ['library/Illustrations.jsx', 'library/Timeline.jsx', 'library/LineChart.jsx']) assert.match(read(f), /dottedPaths\(\)/, f);
+  assert.match(read('library/Figures.jsx'), /walkIn\(\)/);
+});
+
 // A theme field that names a style must name one the components really draw, or it silently falls back.
 const fonts = [...shared.matchAll(/loadFont as (\w+)/g)].map((m) => m[1]);
 const cards = [...shared.matchAll(/case '(\w+)':/g)].map((m) => m[1]);

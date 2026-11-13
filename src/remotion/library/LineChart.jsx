@@ -1,6 +1,6 @@
 import React from 'react';
 import { Easing, interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
-import { bodyFont, estWidth, fitSize, headFont, isVox, pop, theme, twos } from '../shared';
+import { bodyFont, dottedPaths, estWidth, fitSize, headFont, isVox, pop, theme, twos } from '../shared';
 import { Panel } from './Panel';
 import { withUnit } from './format';
 
@@ -72,18 +72,25 @@ export const LineChart = ({ visual, accent, isShort, start }) => {
         ))}
         <line x1={0} x2={plotW} y1={plotH} y2={plotH} stroke={T.muted} strokeWidth={3} />
         <path d={`${path} L ${x(n - 1).toFixed(1)} ${plotH} L ${x(0).toFixed(1)} ${plotH} Z`} fill={accent} opacity={0.16 * p} />
-        <path
-          d={path}
-          fill="none"
-          stroke={stroke}
-          strokeWidth={isShort ? 8 : 7}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          pathLength={1}
-          strokeDasharray={1}
-          strokeDashoffset={1 - p}
-          style={{ filter: T.dark ? `drop-shadow(0 0 10px ${accent})` : 'none' }}
-        />
+        {dottedPaths() ? (
+          <>
+            <clipPath id="line-reveal"><rect x={-20} y={-40} width={20 + (plotW + 20) * p} height={plotH + 80} /></clipPath>
+            <path d={path} fill="none" stroke={accent} strokeWidth={isShort ? 8 : 7} strokeLinecap="round" strokeLinejoin="round" strokeDasharray="2 16" clipPath="url(#line-reveal)" />
+          </>
+        ) : (
+          <path
+            d={path}
+            fill="none"
+            stroke={stroke}
+            strokeWidth={isShort ? 8 : 7}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            pathLength={1}
+            strokeDasharray={1}
+            strokeDashoffset={1 - p}
+            style={{ filter: T.dark ? `drop-shadow(0 0 10px ${accent})` : 'none' }}
+          />
+        )}
         {points.map((q, i) => {
           const d = Math.min(1.1, pop(f0, fps, start + (DRAW * i) / (n - 1), 10));
           return <circle key={i} cx={x(i)} cy={y(q.value)} r={(i === n - 1 ? 14 : 10) * d} fill={i === n - 1 ? accent : T.surface} stroke={accent} strokeWidth={5 * Math.min(1, d)} />;

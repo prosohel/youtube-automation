@@ -1,7 +1,7 @@
 import React from 'react';
 import { interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
 import { icons } from 'lucide-react';
-import { accentFor, bodyFont, fitSize, headFont, isVox, pop, theme, twos } from '../shared';
+import { accentFor, bodyFont, dottedPaths, fitSize, headFont, isVox, pop, theme, twos } from '../shared';
 import { Panel } from './Panel';
 import { ITEM_STAGGER, COUNT_FRAMES } from './timing';
 
@@ -149,12 +149,14 @@ export const OrgTree = ({ visual, accent, isShort, start }) => {
     </div>
   );
   const midY = H * 0.45;
+  // printed report: the connectors are dotted red lines that draw themselves
+  const wire = dottedPaths() ? { stroke: accentFor(0), strokeWidth: 5, strokeDasharray: '8 12', strokeLinecap: 'round' } : { stroke: ink(), strokeWidth: 4 };
   return (
     <div style={{ position: 'relative', width: W, height: H }}>
       <svg width={W} height={H} style={{ position: 'absolute', inset: 0 }}>
-        <line x1={W / 2} y1={H * 0.22} x2={W / 2} y2={midY * lines + H * 0.22 * (1 - lines)} stroke={ink()} strokeWidth={4} />
-        {n > 1 ? <line x1={cx(0)} y1={midY} x2={cx(0) + (cx(n - 1) - cx(0)) * lines} y2={midY} stroke={ink()} strokeWidth={4} opacity={lines} /> : null}
-        {kids.map((_, i) => <line key={i} x1={cx(i)} y1={midY} x2={cx(i)} y2={midY + (H * 0.62 - midY) * lines} stroke={ink()} strokeWidth={4} opacity={lines} />)}
+        <line x1={W / 2} y1={H * 0.22} x2={W / 2} y2={midY * lines + H * 0.22 * (1 - lines)} {...wire} />
+        {n > 1 ? <line x1={cx(0)} y1={midY} x2={cx(0) + (cx(n - 1) - cx(0)) * lines} y2={midY} {...wire} opacity={lines} /> : null}
+        {kids.map((_, i) => <line key={i} x1={cx(i)} y1={midY} x2={cx(i)} y2={midY + (H * 0.62 - midY) * lines} {...wire} opacity={lines} />)}
       </svg>
       {box(visual.root, W / 2, 0, Math.min(W * 0.5, boxW * 1.4), top, true)}
       {kids.map((k, i) => <React.Fragment key={i}>{box(k, cx(i), H * 0.62, boxW, kid(i), false)}</React.Fragment>)}
