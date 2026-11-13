@@ -206,7 +206,7 @@ export const Captions = ({ narration, wordFrames, frames, accent, isShort, onFoo
   const first = Math.floor(active / perChunk) * perChunk;
   const chunk = words.slice(first, first + perChunk);
   const enter = clamp01(pop(f, fps, starts[first], 15));
-  const size = isShort ? 80 : 58;
+  const size = isShort ? 80 : 64;
 
   const box = {
     box: { background: T.captionBg, borderRadius: 26, padding: isShort ? '20px 26px' : '12px 22px' },

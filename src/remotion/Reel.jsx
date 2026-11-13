@@ -206,7 +206,7 @@ export const ReelIntro = ({ title, kicker, brandLabel, isShort }) => {
   const { fps } = useVideoConfig();
   const T = theme();
   const words = title.split(/\s+/).filter(Boolean);
-  const size = (isShort ? 110 : 96) * (title.length > 50 ? 0.72 : title.length > 34 ? 0.85 : 1);
+  const size = (isShort ? 110 : 124) * (title.length > 50 ? 0.72 : title.length > 34 ? 0.85 : 1);
   const push = interpolate(f, [0, 90], [1, 1.04], { extrapolateRight: 'clamp' });
   return (
     <AbsoluteFill style={{ background: T.bg[0] }}>

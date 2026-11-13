@@ -962,10 +962,10 @@
       "halftone",
       "cornerMarks"
     ],
-    "headingFont": "BalooDa2",
-    "headingWeight": "800",
-    "bodyFont": "NotoSansBengali",
-    "bodyWeight": "600",
+    "headingFont": "Atma",
+    "headingWeight": "700",
+    "bodyFont": "AnekBangla",
+    "bodyWeight": "700",
     "dark": false,
     "bg": [
       "#efe8da",

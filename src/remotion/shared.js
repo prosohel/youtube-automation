@@ -6,6 +6,7 @@ import { loadFont as NotoSerifBengali } from '@remotion/google-fonts/NotoSerifBe
 import { loadFont as BalooDa2 } from '@remotion/google-fonts/BalooDa2';
 import { loadFont as Galada } from '@remotion/google-fonts/Galada';
 import { loadFont as Mina } from '@remotion/google-fonts/Mina';
+import { loadFont as Atma } from '@remotion/google-fonts/Atma';
 import THEMES from './themes.json';
 
 /*
@@ -13,7 +14,7 @@ import THEMES from './themes.json';
  * module-level value set once by <Main> is safe and keeps every component free of theme plumbing.
  */
 
-const FONT_LOADERS = { HindSiliguri, AnekBangla, NotoSansBengali, NotoSerifBengali, BalooDa2, Galada, Mina };
+const FONT_LOADERS = { HindSiliguri, AnekBangla, NotoSansBengali, NotoSerifBengali, BalooDa2, Galada, Mina, Atma };
 const FALLBACK = '"Nirmala UI", "Noto Sans Bengali", sans-serif';
 const fontCache = {};
 const fontWaits = {};
