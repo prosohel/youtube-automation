@@ -1,0 +1,88 @@
+/* Schedule page: rules list, rule editor, 7-day calendar. Colours only via tokens in styles.css. */
+.sc-tight { gap: 2px; }
+.sc-head-text { min-width: 0; flex: 1 1 320px; }
+.sc-lede { margin: 2px 0 0; font-size: 13.5px; max-width: 640px; }
+
+/* card header: eyebrow title on the left, a short count or note on the right */
+.sc-card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
+
+/* ---------- rules ---------- */
+.sc-rules-card { gap: 0; }
+.sc-rules-card .sc-card-head { padding-bottom: 8px; }
+.sc-rules { display: flex; flex-direction: column; }
+.sc-rule { padding: 12px 0; }
+.sc-rule .pbadge { width: 34px; height: 34px; }
+/* an off rule dims only its badge; text keeps full contrast (the switch shows the state) */
+.sc-rule.is-off .pbadge { opacity: 0.62; }
+.sc-rule-main { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sc-rule-title { font-size: 14px; color: var(--heading); }
+.sc-rule-what { font-size: 13px; color: var(--ink-2); overflow-wrap: anywhere; }
+.sc-rule-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; font-size: 12.5px; }
+.sc-dot { color: var(--ink-4); }
+.sc-next { color: var(--ink); font-weight: 700; }
+.sc-rule-tags { flex: 0 1 auto; min-width: 0; max-width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sc-time { background: var(--ground); border: 1px solid var(--field); color: var(--accent); font-weight: 700; }
+.sc-cron { display: inline-flex; align-items: center; max-width: 100%; min-height: 24px; padding: 3px 9px; border-radius: 8px; background: var(--neutral-bg); color: var(--ink-3); font-size: 11.5px; white-space: normal; overflow-wrap: anywhere; }
+.sc-rule-actions { flex: none; margin-left: auto; display: flex; align-items: center; gap: 8px; }
+/* the shared switch is 28px tall; give it a 44px hit area without changing its look */
+.sc-switch { display: inline-flex; align-items: center; min-height: 44px; padding-right: 4px; }
+.sc-switch .switch { position: relative; }
+.sc-switch .switch::before { content: ''; position: absolute; inset: -8px -4px; }
+
+/* ---------- editor ---------- */
+.sc-editor { gap: 16px; scroll-margin-top: 16px; border-color: var(--gold-soft-line); box-shadow: var(--shadow); }
+.sc-ed-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--border-soft); }
+.sc-ed-section { display: flex; flex-direction: column; gap: 14px; }
+.sc-ed-section.subpanel { padding: 14px 16px 16px; }
+.sc-seg { gap: 8px; }
+.sc-days { gap: 6px; }
+.sc-times-field { max-width: 360px; }
+.sc-span { grid-column: 1 / -1; }
+.sc-ed-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-top: 14px; border-top: 1px solid var(--border-soft); }
+.sc-preview { flex: 1 1 280px; min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
+.sc-preview strong { color: var(--ink); }
+.sc-error { color: var(--danger); font-weight: 600; }
+.sc-ed-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* ---------- week ---------- */
+/* the card is a size container so the swipe hint shows exactly when the week overflows it */
+.sc-week-card { container-type: inline-size; }
+.sc-week-wrap { scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+.sc-week-wrap .week { min-width: 840px; }
+.sc-week-wrap .day { scroll-snap-align: start; min-height: 210px; }
+.sc-day-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+.sc-day-name { font-size: 13px; color: var(--heading); }
+.day.today .sc-day-name { color: #fff; }
+.sc-scroll-hint { display: none; margin: 0; }
+/* container size is the card's content box, so this matches the week's 840px min-width */
+@container (max-width: 839.98px) {
+  .sc-scroll-hint { display: block; }
+}
+
+/* tablet and phone: touch-size editor controls */
+@media (max-width: 1199px) {
+  .sc-editor .segmented button { min-height: 44px; }
+  .sc-editor .toggle-pill { min-height: 44px; }
+}
+
+/* phone */
+@media (max-width: 639px) {
+  .sc-lede { font-size: 13px; }
+  .sc-page .page-head .actions { width: 100%; }
+  .sc-page .page-head .actions .btn { flex: 1 1 auto; }
+  .sc-rule { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 8px 12px; align-items: start; }
+  .sc-rule .pbadge { grid-row: 1 / span 2; }
+  .sc-rule-tags, .sc-rule-actions { grid-column: 2; }
+  .sc-rule-actions { margin-left: 0; justify-content: flex-start; }
+  .sc-rule-actions .btn:first-of-type { margin-left: auto; }
+  .sc-rule-actions .btn-sm { min-height: 40px; }
+  .sc-editor .segmented { align-self: stretch; }
+  .sc-editor .segmented button { flex: 1 1 auto; }
+  .sc-editor .toggle-pill { min-width: 52px; }
+  .sc-ed-section.subpanel { padding: 12px; }
+  .sc-times-field { max-width: none; }
+  .sc-ed-actions { width: 100%; }
+  .sc-ed-actions .btn { flex: 1 1 0; }
+  .sc-week-wrap .week { min-width: 0; grid-template-columns: repeat(7, minmax(124px, 1fr)); gap: 8px; }
+  .sc-week-wrap .day { min-height: 170px; }
+}

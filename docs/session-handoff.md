@@ -79,6 +79,25 @@ Claude designed 2 scenes in 163 s (a 10×10 crowd grid with one figure walking t
 against a tiny profit block), both accepted and rendered (output/work/test-decode-video-073546/design/). Settings: DESIGN_MODE and
 DESIGN_MINUTES in the Look section of the brand card.
 
+## Dashboard redesign: teal, mustard and cream, light and dark, 2026-11-14
+
+Mockup (Design canvas, private): https://claude.ai/artifact/F57R7hz7EUUaxxoFQnaH1u (desktop pages, tablet, phone, dark).
+
+- **Tokens**: every colour is a CSS variable in web/src/styles.css, light under `:root`, dark under
+  `:root[data-theme='dark']`. Old names (`--accent`, `--ink-*`, `--neutral-bg`...) kept; `--accent` is now the brand
+  colour for text and links (teal, light teal in dark), `--gold` the mustard, `--hero` the teal card, `--primary` the main
+  button (teal in light, mustard in dark). Font: Plus Jakarta Sans + Noto Sans Bengali.
+- **Theme**: web/src/theme.js `useTheme()` (light / dark / auto, localStorage `theme`, auto follows the device);
+  index.html sets `data-theme` before the first paint. Switch in the sidebar; one-button cycle in the top bar.
+- **Shell** (App.jsx): >=1200px sidebar; 640-1199px 88px icon rail + top bar (brand picker, worker pill, theme,
+  sign-out); <640px teal top bar + fixed bottom tab bar (`.main` has bottom padding). One nav markup, CSS moves it.
+  A wrapping column flex container stretches children to their content: the phone `.topbar` must stay `nowrap`.
+- **Pages**: each has its own CSS file (Overview.css `ov-`, Queue.css `q-`, Schedule.css `sc-`, Integrations.css `in-`).
+  Overview has a "Videos made this week" chart from `week`/`weekTotal`/`lastWeekTotal` in server/overview.js
+  (`videosPerDay`, by `createdAt`, server-local days; test/overview.test.js). Queue header has Pause/Resume queue.
+  StageBar labels use `.stage-label.is-done/.is-active/.is-todo`.
+- Not done: Schedule week navigation (the API only serves the next 7 days).
+
 ## YouTube upload defaults from the Studio page, 2026-11-14
 
 Compared the Studio "Video details" page of a published Short with what `uploadVideo` (src/upload.js) sends. Already set:

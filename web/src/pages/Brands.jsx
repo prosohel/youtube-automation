@@ -2,30 +2,21 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { usePoll } from '../usePoll.js';
-import { nameLang, notifyBrandsChanged, useBrands } from '../brand.js';
-import { Chip, contentLang, PlatformBadge, Switch } from '../components/ui.jsx';
-import { buildPatch, Field } from './Integrations.jsx';
+import { ALL, nameLang, notifyBrandsChanged, useBrands } from '../brand.js';
+import { Chip, contentLang, Icon, ICONS, PlatformBadge, Switch } from '../components/ui.jsx';
+import { buildPatch, FieldGrid, goTo, TestResult, useTests } from './Integrations.jsx';
 
 // What each section of a brand card edits. Every key here is a brand key (the server sends no other in /api/brands/:id/settings).
-const CHANNEL_KEYS = ['NICHE', 'VIDEO_INSTRUCTIONS', 'LANGUAGE', 'SCRIPT_MODE', 'VIDEO_FORMAT', 'TARGET_MINUTES', 'TOPIC_CATEGORIES', 'QUESTION_SOURCE', 'QUESTION_MIX', 'QUESTION_SUBJECT', 'QUESTIONS_PER_VIDEO', 'EXTRA_LINK', 'PRIVACY_STATUS', 'YT_CATEGORY_ID', 'YT_PLAYLIST', 'YT_NOTIFY_SUBSCRIBERS', 'SYNTHETIC_MEDIA'];
+const CHANNEL_KEYS = ['NICHE', 'VIDEO_INSTRUCTIONS', 'LANGUAGE', 'SCRIPT_MODE', 'VIDEO_FORMAT', 'TARGET_MINUTES', 'TOPIC_CATEGORIES', 'QUESTION_SOURCE', 'QUESTION_MIX', 'QUESTION_SUBJECT', 'QUESTIONS_PER_VIDEO', 'EXTRA_LINK'];
+const YOUTUBE_KEYS = ['PRIVACY_STATUS', 'YT_CATEGORY_ID', 'YT_PLAYLIST', 'YT_NOTIFY_SUBSCRIBERS', 'SYNTHETIC_MEDIA'];
 const LOOK_KEYS = ['THEME', 'VISUALS', 'DESIGN_MODE', 'DESIGN_MINUTES', 'THUMB_STYLE', 'THUMB_INTRO', 'SHOW_BRAND', 'BRAND_HANDLE'];
 const SIGN_IN_KEYS = ['YOUTUBE_TOKEN', 'TIKTOK_ACCESS_TOKEN', 'TIKTOK_REFRESH_TOKEN'];
 
 const pick = (schema, keys) => keys.map((k) => schema.find((s) => s.key === k)).filter(Boolean);
 const enc = encodeURIComponent;
-
-/** The accounts a brand is connected to, as [platform, text] pairs. */
-function accountChips(accounts) {
-  const a = accounts || {};
-  const out = [];
-  // A recorded account may have no name or id yet (a migrated sign-in whose channel is not confirmed): never print null.
-  const text = (v) => (v === null || v === undefined ? '' : String(v).trim());
-  if (a.youtube) out.push(['youtube', `YouTube: ${text(a.youtube.name) || text(a.youtube.id) || 'signed in'}`]);
-  if (a.tiktok) out.push(['tiktok', text(a.tiktok.username) ? `TikTok: @${text(a.tiktok.username).replace(/^@/, '')}` : 'TikTok: connected']);
-  if (a.facebook) out.push(['facebook', text(a.facebook.id) ? `Facebook: Page ${text(a.facebook.id)}` : 'Facebook: connected']);
-  if (a.instagram) out.push(['instagram', text(a.instagram.id) ? `Instagram: ${text(a.instagram.id)}` : 'Instagram: connected']);
-  return out;
-}
+// A recorded account may have no name or id yet (a migrated sign-in whose channel is not confirmed): never print null.
+const text = (v) => (v === null || v === undefined ? '' : String(v).trim());
+const sectionId = (brand, id) => `brand-${brand.id}-${id}`;
 
 /** Delete asks twice, so one stray click cannot remove a brand. */
 function DeleteButton({ onDelete }) {
@@ -41,13 +32,36 @@ function DeleteButton({ onDelete }) {
   );
 }
 
-/** One section of a brand's settings, with its own draft, Save and Test buttons. Everything it sends names `brand.id`. */
-function Section({ brand, title, blocks, data, reload, onChanged, setToast }) {
+// The look of each thumbnail style as a small tile; unknown styles show their first letters.
+const THUMB_GLYPHS = { bigText: 'Aa', versus: 'VS', question: '?', number: '10', warning: '!', arrow: '→', reaction: ':O', paper: '✎' };
+
+/** The thumbnail styles as tiles: the same setting as the Thumbnail style select, picked by its look. */
+function ThumbTiles({ spec, draft, setDraft, values }) {
+  if (!spec) return null;
+  const v = draft[spec.key] !== undefined ? draft[spec.key] : values[spec.key];
+  const styles = spec.options.filter(Boolean);
+  return (
+    <div className="in-thumbs" role="group" aria-label="Thumbnail styles">
+      {styles.map((o, i) => {
+        const label = (spec.optionLabels && spec.optionLabels[o]) || o;
+        return (
+          <button key={o} type="button" className="in-thumb" aria-pressed={v === o} onClick={() => setDraft((d) => ({ ...d, [spec.key]: o }))}>
+            <span className={`in-thumb-art t-${i % 8}`} aria-hidden="true">{THUMB_GLYPHS[o] || o.slice(0, 2)}</span>
+            <span className="in-thumb-name">{label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** One settings card of a brand, with its own draft and Save button. Everything it sends names `brand.id`. */
+function Section({ brand, id, title, sub, platform, chip, blocks, data, reload, onChanged, setToast }) {
   const [draft, setDraft] = useState({});
-  const [results, setResults] = useState({});
   const specs = blocks.flatMap((b) => b.specs);
   const dirty = Object.keys(draft).length > 0;
   const fieldProps = { draft, setDraft, values: data.values, effective: data.effective || {}, lang: contentLang(data.values.LANGUAGE), idPrefix: `${brand.id}-` };
+  const headId = `${sectionId(brand, id)}-h`;
 
   const save = async () => {
     try {
@@ -55,132 +69,86 @@ function Section({ brand, title, blocks, data, reload, onChanged, setToast }) {
       await reload(); // show the saved values before the draft goes away
       setDraft({});
       setToast(`${title} saved`);
-      onChanged(); // the accounts shown in the header may have changed
+      onChanged(); // the accounts shown in the brand panel may have changed
     } catch (e) {
       setToast(e.message);
     }
   };
-  const runTest = async (service) => {
-    setResults((r) => ({ ...r, [service]: { ok: null, detail: 'Testing…' } }));
-    const res = await api.send('POST', `/api/test/${service}?brand=${enc(brand.id)}`).catch((e) => ({ ok: false, detail: e.message }));
-    setResults((r) => ({ ...r, [service]: res }));
-  };
 
   return (
-    <fieldset className="subpanel stack">
-      <legend>{title}</legend>
+    <section className="card" id={sectionId(brand, id)} aria-labelledby={headId}>
+      <div className="in-card-head">
+        <div className="in-card-title">
+          {platform && <PlatformBadge id={platform} />}
+          <h2 id={headId} tabIndex={-1}>{title}</h2>
+          {chip}
+        </div>
+        <p className="faint">{sub}</p>
+      </div>
       {blocks.map((b) => (
-        <div key={b.id} className="stack" style={{ gap: 10 }}>
+        <div key={b.id} className="in-block">
           {b.title && (
-            <div className="inline" style={{ alignItems: 'flex-start', flexWrap: 'nowrap' }}>
+            <div className="in-block-head">
               <PlatformBadge id={b.platform} />
-              <div className="stack" style={{ gap: 2 }}>
+              <div>
                 <strong>{b.title}</strong>
                 {b.sub && <span className="faint">{b.sub}</span>}
               </div>
             </div>
           )}
-          {b.top}
-          {b.specs.length > 0 && (
-            <div className="fields">
-              {b.specs.map((s) => <Field key={s.key} spec={s} value={data.values[s.key]} {...fieldProps} />)}
-            </div>
-          )}
-          {b.tests && (
-            <div className="between">
-              <div className="stack" style={{ gap: 4 }}>
-                {b.tests.map(([svc]) =>
-                  results[svc] ? (
-                    <span key={svc} role="status" style={{ fontSize: 13, color: results[svc].ok ? 'var(--ok)' : results[svc].ok === false ? 'var(--danger)' : 'var(--ink-3)' }}>
-                      {results[svc].detail}
-                    </span>
-                  ) : null
-                )}
-              </div>
-              <div className="inline">
-                {b.tests.map(([svc, label]) => (
-                  <button key={svc} type="button" className="btn btn-sm" onClick={() => runTest(svc)}>{label}</button>
-                ))}
-              </div>
-            </div>
-          )}
+          {b.note && <span className="faint">{b.note}</span>}
+          <FieldGrid specs={b.specs} values={data.values} fieldProps={fieldProps} />
+          {b.thumbs && <ThumbTiles spec={b.specs.find((s) => s.key === 'THUMB_STYLE')} draft={draft} setDraft={setDraft} values={data.values} />}
         </div>
       ))}
-      <div className="between" style={{ justifyContent: 'flex-end' }}>
-        <button type="button" className="btn btn-primary btn-sm" disabled={!dirty} onClick={save} aria-label={`Save ${title}`}>Save</button>
+      <div className="in-card-foot">
+        <div className="in-buttons">
+          <button type="button" className="btn btn-primary btn-sm" disabled={!dirty} onClick={save} aria-label={`Save ${title}`}>Save</button>
+        </div>
       </div>
-    </fieldset>
+    </section>
   );
 }
 
-/** The settings of one brand, loaded when its card is opened. */
-function BrandBody({ brand, onChanged, setToast }) {
-  const { data, error, reload } = usePoll(`/api/brands/${enc(brand.id)}/settings`, 120000);
-  if (!data) return <p className="muted" role="status">{error || 'Loading…'}</p>;
-
-  const { schema, values } = data;
-  const isSet = (key) => Boolean(values[key] && values[key].set);
-  const signedIn = isSet('YOUTUBE_TOKEN');
-  const tiktokSignedIn = isSet('TIKTOK_REFRESH_TOKEN') || isSet('TIKTOK_ACCESS_TOKEN');
-  // Sign-ins come from the Connect buttons, never typed in.
-  const group = (id) => schema.filter((s) => s.group === id && !SIGN_IN_KEYS.includes(s.key));
-  const sections = [
-    { id: 'channel', title: 'Channel', blocks: [{ id: 'channel', specs: pick(schema, CHANNEL_KEYS) }] },
-    { id: 'voice', title: 'Voice', blocks: [{ id: 'voice', specs: group('voice') }] },
-    { id: 'look', title: 'Look', blocks: [{ id: 'look', specs: pick(schema, LOOK_KEYS) }] },
+/** The accounts of a brand as rows: who it posts as, and the button that connects, sets up or tests it. */
+function accountRows(brand, values) {
+  const a = brand.accounts || {};
+  const isSet = (key) => Boolean(values && values[key] && values[key].set);
+  // Until the brand's settings arrive, the accounts recorded on the brand stand in for its sign-ins.
+  const yt = values ? isSet('YOUTUBE_TOKEN') : Boolean(a.youtube);
+  const tt = values ? isSet('TIKTOK_REFRESH_TOKEN') || isSet('TIKTOK_ACCESS_TOKEN') : Boolean(a.tiktok);
+  const ytName = a.youtube ? text(a.youtube.name) || text(a.youtube.id) : '';
+  const ttUser = a.tiktok ? text(a.tiktok.username).replace(/^@/, '') : '';
+  const igId = (a.instagram && text(a.instagram.id)) || text(values && values.INSTAGRAM_USER_ID);
+  const fbId = (a.facebook && text(a.facebook.id)) || text(values && values.FACEBOOK_PAGE_ID);
+  const ig = Boolean(a.instagram || igId);
+  const fb = Boolean(a.facebook || fbId);
+  return [
     {
-      id: 'accounts',
-      title: 'Accounts',
-      blocks: [
-        {
-          id: 'youtube', platform: 'youtube', title: 'YouTube', specs: [], tests: [['youtube', 'Test YouTube']],
-          sub: 'This brand’s own channel. Uploads stay private until Google approves your API project.',
-          top: (
-            <div className="inline">
-              {signedIn ? <Chip tone="ok">Signed in</Chip> : <Chip tone="danger">Not signed in</Chip>}
-              <a className="btn btn-sm" href={`/api/youtube/connect?brand=${enc(brand.id)}`}>{signedIn ? 'Reconnect YouTube' : 'Connect YouTube'}</a>
-              <span className="faint">Posting checks the channel first and needs read access. If YouTube posts fail with “Reconnect YouTube for this brand”, connect again.</span>
-            </div>
-          ),
-        },
-        {
-          id: 'tiktok', platform: 'tiktok', title: 'TikTok', specs: group('tiktok'), tests: [['tiktok', 'Test TikTok']],
-          sub: 'This brand’s own TikTok account. Until TikTok audits your app, posts are “Only me” and the account must be set to Private.',
-          top: (
-            <div className="inline">
-              {tiktokSignedIn ? <Chip tone="ok">Signed in</Chip> : <Chip tone="danger">Not signed in</Chip>}
-              <a className="btn btn-sm" href={`/api/tiktok/connect?brand=${enc(brand.id)}`}>{tiktokSignedIn ? 'Reconnect TikTok' : 'Connect TikTok'}</a>
-              <span className="faint">Sign in with this brand’s TikTok account and allow posting. It must be a target user of your TikTok sandbox.</span>
-            </div>
-          ),
-        },
-        {
-          id: 'meta', platform: 'instagram', title: 'Instagram and Facebook', specs: group('meta'), tests: [['instagram', 'Test Instagram'], ['facebook', 'Test Facebook']],
-          sub: 'A Page or Instagram account can belong to one brand only.',
-        },
-      ],
+      id: 'youtube', name: 'YouTube', on: yt, test: ['youtube', 'Test YouTube'],
+      detail: yt ? (ytName ? `${ytName} · signed in` : 'Signed in') : 'Not signed in',
+      href: `/api/youtube/connect?brand=${enc(brand.id)}`, action: yt ? 'Reconnect' : 'Connect',
     },
+    {
+      id: 'tiktok', name: 'TikTok', on: tt, test: ['tiktok', 'Test TikTok'],
+      detail: tt ? (ttUser ? `@${ttUser} · signed in` : 'Signed in') : 'Not signed in',
+      href: `/api/tiktok/connect?brand=${enc(brand.id)}`, action: tt ? 'Reconnect' : 'Connect',
+    },
+    { id: 'instagram', name: 'Instagram', on: ig, test: ['instagram', 'Test Instagram'], detail: ig ? (igId ? `Account ${igId}` : 'Connected') : 'Not set up', action: ig ? 'Edit' : 'Set up' },
+    { id: 'facebook', name: 'Facebook', on: fb, test: ['facebook', 'Test Facebook'], detail: fb ? (fbId ? `Page ${fbId}` : 'Connected') : 'Not set up', action: fb ? 'Edit' : 'Set up' },
   ];
-  return (
-    <div className="stack">
-      {sections.map((s) => (
-        <Section key={s.id} brand={brand} title={s.title} blocks={s.blocks} data={data} reload={reload} onChanged={onChanged} setToast={setToast} />
-      ))}
-      <span className="faint">Test buttons use the values already saved.</span>
-    </div>
-  );
 }
 
-function BrandCard({ brand, isPicked, startOpen, focus, onChanged, setToast }) {
-  const [open, setOpen] = useState(isPicked || startOpen);
+/** The teal panel of the brand on screen: its name, on/off switch, a one-line summary and its accounts. */
+function BrandHero({ brand, values, focus, onChanged, setToast, results, runTest }) {
   const [name, setName] = useState(brand.name);
   const [busy, setBusy] = useState(false);
   const ref = useRef(null);
   const cancelled = useRef(false); // Escape: leave without saving the typed name
-  const bodyId = `brand-body-${brand.id}`;
   const activeId = `brand-active-${brand.id}`;
+  const { data: overview } = usePoll(`/api/overview?brand=${enc(brand.id)}`, 60000);
+  const { data: rules } = usePoll(`/api/rules?brand=${enc(brand.id)}`, 60000);
 
-  useEffect(() => { if (isPicked) setOpen(true); }, [isPicked]);
   useEffect(() => setName(brand.name), [brand.name]);
   useEffect(() => { if (focus && ref.current) ref.current.scrollIntoView({ block: 'start' }); }, [focus]);
 
@@ -215,50 +183,145 @@ function BrandCard({ brand, isPicked, startOpen, focus, onChanged, setToast }) {
     }
   };
 
-  const chips = accountChips(brand.accounts);
+  const summary = [
+    brand.active ? 'On, posting to its own accounts' : 'Off',
+    values && text(values.LANGUAGE),
+    values && values.VIDEO_FORMAT ? (values.VIDEO_FORMAT === 'shorts' ? 'Shorts' : 'Landscape') : '',
+  ].filter(Boolean).join(' · ');
+  const rows = accountRows(brand, values);
+  // Videos are queued, working, ready (not posted yet), failed or published: together, every video of the brand.
+  const c = overview && overview.counts;
+  const stats = [
+    ['Videos', c ? c.queued + c.working + c.ready + c.failed + c.published : null],
+    ['Published', c ? c.published : null],
+    ['Rules', rules ? rules.length : null],
+  ];
+
   return (
-    <section className="card brand-card" ref={ref} aria-label={`Brand ${brand.name}`}>
-      <div className="brand-card-head">
-        <input
-          className="brand-name-input"
-          aria-label="Brand name"
-          lang={nameLang(name)}
-          value={name}
-          maxLength={80}
-          disabled={busy}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={rename}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') e.currentTarget.blur();
-            if (e.key === 'Escape') { cancelled.current = true; e.currentTarget.blur(); }
-          }}
-        />
-        <div className="inline">
-          <span id={activeId} className="field">Active</span>
-          <Switch checked={brand.active} onChange={(v) => update({ active: v }, v ? 'Brand is on' : 'Brand is off')} labelledBy={activeId} disabled={busy} />
+    <section className="card card-hero in-hero" ref={ref} aria-label={`Brand ${brand.name}`}>
+      <div className="in-hero-box">
+        <div className="in-hero-top">
+          <input
+            className="brand-name-input"
+            aria-label="Brand name"
+            lang={nameLang(name)}
+            value={name}
+            maxLength={80}
+            disabled={busy}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={rename}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.currentTarget.blur();
+              if (e.key === 'Escape') { cancelled.current = true; e.currentTarget.blur(); }
+            }}
+          />
+          <span className="in-active">
+            <span id={activeId}>Active</span>
+            <Switch checked={brand.active} onChange={(v) => update({ active: v }, v ? 'Brand is on' : 'Brand is off')} labelledBy={activeId} disabled={busy} />
+          </span>
         </div>
+        <span className="in-summary">
+          <Icon d={brand.active ? ICONS.check : ICONS.pause} size={14} />
+          {summary}
+        </span>
+        <dl className="in-hero-stats">
+          {stats.map(([label, n]) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd>{n === null ? '–' : n}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
-      <div className="inline" style={{ gap: 6 }}>
-        {chips.length === 0 && <Chip>Not connected</Chip>}
-        {chips.map(([platform, text]) => (
-          <Chip key={platform} tone="ok"><span lang={nameLang(text)}>{text}</span></Chip>
+      <div className="in-hero-sub">
+        <h3>Accounts</h3>
+        <span className="faint">Test buttons use the values already saved.</span>
+      </div>
+      <ul className="in-accts">
+        {rows.map((r) => (
+          <li key={r.id} className={`in-acct${r.on ? ' on' : ''}`}>
+            <PlatformBadge id={r.id} />
+            <div className="in-acct-text">
+              <strong>{r.name}</strong>
+              <span lang={nameLang(r.detail)}>{r.detail}</span>
+            </div>
+            <div className="in-acct-actions">
+              {r.href ? (
+                <a className="btn btn-sm" href={r.href} aria-label={`${r.action} ${r.name}`}>{r.action}</a>
+              ) : (
+                <button type="button" className="btn btn-sm" onClick={() => goTo(sectionId(brand, 'accounts'))} aria-label={`${r.action} ${r.name}`}>{r.action}</button>
+              )}
+              <button type="button" className="btn btn-sm" onClick={() => runTest(r.test[0])} aria-label={r.test[1]}>Test</button>
+            </div>
+            <TestResult result={results[r.test[0]]} />
+          </li>
         ))}
+      </ul>
+      <div className="in-hero-foot">
+        <button type="button" className="btn btn-sm" disabled={busy} onClick={() => update({ archived: true }, `${brand.name} archived`)}>Archive</button>
+        <DeleteButton onDelete={remove} />
       </div>
-      <div className="between">
-        <button type="button" className="link-btn" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen((o) => !o)}>
-          {open ? 'Hide settings' : 'Show settings'}
-        </button>
-        <div className="inline">
-          <button type="button" className="btn btn-sm" disabled={busy} onClick={() => update({ archived: true }, `${brand.name} archived`)}>Archive</button>
-          <DeleteButton onDelete={remove} />
-        </div>
-      </div>
-      {open && (
-        <div id={bodyId}>
-          <BrandBody brand={brand} onChanged={onChanged} setToast={setToast} />
-        </div>
-      )}
     </section>
+  );
+}
+
+/** The brand on screen: its panel and keys on one side, its settings cards on the other. */
+function BrandView({ brand, focus, onChanged, setToast, side }) {
+  const { data, error, reload } = usePoll(`/api/brands/${enc(brand.id)}/settings`, 120000);
+  const [results, runTest] = useTests(brand.id);
+
+  let main;
+  if (!data) {
+    main = <p className="muted" role="status">{error || 'Loading…'}</p>;
+  } else {
+    const { schema, values } = data;
+    const signedIn = Boolean(values.YOUTUBE_TOKEN && values.YOUTUBE_TOKEN.set);
+    // Sign-ins come from the Connect buttons, never typed in.
+    const group = (id) => schema.filter((s) => s.group === id && !SIGN_IN_KEYS.includes(s.key));
+    const sections = [
+      { id: 'channel', title: 'Channel', sub: 'What the videos are about', blocks: [{ id: 'channel', specs: pick(schema, CHANNEL_KEYS) }] },
+      {
+        id: 'youtube', title: 'YouTube upload', platform: 'youtube', sub: 'Privacy, category, playlist and labels',
+        chip: signedIn ? null : <Chip tone="danger">Not signed in</Chip>,
+        blocks: [{ id: 'youtube', specs: pick(schema, YOUTUBE_KEYS) }],
+      },
+      { id: 'voice', title: 'Voice', sub: 'Who narrates this brand’s videos', blocks: [{ id: 'voice', specs: group('voice') }] },
+      { id: 'look', title: 'Look', sub: 'Theme, visuals and thumbnails', blocks: [{ id: 'look', specs: pick(schema, LOOK_KEYS), thumbs: true }] },
+      {
+        id: 'accounts',
+        title: 'Accounts',
+        sub: 'How each account posts',
+        blocks: [
+          {
+            id: 'youtube', platform: 'youtube', title: 'YouTube', specs: [],
+            sub: 'This brand’s own channel. Uploads stay private until Google approves your API project.',
+            note: 'Posting checks the channel first and needs read access. If YouTube posts fail with “Reconnect YouTube for this brand”, connect again.',
+          },
+          {
+            id: 'tiktok', platform: 'tiktok', title: 'TikTok', specs: group('tiktok'),
+            sub: 'This brand’s own TikTok account. Until TikTok audits your app, posts are “Only me” and the account must be set to Private.',
+            note: 'Sign in with this brand’s TikTok account and allow posting. It must be a target user of your TikTok sandbox.',
+          },
+          {
+            id: 'meta', platform: 'instagram', title: 'Instagram and Facebook', specs: group('meta'),
+            sub: 'A Page or Instagram account can belong to one brand only.',
+          },
+        ],
+      },
+    ];
+    main = sections.map((s) => (
+      <Section key={s.id} brand={brand} {...s} data={data} reload={reload} onChanged={onChanged} setToast={setToast} />
+    ));
+  }
+
+  return (
+    <div className="in-layout">
+      <div className="in-side">
+        <BrandHero brand={brand} values={data ? data.values : null} focus={focus} onChanged={onChanged} setToast={setToast} results={results} runTest={runTest} />
+        {side}
+      </div>
+      <div className="in-main">{main}</div>
+    </div>
   );
 }
 
@@ -286,12 +349,12 @@ function ArchivedRow({ brand, onChanged, setToast }) {
     }
   };
   return (
-    <li className="between">
-      <span className="inline">
+    <li>
+      <span>
         <strong lang={nameLang(brand.name)}>{brand.name}</strong>
         <Chip>Archived</Chip>
       </span>
-      <span className="inline">
+      <span>
         <button type="button" className="btn btn-sm" disabled={busy} onClick={unarchive}>Unarchive</button>
         <DeleteButton onDelete={remove} />
       </span>
@@ -299,7 +362,7 @@ function ArchivedRow({ brand, onChanged, setToast }) {
   );
 }
 
-function AddBrand({ brands, onAdded, setToast }) {
+function AddBrand({ brands, onAdded, onClose, setToast }) {
   const [name, setName] = useState('');
   const [copyFrom, setCopyFrom] = useState('');
   const [busy, setBusy] = useState(false);
@@ -323,12 +386,15 @@ function AddBrand({ brands, onAdded, setToast }) {
   };
 
   return (
-    <form className="subpanel stack" onSubmit={submit} aria-label="Add brand">
-      <h3 style={{ fontSize: 15 }}>Add brand</h3>
+    <form id="add-brand" className="card" onSubmit={submit} aria-labelledby="add-brand-h">
+      <div className="in-card-head">
+        <h2 id="add-brand-h">Add brand</h2>
+        <p className="faint">Its own channel, voice, look and accounts</p>
+      </div>
       <div className="fields">
         <label className="field">
           Name
-          <input lang={nameLang(name)} value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
+          <input lang={nameLang(name)} value={name} maxLength={80} autoFocus={Boolean(onClose)} onChange={(e) => setName(e.target.value)} />
         </label>
         <label className="field">
           Copy settings from
@@ -339,20 +405,25 @@ function AddBrand({ brands, onAdded, setToast }) {
           <span className="hint">Copies the channel, voice and look. Accounts and sign-ins are never copied.</span>
         </label>
       </div>
-      <div className="between" style={{ justifyContent: 'flex-end' }}>
+      <div className="in-add-foot">
+        {onClose && <button type="button" className="btn btn-sm" onClick={onClose}>Cancel</button>}
         <button type="submit" className="btn btn-primary btn-sm" disabled={busy || !name.trim()}>Add brand</button>
       </div>
     </form>
   );
 }
 
-/** The Brands section of Integrations: one card per brand with its own settings and accounts. */
-export default function Brands({ setToast }) {
+/**
+ * The brands part of Integrations: a header with the brand switch and New brand, then one brand at a time
+ * (its panel, `side` under it, and its settings cards). `head` is the title block on the left of the header.
+ */
+export default function Brands({ setToast, head, side }) {
   const { data, error, reload } = usePoll('/api/brands?archived=1', 60000);
   const { picked } = useBrands();
   const [params] = useSearchParams();
   const [showArchived, setShowArchived] = useState(false);
-  const [justAdded, setJustAdded] = useState(null);
+  const [chosen, setChosen] = useState(null);
+  const [adding, setAdding] = useState(false);
 
   const onChanged = useCallback(() => {
     notifyBrandsChanged(); // the sidebar picker and the other pages
@@ -360,54 +431,87 @@ export default function Brands({ setToast }) {
   }, [reload]);
   const onAdded = useCallback(
     (made) => {
-      setJustAdded(made.id);
+      setChosen(made.id);
+      setAdding(false);
       return onChanged();
     },
     [onChanged],
   );
 
+  // After a YouTube or TikTok sign-in we come back to /integrations?brand=<id>&youtube=...: show that brand.
+  const returnedTo = params.get('youtube') || params.get('tiktok') ? params.get('brand') : null;
+  // The brand picked in the sidebar is the one shown, until another is chosen here.
+  useEffect(() => { if (picked && picked !== ALL) setChosen(picked); }, [picked]);
+  useEffect(() => { if (returnedTo) setChosen(returnedTo); }, [returnedTo]);
+
   const live = (data || []).filter((b) => !b.archived);
   const archived = (data || []).filter((b) => b.archived);
-  // After the YouTube sign-in Google sends us back to /integrations?brand=<id>&youtube=...: show that brand.
-  const returnedTo = params.get('youtube') ? params.get('brand') : null;
+  const current = live.find((b) => b.id === chosen) || live.find((b) => b.id === picked) || live[0] || null;
+  const addOpen = adding || Boolean(data && live.length === 0);
 
-  return (
-    <section className="stack" aria-labelledby="brands-h">
-      <div className="stack" style={{ gap: 4 }}>
-        <h2 id="brands-h" style={{ fontSize: 20 }}>Brands</h2>
-        <span className="faint">Each brand has its own channel settings, voice, look and accounts. Videos for a brand are posted only to that brand’s accounts.</span>
+  const archivedCard = data && (
+    <section className="card" aria-labelledby="archived-h">
+      <div className="between" style={{ flexWrap: 'nowrap' }}>
+        <h2 id="archived-h" className="eyebrow">Archived brands</h2>
+        <span className="inline in-archived-toggle" style={{ gap: 8, flexWrap: 'nowrap' }}>
+          <span id="show-archived" className="faint">Show archived ({archived.length})</span>
+          <Switch checked={showArchived} onChange={setShowArchived} labelledBy="show-archived" />
+        </span>
       </div>
-      {!data && <p className="muted" role="status">{error || 'Loading brands…'}</p>}
-      {data && live.length === 0 && <p className="muted">No brands yet. Add one below.</p>}
-      {live.map((b) => (
-        <BrandCard
-          key={b.id}
-          brand={b}
-          isPicked={picked === b.id}
-          startOpen={justAdded === b.id}
-          focus={returnedTo === b.id}
-          onChanged={onChanged}
-          setToast={setToast}
-        />
-      ))}
-      {data && (
-        <div className="card">
-          <AddBrand brands={live} onAdded={onAdded} setToast={setToast} />
-          <div className="between">
-            <span id="show-archived" className="field">Show archived ({archived.length})</span>
-            <Switch checked={showArchived} onChange={setShowArchived} labelledBy="show-archived" />
-          </div>
-          {showArchived && (
-            archived.length === 0 ? (
-              <span className="faint">No archived brands.</span>
-            ) : (
-              <ul className="stack" style={{ listStyle: 'none', margin: 0, padding: 0, gap: 8 }}>
-                {archived.map((b) => <ArchivedRow key={b.id} brand={b} onChanged={onChanged} setToast={setToast} />)}
-              </ul>
-            )
-          )}
-        </div>
+      {showArchived && (
+        archived.length === 0 ? (
+          <span className="faint">No archived brands.</span>
+        ) : (
+          <ul className="in-archived-list">
+            {archived.map((b) => <ArchivedRow key={b.id} brand={b} onChanged={onChanged} setToast={setToast} />)}
+          </ul>
+        )
       )}
     </section>
+  );
+  const sideCards = (
+    <>
+      {side}
+      {archivedCard}
+    </>
+  );
+
+  return (
+    <>
+      <header className="page-head in-page-head">
+        {head}
+        {/* With no brands the Add brand form is always open, so there is nothing to toggle. */}
+        {data && live.length > 0 && (
+          <div className="actions">
+            {live.length > 1 && (
+              <div role="radiogroup" aria-label="Brand shown" className="segmented in-brand-switch">
+                {live.map((b) => (
+                  <button key={b.id} type="button" role="radio" aria-checked={current && current.id === b.id} lang={nameLang(b.name)} title={b.name} onClick={() => setChosen(b.id)}>
+                    {b.name}
+                  </button>
+                ))}
+              </div>
+            )}
+            <button type="button" className="btn btn-primary in-new-brand" aria-expanded={addOpen} aria-controls={addOpen ? 'add-brand' : undefined} onClick={() => setAdding((o) => !o)}>
+              <Icon d={ICONS.plus} size={16} />
+              New brand
+            </button>
+          </div>
+        )}
+      </header>
+      {addOpen && <AddBrand brands={live} onAdded={onAdded} onClose={live.length > 0 ? () => setAdding(false) : null} setToast={setToast} />}
+      <section aria-label="Brands" className="stack" style={{ gap: 16 }}>
+        {!data && <p className="muted" role="status">{error || 'Loading brands…'}</p>}
+        {data && live.length === 0 && <p className="muted">No brands yet. Add one above.</p>}
+        {current ? (
+          <BrandView key={current.id} brand={current} focus={returnedTo === current.id} onChanged={onChanged} setToast={setToast} side={sideCards} />
+        ) : (
+          <div className="in-layout">
+            <div className="in-side">{sideCards}</div>
+            <div className="in-main" />
+          </div>
+        )}
+      </section>
+    </>
   );
 }

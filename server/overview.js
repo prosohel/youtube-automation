@@ -3,6 +3,7 @@ const settings = require('./settings');
 const brands = require('./brands');
 const { nextRuns } = require('./scheduler');
 const { pickVideo } = require('./publishFlow');
+const { localDate } = require('../src/util');
 
 const HEARTBEAT_KEY = 'worker:heartbeat';
 const PLATFORM_NAMES = { youtube: 'YouTube', tiktok: 'TikTok', instagram: 'Instagram', facebook: 'Facebook' };
@@ -35,8 +36,36 @@ const slim = (v) => ({
 
 const { connected } = settings;
 
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/**
+ * Videos made per day for the last 7 days including today (oldest first), by createdAt on the server's local
+ * calendar day, plus the week's total and the total of the 7 days before it.
+ */
+function videosPerDay(videos, now = new Date()) {
+  const day = (back) => {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - back);
+    return { date: localDate(d), label: DAY_NAMES[d.getDay()] };
+  };
+  const perDate = new Map();
+  for (const v of videos) {
+    const at = v.createdAt ? new Date(v.createdAt) : null;
+    if (!at || Number.isNaN(at.getTime())) continue;
+    const key = localDate(at);
+    perDate.set(key, (perDate.get(key) || 0) + 1);
+  }
+  const week = [];
+  for (let back = 6; back >= 0; back--) {
+    const d = day(back);
+    week.push({ ...d, count: perDate.get(d.date) || 0 });
+  }
+  let lastWeekTotal = 0;
+  for (let back = 7; back <= 13; back++) lastWeekTotal += perDate.get(day(back).date) || 0;
+  return { week, weekTotal: week.reduce((n, d) => n + d.count, 0), lastWeekTotal };
+}
+
 /** brandId: only that brand's videos, rules, posts and alerts. Without it, every brand's, each item carrying its brandId. */
-async function computeOverview(redis, queues, { brandId } = {}) {
+async function computeOverview(redis, queues, { brandId, now = new Date() } = {}) {
   const [videos, rules, s, worker, paused, allBrands] = await Promise.all([
     store.listVideos(redis, { limit: 1000, brandId }),
     store.listRules(redis).then((all) => all.filter((r) => !brandId || r.brandId === brandId)),
@@ -94,7 +123,7 @@ async function computeOverview(redis, queues, { brandId } = {}) {
   for (const r of targets.values()) {
     if (await isConnected(r.brandId, r.platform)) continue;
     const name = PLATFORM_NAMES[r.platform];
-    alerts.push({ level: 'warn', brandId: r.brandId, title: `${name} is not connected`, body: `Posts scheduled for ${name} on "${brandName(r.brandId)}" are skipped until you connect it.`, href: '/integrations' });
+    alerts.push({ level: 'warn', brandId: r.brandId, title: `${name} is not connected`, body: `Posts scheduled for ${name} on "${brandName(r.brandId)}" are skipped until you connect it.`, href: `/integrations?brand=${encodeURIComponent(r.brandId)}` });
   }
   if (s.LLM_PROVIDER === 'claude-code' && process.env.IN_DOCKER && !s.CLAUDE_CODE_OAUTH_TOKEN) {
     alerts.push({ level: 'warn', title: 'Claude Code needs a token', body: 'Run "claude setup-token" on this PC and paste the token in Integrations.', href: '/integrations' });
@@ -104,8 +133,12 @@ async function computeOverview(redis, queues, { brandId } = {}) {
   }
 
   const current = videos.find((v) => v.status === 'working');
+  const { week, weekTotal, lastWeekTotal } = videosPerDay(videos, now);
   return {
     counts,
+    week,
+    weekTotal,
+    lastWeekTotal,
     current: current ? { ...slim(current), log: (current.log || []).slice(-3) } : null,
     nextPosts,
     recent: videos.filter((v) => v.status === 'ready').slice(0, 5).map(slim),
@@ -115,4 +148,4 @@ async function computeOverview(redis, queues, { brandId } = {}) {
   };
 }
 
-module.exports = { computeOverview, workerState, slim, HEARTBEAT_KEY };
+module.exports = { computeOverview, videosPerDay, workerState, slim, HEARTBEAT_KEY };

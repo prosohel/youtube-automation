@@ -1,0 +1,227 @@
+/* Overview page. Colours only through the tokens in styles.css, so light and dark both work. */
+
+/* ---------- header ---------- */
+.ov-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ov-date-short { display: none; }
+.ov-worker { height: 32px; padding: 0 12px; }
+.ov-worker .dot { width: 8px; height: 8px; }
+.ov-worker.tone-ok .dot { background: var(--dot-ok); }
+.ov-worker.tone-warn .dot { background: var(--dot-warn); }
+.ov-worker.tone-danger .dot { background: var(--dot-danger); }
+
+/* ---------- KPIs ---------- */
+.kpis.ov-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.ov-kpi-chip { height: 22px; padding: 0 8px; }
+.ov-kpi-dot { flex: none; }
+.ov-kpi-waiting .ov-kpi-dot { background: var(--ink-4); }
+.ov-kpi-making .ov-kpi-dot { background: var(--info); }
+.ov-kpi-failed .ov-kpi-dot { background: var(--dot-danger); }
+.ov-kpi-failed.has-failed .kpi-value { color: var(--danger); }
+
+/* ---------- main grid: week + pipeline, attention + upcoming ---------- */
+.ov-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-areas: 'week week now' 'att next next';
+  align-items: stretch;
+}
+.ov-grid.no-week { grid-template-areas: 'now now now' 'att next next'; }
+.ov-now { grid-area: now; }
+.ov-week { grid-area: week; }
+.ov-att { grid-area: att; }
+.ov-next { grid-area: next; }
+
+.ov-card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 6px; }
+.ov-link { display: inline-flex; align-items: center; min-height: 36px; font-weight: 700; font-size: 13px; text-decoration: none; color: var(--accent); }
+.ov-link:hover { color: var(--accent-ink); }
+
+/* ---------- now in the pipeline (teal) ---------- */
+.ov-now { gap: 14px; }
+.ov-now-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ov-now-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.ov-now-text { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ov-now-text .big-title { overflow-wrap: anywhere; }
+.ov-now-empty { margin: 0; }
+.ov-now-log { max-height: 180px; }
+.ov-now-link { align-self: flex-start; font-size: 13.5px; }
+/* On teal the link stays gold (styles.css .card-hero a); hover must not fall back to --accent-ink. */
+.ov-now .ov-now-link, .ov-now .ov-now-link:hover { color: var(--gold); }
+.ov-now .ov-now-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+/* Dark --hero is lighter, so gold text drops below 4.5:1: white text, gold underline keeps the accent. */
+:root[data-theme='dark'] .ov-now .ov-now-link,
+:root[data-theme='dark'] .ov-now .ov-now-link:hover { color: #fff; text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
+/* StageBar paints its labels with inline ink colours meant for a light card; on teal they read white / soft. */
+/* Without the chart the pipeline is full width: text on the left, log on the right. */
+.ov-grid.no-week .ov-now:not(.idle) {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  grid-template-areas: 'main log' 'link log';
+  align-items: start;
+  column-gap: 18px;
+}
+.ov-grid.no-week .ov-now:not(.idle) .ov-now-main { grid-area: main; }
+.ov-grid.no-week .ov-now:not(.idle) .ov-now-log { grid-area: log; align-self: stretch; }
+.ov-grid.no-week .ov-now:not(.idle) .ov-now-link { grid-area: link; }
+
+/* ---------- videos made this week ---------- */
+.ov-week-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.ov-week-total { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ov-week-num { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-family: var(--display); font-size: 24px; font-weight: 800; letter-spacing: -0.02em; color: var(--heading); line-height: 1.2; }
+.ov-trend { font-family: var(--font); font-size: 13px; font-weight: 600; letter-spacing: 0; color: var(--ink-4); }
+.ov-trend.up { color: var(--ok); }
+.ov-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--ink-2); }
+.ov-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.ov-swatch { width: 10px; height: 10px; border-radius: 3px; background: var(--gold); }
+.ov-swatch.today { background: var(--chart-today); }
+.ov-bars {
+  --ov-bar-max: 112px;
+  margin-top: auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  min-height: calc(var(--ov-bar-max) + 30px);
+  padding-top: 8px;
+  border-bottom: 1px dashed var(--field);
+}
+.ov-bar-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; }
+.ov-bar-n { font-size: 12px; font-weight: 700; color: var(--ink-2); line-height: 1; }
+.ov-bar-col.today .ov-bar-n { color: var(--heading); }
+.ov-bar { width: 100%; max-width: 44px; height: max(4px, calc(var(--ov-bar-max) * var(--p, 0))); border-radius: 10px 10px 4px 4px; background: var(--gold); }
+.ov-bar.zero { background: var(--border); }
+.ov-bar-col.today .ov-bar { background: var(--chart-today); }
+.ov-bar-days { display: flex; gap: 10px; }
+.ov-bar-days span { flex: 1 1 0; min-width: 0; text-align: center; font-size: 12px; font-weight: 600; color: var(--ink-4); }
+.ov-bar-days span.today { color: var(--heading); font-weight: 800; }
+
+/* ---------- needs your attention ---------- */
+.ov-att, .ov-next { gap: 4px; }
+.ov-att-row { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--border-soft); }
+.ov-att-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.ov-att-text strong { font-size: 13.5px; color: var(--heading); }
+.ov-att-text .muted { font-size: 13px; }
+.ov-att-text .ov-link { align-self: flex-start; }
+
+/* ---------- upcoming posts ---------- */
+.ov-post {
+  display: grid;
+  grid-template-columns: 150px auto minmax(0, 1fr) auto;
+  grid-template-areas: 'time badge main flag';
+  align-items: center;
+  gap: 8px 14px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border-soft);
+}
+.ov-post-time { grid-area: time; font-size: 12.5px; font-weight: 700; color: var(--accent); }
+.ov-post-badge { grid-area: badge; display: inline-flex; }
+.ov-post-main { grid-area: main; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ov-post-title { font-weight: 600; font-size: 13.5px; overflow-wrap: anywhere; }
+.ov-post-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.ov-post-meta .faint { font-size: 12px; }
+.ov-post-flag { grid-area: flag; display: inline-flex; }
+
+/* ---------- latest videos: table on desktop, cards below ---------- */
+.ov-thumb { flex: none; width: 34px; height: 46px; border-radius: 8px; object-fit: cover; background: var(--surface-3); }
+.ov-thumb-empty { display: grid; place-items: center; color: var(--ink-4); }
+.ov-vcell { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ov-vcell-text { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; min-width: 0; }
+.ov-vtitle { font-weight: 600; font-size: 13.5px; overflow-wrap: anywhere; }
+.ov-vcards { display: none; list-style: none; margin: 0; padding: 0; }
+.ov-vcard { display: flex; gap: 12px; min-width: 0; padding: 12px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--ground); }
+.ov-vcard .ov-thumb { width: 42px; height: 58px; border-radius: 9px; }
+.ov-vcard-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1 1 auto; }
+.ov-vcard-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.ov-vcard-meta .faint { font-size: 12px; }
+.ov-vcard-status { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.ov-pstat { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; max-width: 100%; min-width: 0; }
+
+/* ---------- tablet ---------- */
+@media (max-width: 1199px) {
+  /* App.jsx's top bar carries the worker pill below 1200px, so the page chip would repeat it. */
+  .ov-worker { display: none; }
+  .ov-link { min-height: 44px; }
+
+  .kpis.ov-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+  .ov-kpi-hero, .ov-kpi-gold { grid-column: span 3; }
+  .ov-kpi-plain { grid-column: span 2; padding: 12px 16px; }
+  .ov-kpi-plain .kpi-value { font-size: 24px; }
+
+  .ov-grid {
+    gap: 14px;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    grid-template-areas: 'now now' 'week att' 'next next';
+  }
+  .ov-grid.no-week { grid-template-areas: 'now now' 'att att' 'next next'; }
+
+  .ov-now:not(.idle),
+  .ov-grid.no-week .ov-now:not(.idle) {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    grid-template-areas: 'main log' 'link log';
+    align-items: start;
+    column-gap: 16px;
+    row-gap: 4px;
+  }
+  .ov-now:not(.idle) .ov-now-main { grid-area: main; }
+  .ov-now:not(.idle) .ov-now-log { grid-area: log; align-self: stretch; max-height: 220px; }
+  .ov-now:not(.idle) .ov-now-link { grid-area: link; }
+  .ov-now .big-title { font-size: 17px; }
+
+  .ov-bars { --ov-bar-max: 84px; gap: 8px; }
+  .ov-bar { max-width: 36px; border-radius: 8px 8px 3px 3px; }
+  .ov-bar-days { gap: 8px; }
+
+  .ov-att { background: var(--gold-soft); border-color: var(--gold-soft-line); }
+  .ov-att .eyebrow { color: var(--gold-soft-ink); }
+  .ov-att .ov-att-count { background: var(--gold); color: var(--gold-ink); }
+  .ov-att-row { border-top-color: var(--gold-soft-line); }
+  .ov-att .pbadge { background: var(--surface); }
+
+  .ov-table { display: none; }
+  .ov-vcards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+}
+
+/* ---------- phone ---------- */
+@media (max-width: 639px) {
+  .ov-date-long { display: none; }
+  .ov-date-short { display: inline; }
+  .ov-actions { flex: 1 1 100%; }
+  .ov-actions .btn { flex: 1 1 auto; }
+
+  /* Teal and mustard side by side on top (as the mockup), the three counts in one row below. */
+  .kpis.ov-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+  .ov-kpi-hero, .ov-kpi-gold { grid-column: span 3; padding: 14px; }
+  .ov-kpi-plain { grid-column: span 2; padding: 10px 10px 12px; }
+  .ov-kpi-hero .kpi-value, .ov-kpi-gold .kpi-value { font-size: 28px; }
+  .ov-kpi-plain .kpi-label { font-size: 12px; align-items: flex-start; }
+  .ov-kpi-plain .kpi-value { font-size: 22px; }
+  .ov-kpi-plain .kpi-note { font-size: 11.5px; }
+  /* The note already says "N still private"; the chip does not fit a half-width card at 360px. */
+  .ov-kpi-chip { display: none; }
+
+  .ov-grid,
+  .ov-grid.no-week { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'now' 'week' 'att' 'next'; }
+  .ov-grid.no-week { grid-template-areas: 'now' 'att' 'next'; }
+
+  .ov-now:not(.idle),
+  .ov-grid.no-week .ov-now:not(.idle) { display: flex; flex-direction: column; gap: 12px; }
+  .ov-now .big-title { font-size: 16px; }
+  .ov-now:not(.idle) .ov-now-log { max-height: 160px; }
+
+  .ov-bars { --ov-bar-max: 70px; gap: 6px; }
+  .ov-bar { max-width: none; border-radius: 7px 7px 3px 3px; }
+  .ov-bar-n { font-size: 11px; }
+  .ov-bar-days { gap: 6px; }
+  .ov-bar-days span { font-size: 10.5px; }
+
+  .ov-post {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: 'badge main' 'badge time' 'badge flag';
+    align-items: start;
+    gap: 2px 12px;
+  }
+  .ov-post-time { font-size: 11.5px; }
+  .ov-post-flag { margin-top: 4px; }
+
+  .ov-vcards { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+}

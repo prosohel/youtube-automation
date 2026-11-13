@@ -1,3 +1,4 @@
+import './Queue.css';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
@@ -21,7 +22,7 @@ function VideoOption({ spec, value, brandValue, onChange }) {
   const current = brandValue === '' || brandValue === null || brandValue === undefined ? '' : String(brandValue);
   const label = spec.label.replace(/ \(empty.*\)$/, ''); // "Design theme (empty = Claude picks)" -> "Design theme"; "Video length (min)" stays
   return (
-    <label className="field" style={{ flex: '1 1 230px' }}>
+    <label className="field">
       {label}
       {spec.type === 'enum' ? (
         <select value={value} onChange={(e) => onChange(e.target.value)}>
@@ -76,11 +77,14 @@ function AddVideo({ brands, picked, onAdded, setToast }) {
     }
   };
   return (
-    <form className="card" onSubmit={add} aria-labelledby="add-h">
-      <h2 id="add-h">Add a video to the queue</h2>
-      {/* Two rows: what to make, then where it goes and the button, so the platform pills never wrap one by one. */}
-      <div className="inline" style={{ alignItems: 'flex-end', gap: 14 }}>
-        <label className="field" style={{ flex: '1 1 180px' }}>
+    <form className="card q-add" onSubmit={add} aria-labelledby="add-h">
+      <div className="q-add-head">
+        <h2 id="add-h">Add a video to the queue</h2>
+        <span className="faint">Leave the topic empty and AI picks a trending one</span>
+      </div>
+      {/* What to make and the button on one row (wraps on narrow screens); where it goes and the options below. */}
+      <div className="q-add-row">
+        <label className="field q-f-brand">
           Brand
           <select required value={brandId} onChange={(e) => { setChosen(e.target.value); setCategory(''); }}>
             <option value="" disabled>Choose a brand</option>
@@ -89,11 +93,11 @@ function AddVideo({ brands, picked, onAdded, setToast }) {
             ))}
           </select>
         </label>
-        <label className="field" style={{ flex: '3 1 280px' }}>
+        <label className="field q-f-topic">
           Topic
           <input lang={lang} value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="Leave empty and AI picks a trending topic" />
         </label>
-        <label className="field" style={{ flex: '1 1 220px' }}>
+        <label className="field q-f-cat">
           Category
           <select lang={lang} value={categories.includes(category) ? category : ''} onChange={(e) => setCategory(e.target.value)}>
             <option value="">Any of my categories</option>
@@ -102,40 +106,14 @@ function AddVideo({ brands, picked, onAdded, setToast }) {
             ))}
           </select>
         </label>
-      </div>
-      <div className="stack" style={{ gap: 10 }}>
-        <button type="button" className="link-btn" aria-expanded={more} aria-controls="video-options" onClick={() => setMore((m) => !m)} style={{ alignSelf: 'flex-start' }}>
-          {more ? 'Hide options for this video' : 'Options for this video'}{chosenCount ? ` · ${chosenCount} set` : ''}
+        <button className="btn btn-primary q-add-btn" type="submit" disabled={busy || platforms.length === 0}>
+          <Icon d={ICONS.plus} size={16} /> Add to queue
         </button>
-        {more && (
-          <div id="video-options" className="stack" style={{ gap: 12 }}>
-            <label className="field">
-              Custom prompt for this video (optional)
-              <textarea
-                lang={lang}
-                rows={3}
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                maxLength={2000}
-                placeholder="What this video should do, e.g. compare two options and end with one clear recommendation; mention our free course"
-              />
-              <span className="hint">Goes to the script writer with the brand's standing instructions. It shapes this video only.</span>
-            </label>
-            {options.length > 0 && (
-              <div className="inline" style={{ alignItems: 'flex-end', gap: 14, flexWrap: 'wrap' }}>
-                {options.map((spec) => (
-                  <VideoOption key={spec.key} spec={spec} value={overrides[spec.key] ?? ''} brandValue={brandPage.values[spec.key]} onChange={(v) => setOverride(spec.key, v)} />
-                ))}
-              </div>
-            )}
-            <span className="faint">Each option left on "Brand default" uses the brand's setting at the time the video is made.</span>
-          </div>
-        )}
       </div>
-      <div className="between" style={{ alignItems: 'flex-end' }}>
-        <fieldset style={{ border: 'none', margin: 0, padding: 0 }}>
-          <legend className="field" style={{ padding: '0 0 6px' }}>Publish to</legend>
-          <div className="inline" style={{ gap: 8 }}>
+      <div className="q-add-foot">
+        <fieldset className="q-pub">
+          <legend className="field">Publish to</legend>
+          <div className="q-pills">
             {PLATFORMS.map((p) => (
               <button type="button" key={p.id} className="toggle-pill" aria-pressed={platforms.includes(p.id)} onClick={() => flip(p.id)}>
                 {p.name}
@@ -143,10 +121,35 @@ function AddVideo({ brands, picked, onAdded, setToast }) {
             ))}
           </div>
         </fieldset>
-        <button className="btn btn-primary" type="submit" disabled={busy || platforms.length === 0}>
-          <Icon d={ICONS.plus} size={16} /> Add to queue
+        <button type="button" className="link-btn q-more" aria-expanded={more} aria-controls="video-options" onClick={() => setMore((m) => !m)}>
+          {more ? 'Hide options for this video' : 'Options for this video'}{chosenCount ? ` · ${chosenCount} set` : ''}
         </button>
       </div>
+      {more && (
+        <div id="video-options" className="q-opts">
+          <span className="eyebrow">Options for this video</span>
+          <label className="field">
+            Custom prompt for this video (optional)
+            <textarea
+              lang={lang}
+              rows={3}
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              maxLength={2000}
+              placeholder="What this video should do, e.g. compare two options and end with one clear recommendation; mention our free course"
+            />
+            <span className="hint">Goes to the script writer with the brand's standing instructions. It shapes this video only.</span>
+          </label>
+          {options.length > 0 && (
+            <div className="q-opts-grid">
+              {options.map((spec) => (
+                <VideoOption key={spec.key} spec={spec} value={overrides[spec.key] ?? ''} brandValue={brandPage.values[spec.key]} onChange={(v) => setOverride(spec.key, v)} />
+              ))}
+            </div>
+          )}
+          <span className="faint">Each option left on "Brand default" uses the brand's setting at the time the video is made.</span>
+        </div>
+      )}
     </form>
   );
 }
@@ -172,10 +175,10 @@ function Redo({ v, act }) {
     act('POST', `/api/videos/${v.id}/redo`, { stage, ...(stage === 'thumbnail' ? { style } : {}) }, `Queued: ${info[1].toLowerCase()} again`);
   };
   return (
-    <div className="stack" style={{ gap: 8 }}>
+    <div className="q-block q-redo">
       <h3>Redo a part</h3>
-      <div className="inline" style={{ alignItems: 'flex-end' }}>
-        <label className="field" style={{ flex: '1 1 200px' }}>
+      <div className="q-redo-row">
+        <label className="field">
           What
           <select value={stage} onChange={(e) => setStage(e.target.value)}>
             {REDO.map(([id, name]) => (
@@ -184,7 +187,7 @@ function Redo({ v, act }) {
           </select>
         </label>
         {stage === 'thumbnail' && (
-          <label className="field" style={{ flex: '1 1 160px' }}>
+          <label className="field">
             Style
             <select value={style} onChange={(e) => setStyle(e.target.value)}>
               {THUMB_STYLES.map(([id, name]) => (
@@ -202,10 +205,10 @@ function Redo({ v, act }) {
   );
 }
 
-function Detail({ id, onChanged, setToast }) {
+function Detail({ id, brandName, onChanged, setToast }) {
   const { data: v, error, reload } = usePoll(id ? `/api/videos/${id}` : null, 3000);
-  if (!id) return <section className="card grow-1"><p className="empty">Select a video to see its script, log and file.</p></section>;
-  if (!v) return <section className="card grow-1"><p className="muted">{error ? `Could not load this video: ${error}` : 'Loading…'}</p></section>;
+  if (!id) return <section id="q-detail" className="card q-detail"><p className="empty">Select a video to see its script, log and file.</p></section>;
+  if (!v) return <section id="q-detail" className="card q-detail"><p className="muted">{error ? `Could not load this video: ${error}` : 'Loading…'}</p></section>;
   const act = async (method, path, body, msg) => {
     try {
       await api.send(method, path, body);
@@ -217,26 +220,20 @@ function Detail({ id, onChanged, setToast }) {
     }
   };
   const scenes = (v.script && v.script.scenes) || [];
+  const brand = v.brandId ? brandName(v.brandId) : '';
+  const own = v.overrides && Object.keys(v.overrides).length > 0 ? v.overrides : null;
+  const showThumb = v.files && v.files.thumb && v.status === 'ready';
   return (
-    // Sticky with its own scroll, so a long script or log never leaves the list side of the page empty.
-    <section className="card grow-1 detail-panel" aria-labelledby="det-h">
-      <div className="stack" style={{ gap: 6 }}>
-        <h2 id="det-h" className="eyebrow">Video</h2>
-        <p className="big-title bn" lang="bn">{v.title || v.topic || 'Topic not picked yet'}</p>
-        <div className="inline">
-          <VideoStatus video={v} />
-          <span className="faint">{v.category || 'Any category'} · added {fmtTime(v.createdAt)}</span>
+    // Sticky with its own scroll on desktop, so a long script or log never leaves the list side of the page empty.
+    <section id="q-detail" className="card q-detail detail-panel" aria-labelledby="det-h">
+      <div className="q-det-head">
+        <div className="q-det-title">
+          <span className="eyebrow">Video details</span>
+          <h2 id="det-h" className="bn" lang="bn">{v.title || v.topic || 'Topic not picked yet'}</h2>
         </div>
-        {v.error && <div className="banner tone-danger">{v.error}</div>}
-        {(v.prompt || (v.overrides && Object.keys(v.overrides).length > 0)) && (
-          <div className="stack" style={{ gap: 4 }}>
-            {v.overrides && Object.keys(v.overrides).length > 0 && (
-              <span className="faint">Own options: {Object.entries(v.overrides).map(([k, val]) => `${k.toLowerCase().replace(/_/g, ' ')} = ${val}`).join(' · ')}</span>
-            )}
-            {v.prompt && <p className="faint bn" lang="bn" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>Prompt: {v.prompt}</p>}
-          </div>
-        )}
+        <VideoStatus video={v} />
       </div>
+      {v.error && <div className="banner tone-danger">{v.error}</div>}
       <StageBar video={v} />
       {v.renderer === 'plain' && v.status === 'ready' && (
         <div className="banner tone-warn">Plain render: captions only, no graphics (the animated render failed; the log says why). Redo a part → Video tries again.</div>
@@ -244,34 +241,62 @@ function Detail({ id, onChanged, setToast }) {
       {v.files && v.files.video && v.status === 'ready' && (
         <video className="preview" controls preload="metadata" src={`/api/media/${v.id}/video?v=${encodeURIComponent(v.updatedAt || '')}`} poster={v.files.thumb ? `/api/media/${v.id}/thumb?v=${encodeURIComponent(v.updatedAt || '')}` : undefined} />
       )}
-      {v.files && v.files.thumb && v.status === 'ready' && (
-        <div className="inline" style={{ alignItems: 'flex-start' }}>
-          <img alt="Thumbnail" src={`/api/media/${v.id}/thumb?v=${encodeURIComponent(v.updatedAt || '')}`} style={{ width: 150, borderRadius: 10, border: '1px solid var(--border-soft)' }} />
-          <span className="faint">Thumbnail{v.thumbnail && v.thumbnail.style ? ` · ${v.thumbnail.style}` : ''}</span>
-        </div>
-      )}
+      <div className="q-media">
+        {showThumb && (
+          <div className="q-thumb-img">
+            <img alt="Thumbnail" src={`/api/media/${v.id}/thumb?v=${encodeURIComponent(v.updatedAt || '')}`} />
+          </div>
+        )}
+        <dl className="q-facts">
+          {brand && (
+            <>
+              <dt>Brand</dt>
+              <dd lang={nameLang(brand)}>{brand}</dd>
+            </>
+          )}
+          <dt>Category</dt>
+          <dd>{v.category || 'Any category'}</dd>
+          <dt>Added</dt>
+          <dd>{fmtTime(v.createdAt)}</dd>
+          {showThumb && (
+            <>
+              <dt>Thumbnail</dt>
+              <dd>{v.thumbnail && v.thumbnail.style ? v.thumbnail.style : 'Made'}</dd>
+            </>
+          )}
+          {own && (
+            <>
+              <dt>Own options</dt>
+              <dd>{Object.entries(own).map(([k, val]) => `${k.toLowerCase().replace(/_/g, ' ')} = ${val}`).join(' · ')}</dd>
+            </>
+          )}
+        </dl>
+      </div>
+      {v.prompt && <p className="q-prompt bn" lang="bn">Prompt: {v.prompt}</p>}
       {v.status === 'ready' && (
-        <div className="stack" style={{ gap: 8 }}>
-          <h3>Platforms</h3>
-          {PLATFORMS.map((p) => (
-            <div className="list-row" key={p.id}>
-              <PlatformBadge id={p.id} small />
-              <span style={{ flex: 1 }}>{p.name}</span>
-              <PlatformStatus rec={v.platforms[p.id]} platform={p.id} />
-              {(!v.platforms[p.id] || ['failed', 'interrupted'].includes(v.platforms[p.id].status)) && (
-                <button type="button" className="btn btn-sm" onClick={() => act('POST', `/api/videos/${v.id}/publish`, { platform: p.id }, `Publishing to ${p.name}`)}>
-                  Publish now
-                </button>
-              )}
-            </div>
-          ))}
+        <div className="q-block">
+          <h3 className="eyebrow">Platforms</h3>
+          <div className="q-plats">
+            {PLATFORMS.map((p) => (
+              <div className="list-row" key={p.id}>
+                <PlatformBadge id={p.id} small />
+                <span className="q-plat-name">{p.name}</span>
+                <PlatformStatus rec={v.platforms[p.id]} platform={p.id} />
+                {(!v.platforms[p.id] || ['failed', 'interrupted'].includes(v.platforms[p.id].status)) && (
+                  <button type="button" className="btn btn-sm" onClick={() => act('POST', `/api/videos/${v.id}/publish`, { platform: p.id }, `Publishing to ${p.name}`)}>
+                    Publish now
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
       {(v.status === 'ready' || v.status === 'failed') && !postedSomewhere(v) && <Redo v={v} act={act} />}
       {scenes.length > 0 && (
-        <details>
-          <summary style={{ cursor: 'pointer', fontWeight: 600, minHeight: 36 }}>Script · {scenes.length} scenes</summary>
-          <ol style={{ paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <details className="q-script">
+          <summary>Script · {scenes.length} scenes</summary>
+          <ol>
             {scenes.map((s, i) => (
               <li key={i} className="bn" lang="bn">
                 {s.narration}
@@ -281,11 +306,11 @@ function Detail({ id, onChanged, setToast }) {
           </ol>
         </details>
       )}
-      <div className="stack" style={{ gap: 6 }}>
-        <h3>Log</h3>
+      <div className="q-block">
+        <h3 className="eyebrow">Log</h3>
         <div className="logbox">{(v.log || []).slice(-60).join('\n') || 'No log yet'}</div>
       </div>
-      <div className="inline">
+      <div className="q-actions">
         {(v.status === 'failed' || v.status === 'queued') && (
           <button type="button" className="btn" onClick={() => act('POST', `/api/videos/${v.id}/retry`, undefined, 'Queued again')}>
             <Icon d={ICONS.retry} size={16} /> {v.status === 'failed' ? 'Retry' : 'Queue again'}
@@ -305,6 +330,9 @@ function Detail({ id, onChanged, setToast }) {
   );
 }
 
+/** The small coloured tile at the start of a row: its colour says where the video stands. */
+const thumbTone = (v) => (v.status === 'ready' && isPublished(v) ? 'published' : v.status);
+
 export default function Queue() {
   const [params, setParams] = useSearchParams();
   const tab = params.get('tab') || 'active';
@@ -314,6 +342,18 @@ export default function Queue() {
   const { brands, picked, brandName } = useBrands();
   const { data: videos, reload } = usePoll(withBrand('/api/videos?limit=300', picked), 3000);
   const [toast, setToast] = useToast();
+  // Pause/resume is global (every brand's queue), the same switch as on the Overview page.
+  const { data: overview, reload: reloadOverview } = usePoll('/api/overview', 5000);
+  const paused = !!overview?.paused;
+  const togglePause = async () => {
+    try {
+      await api.send('POST', paused ? '/api/queue/resume' : '/api/queue/pause');
+      setToast(paused ? 'All brands resumed' : 'All brands paused: the current step finishes, nothing new starts');
+      reloadOverview();
+    } catch (e) {
+      setToast(e.message);
+    }
+  };
   // Tabs keyboard pattern: arrow keys move between tabs, only the selected tab is in the Tab order.
   const onTabKey = (e) => {
     const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
@@ -323,6 +363,13 @@ export default function Queue() {
     const next = TABS[(i + step + TABS.length) % TABS.length][0];
     setTab(next);
     document.getElementById(`tab-${next}`)?.focus();
+  };
+  // Below 1200px the details sit under the list, so picking a video also scrolls to them.
+  const pick = (id) => {
+    setSelected(id);
+    if (window.matchMedia && window.matchMedia('(max-width: 1199px)').matches) {
+      requestAnimationFrame(() => document.getElementById('q-detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
   };
 
   const groups = useMemo(() => Object.fromEntries(TABS.map(([id, , fn]) => [id, (videos || []).filter(fn)])), [videos]);
@@ -334,60 +381,82 @@ export default function Queue() {
 
   return (
     <div className="container">
-      <header className="stack" style={{ gap: 4 }}>
-        <h1>Queue</h1>
-        <p className="muted" style={{ margin: 0 }}>The worker makes one video at a time, from topic to render. Finished videos wait for their posting slot.</p>
+      <header className="page-head">
+        <div className="q-head-text">
+          <p className="eyebrow">{videos ? `${videos.length} ${videos.length === 1 ? 'video' : 'videos'} · ${(groups.active || []).length} in progress` : 'Videos'}</p>
+          <h1>Queue</h1>
+          <p className="muted q-lede">The worker makes one video at a time, from topic to render. Finished videos wait for their posting slot.</p>
+        </div>
+        {overview && (
+          <div className="actions">
+            <button type="button" className="btn" onClick={togglePause} title="Pauses or resumes every brand's queue">
+              <Icon d={paused ? ICONS.play : ICONS.pause} size={16} />
+              {paused ? 'Resume queue' : 'Pause queue'}
+            </button>
+          </div>
+        )}
       </header>
       <AddVideo brands={brands} picked={picked} onAdded={reload} setToast={setToast} />
-      <div className="row" style={{ alignItems: 'flex-start' }}>
-        <section className="card grow-3" aria-label="Videos" style={{ paddingTop: 8 }}>
-          <div role="tablist" aria-label="Video status" className="tabs" onKeyDown={onTabKey}>
-            {TABS.map(([id, label]) => (
-              <button
-                key={id}
-                id={`tab-${id}`}
-                type="button"
-                role="tab"
-                className="tab"
-                aria-selected={tab === id}
-                aria-controls="videos-panel"
-                tabIndex={tab === id ? 0 : -1}
-                onClick={() => setTab(id)}
-              >
-                {label}
-                <span className="badge">{(groups[id] || []).length}</span>
-              </button>
-            ))}
-          </div>
+      <div role="tablist" aria-label="Video status" className="tabs q-tabs" onKeyDown={onTabKey}>
+        {TABS.map(([id, label]) => (
+          <button
+            key={id}
+            id={`tab-${id}`}
+            type="button"
+            role="tab"
+            className="tab"
+            aria-selected={tab === id}
+            aria-controls="videos-panel"
+            tabIndex={tab === id ? 0 : -1}
+            onClick={() => setTab(id)}
+          >
+            {label}
+            <span className="badge">{(groups[id] || []).length}</span>
+          </button>
+        ))}
+      </div>
+      <div className="q-layout">
+        <section className="card q-list" aria-label="Videos">
           <div role="tabpanel" id="videos-panel" aria-labelledby={`tab-${tab}`}>
             {!videos && <p className="muted">Loading…</p>}
             {videos && list.length === 0 && <p className="empty">Nothing here.</p>}
             {list.map((v) => (
-              <div className="list-row" key={v.id} style={{ background: v.id === selected ? '#f8faff' : undefined, borderRadius: 10, paddingLeft: 8, paddingRight: 8 }}>
-                <div className="stack" style={{ gap: 4, flex: '1 1 300px', minWidth: 0 }}>
-                  <span className="bn" lang="bn" style={{ fontWeight: 600 }}>{v.title || v.topic || 'Topic not picked yet'}</span>
-                  <span className="faint">
+              // The whole row picks the video for the mouse; the Details button is the keyboard and screen-reader way.
+              <div className={`q-row${v.id === selected ? ' is-selected' : ''}`} key={v.id} onClick={() => pick(v.id)}>
+                <span className={`q-thumb is-${thumbTone(v)}`} aria-hidden="true">
+                  <Icon d={ICONS.play} size={14} fill />
+                </span>
+                <div className="q-row-main">
+                  <span className="q-row-title bn" lang="bn">{v.title || v.topic || 'Topic not picked yet'}</span>
+                  <span className="q-row-meta">
                     {v.category || 'Any category'} · {fmtTime(v.createdAt)}
-                    {v.lastLog ? ` · ${v.lastLog.slice(9, 90)}` : ''}
+                    {v.lastLog ? ` · ${v.lastLog.replace(/^\[[^\]]*\]\s*/, '').slice(0, 80)}` : ''}
                   </span>
-                  <div className="inline" style={{ gap: 4 }}>
+                  <div className="q-row-tags">
                     {(v.targets || []).map((p) => (
                       <PlatformBadge key={p} id={p} small />
                     ))}
                     {picked === ALL && <BrandChip name={brandName(v.brandId)} lang={nameLang(brandName(v.brandId))} />}
                   </div>
                 </div>
-                <VideoStatus video={v} />
-                {Object.values(v.platforms || {}).some((p) => p.status === 'failed') && <Chip tone="danger">Post failed</Chip>}
-                {Object.values(v.platforms || {}).some((p) => p.status === 'skipped') && <Chip tone="warn">Skipped somewhere</Chip>}
-                <button type="button" className="btn btn-sm" aria-pressed={v.id === selected} onClick={() => setSelected(v.id)}>
-                  Details
-                </button>
+                <div className="q-row-side">
+                  <VideoStatus video={v} />
+                  {Object.values(v.platforms || {}).some((p) => p.status === 'failed') && <Chip tone="danger">Post failed</Chip>}
+                  {Object.values(v.platforms || {}).some((p) => p.status === 'skipped') && <Chip tone="warn">Skipped somewhere</Chip>}
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    aria-pressed={v.id === selected}
+                    onClick={(e) => { e.stopPropagation(); pick(v.id); }}
+                  >
+                    Details
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         </section>
-        <Detail id={selected} onChanged={reload} setToast={setToast} />
+        <Detail id={selected} brandName={brandName} onChanged={reload} setToast={setToast} />
       </div>
       {toast}
     </div>

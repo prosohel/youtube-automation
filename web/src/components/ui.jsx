@@ -92,7 +92,7 @@ export function StageBar({ video }) {
             <div className="bar">
               <div style={{ width: isDone ? '100%' : active ? '50%' : '0%' }} />
             </div>
-            <span style={{ fontWeight: active ? 700 : 500, color: isDone || active ? 'var(--ink)' : 'var(--ink-4)' }}>
+            <span className={`stage-label ${isDone ? 'is-done' : active ? 'is-active' : 'is-todo'}`}>
               {STAGE_NAMES[s]}
               {active ? ' …' : ''}
             </span>
@@ -162,9 +162,10 @@ export function useToast() {
   return [node, setMsg];
 }
 
-export function Icon({ d, size = 18 }) {
+/** A stroke icon from ICONS; with fill it is painted solid instead (the play mark). */
+export function Icon({ d, size = 18, fill = false }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={fill ? 'currentColor' : 'none'} stroke={fill ? 'none' : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       {d.map((p, i) => (
         <path key={i} d={p} />
       ))}
@@ -183,4 +184,11 @@ export const ICONS = {
   pause: ['M6 4h4v16H6z', 'M14 4h4v16h-4z'],
   retry: ['M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8', 'M3 3v5h5'],
   alert: ['m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3', 'M12 9v4', 'M12 17h.01'],
+  sun: ['M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z', 'M12 2v2', 'M12 20v2', 'm4.9 4.9 1.4 1.4', 'm17.7 17.7 1.4 1.4', 'M2 12h2', 'M20 12h2', 'm4.9 19.1 1.4-1.4', 'm17.7 6.3 1.4-1.4'],
+  moon: ['M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z'],
+  monitor: ['M4 3h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z', 'M8 21h8', 'M12 17v4'],
+  logout: ['M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4', 'm16 17 5-5-5-5', 'M21 12H9'],
+  chevronLeft: ['m15 18-6-6 6-6'],
+  chevronRight: ['m9 18 6-6-6-6'],
+  check: ['M20 6 9 17l-5-5'],
 };
