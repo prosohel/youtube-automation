@@ -79,6 +79,16 @@ Claude designed 2 scenes in 163 s (a 10×10 crowd grid with one figure walking t
 against a tiny profit block), both accepted and rendered (output/work/test-decode-video-073546/design/). Settings: DESIGN_MODE and
 DESIGN_MINUTES in the Look section of the brand card.
 
+## Question mix (QUESTION_MIX), 2026-11-13
+
+Brand setting **Question videos** under "Questions from your site" (shown only when a source is on): `all` (default, every
+auto-picked video from questions, as before), `half` (question and topic videos take turns), `third` (one question video, then
+two topic videos from the categories). `questionTurn` in server/pipeline.js looks at the brand's latest decided videos in Redis
+(same brand, `done.topic`, not this one): a question turn only when none of the last 1 (half) or 2 (third) was a question
+video. A question turn that found nothing (so became a topic video) counts as a topic turn, so the next video asks again.
+A typed topic is never a question video. `QUESTION_SOURCE` is also a per-video option in the Add form (pick a site for one
+video on a brand that has it off); per-video "off" = type a topic.
+
 ## Thumbnails: eight styles, per-video choice, bespoke in instant mode, 2026-11-13
 
 - **Four more library styles** in src/remotion/Thumbnail.jsx (`STYLES` in src/thumbnail.js): `warning` (hazard bands, a

@@ -103,6 +103,7 @@ const cfg = (module.exports = {
   // '' = off (Claude finds topics), 'mathsuggestion.com', 'recentjobsolution.com' or 'both'.
   questionSource: (process.env.QUESTION_SOURCE || '').trim(),
   questionSubject: (process.env.QUESTION_SUBJECT || 'all').trim(), // 'all' or 'math'
+  questionMix: (process.env.QUESTION_MIX || 'all').trim(), // all = every auto video from questions; half / third = topic videos in between
   extraLink: (process.env.EXTRA_LINK || '').trim(), // the brand's own site, promoted on every video (src/extraLink.js)
   questionsPerVideo: Number(process.env.QUESTIONS_PER_VIDEO || 2), // at most; the video length wins (1-5)
 

@@ -13,7 +13,7 @@ const TABS = [
 ];
 
 // The brand settings one video may override from this form; must match VIDEO_OPTION_KEYS in server/settings.js.
-const VIDEO_OPTION_KEYS = ['VIDEO_FORMAT', 'TARGET_MINUTES', 'SCRIPT_MODE', 'LANGUAGE', 'DESIGN_MODE', 'THEME', 'THUMB_STYLE', 'VISUALS']; // form order
+const VIDEO_OPTION_KEYS = ['VIDEO_FORMAT', 'TARGET_MINUTES', 'SCRIPT_MODE', 'QUESTION_SOURCE', 'LANGUAGE', 'DESIGN_MODE', 'THEME', 'THUMB_STYLE', 'VISUALS']; // form order
 const optionName = (spec, v) => (spec.optionLabels && spec.optionLabels[v]) || (v === '' ? 'Claude picks' : v);
 
 /** One per-video override: a select over the setting's options (or a number / text box), with "Brand default" first. */

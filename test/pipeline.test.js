@@ -368,6 +368,46 @@ test('question mode: the picked questions become the video\'s topic', async () =
   });
 });
 
+test('question mix: half alternates question and topic videos per brand; a topic video after a failed question search counts as a turn', async () => {
+  await withQuestionSource('mathsuggestion.com', async () => {
+    const cfg = require('../src/config');
+    cfg.applySettings({ questionMix: 'half' });
+    try {
+      const r = await freshRedis();
+      const outDir = tmpOut();
+      const questionInfo = { topic: 'q video', angle: 'a', hook: 'h', searchQuery: 'q', questions: [{ id: 'x#1' }], sourceUrl: 'https://mathsuggestion.com/p', siteName: 'mathsuggestion.com' };
+      const make = async (brandId, opts = {}) => {
+        const calls = [];
+        const v = await store.createVideo(r, { brandId, category: 'HSC' });
+        const done = await runVideoJob(v.id, { redis: r, deps: fakeDeps(calls, { outDir, questionInfo, ...opts }), outDir });
+        return { done, calls };
+      };
+      const first = await make('b_a');
+      assert.equal(first.done.topic, 'q video', 'the first auto video is a question video');
+      const second = await make('b_a');
+      assert.equal(second.calls.filter((c) => c.startsWith('questions:')).length, 0, 'the next one skips the question finder');
+      assert.equal(second.done.topic, 'auto topic');
+      assert.ok(second.done.log.some((l) => l.includes('a topic video this turn, by the question mix')), second.done.log.join('\n'));
+      const third = await make('b_a');
+      assert.equal(third.done.topic, 'q video', 'then questions again');
+      const other = await make('b_b');
+      assert.equal(other.done.topic, 'q video', 'another brand has its own turns');
+      // a question turn that found nothing made a topic video: the next video asks for questions again
+      const empty = await make('b_c', { questionInfo: undefined, noQuestionReason: 'none' });
+      assert.equal(empty.done.topic, 'auto topic');
+      const next = await make('b_c');
+      assert.equal(next.done.topic, 'q video');
+      cfg.applySettings({ questionMix: 'third' });
+      await make('b_d');
+      assert.equal((await make('b_d')).done.topic, 'auto topic');
+      assert.equal((await make('b_d')).done.topic, 'auto topic');
+      assert.equal((await make('b_d')).done.topic, 'q video');
+    } finally {
+      cfg.applySettings({ questionMix: 'all' });
+    }
+  });
+});
+
 test('question mode: a resumed video keeps the questions it picked', async () => {
   await withQuestionSource('mathsuggestion.com', async () => {
     const r = await freshRedis();

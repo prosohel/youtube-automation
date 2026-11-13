@@ -105,6 +105,15 @@ const SETTINGS_SCHEMA = [
     },
   },
   {
+    key: 'QUESTION_MIX', scope: 'brand', cfg: 'questionMix', requires: 'QUESTION_SOURCE', group: 'channel', type: 'enum', options: ['all', 'half', 'third'], default: 'all', label: 'Question videos',
+    optionLabels: { all: 'Every video', half: 'Every other video', third: 'One in three' },
+    optionHints: {
+      all: 'Every auto-picked video is made from questions (a found topic only when none is left).',
+      half: 'Question videos and topic videos take turns: after a question video the next one gets a found topic from your categories.',
+      third: 'One question video, then two topic videos from your categories.',
+    },
+  },
+  {
     key: 'QUESTION_SUBJECT', scope: 'brand', cfg: 'questionSubject', requires: 'QUESTION_SOURCE', group: 'channel', type: 'enum', options: ['all', 'math'], default: 'all', label: 'Question subject',
     optionLabels: { all: 'All subjects', math: 'Math only' },
     optionHints: { math: 'Only math questions that have a number in them. mathsuggestion.com is all math.' },
@@ -132,7 +141,7 @@ const BRAND_KEYS = new Set(SETTINGS_SCHEMA.filter((s) => s.scope === 'brand').ma
 const isBrandKey = (key) => BRAND_KEYS.has(key);
 
 /** Brand settings that one video may override from the "Add a video" form (its own choices, saved on the video). */
-const VIDEO_OPTION_KEYS = ['VIDEO_FORMAT', 'SCRIPT_MODE', 'DESIGN_MODE', 'THEME', 'THUMB_STYLE', 'VISUALS', 'TARGET_MINUTES', 'LANGUAGE'];
+const VIDEO_OPTION_KEYS = ['VIDEO_FORMAT', 'SCRIPT_MODE', 'QUESTION_SOURCE', 'DESIGN_MODE', 'THEME', 'THUMB_STYLE', 'VISUALS', 'TARGET_MINUTES', 'LANGUAGE'];
 
 /**
  * The overrides of one video, cleaned: only VIDEO_OPTION_KEYS, each coerced like a setting; '' / null = "brand

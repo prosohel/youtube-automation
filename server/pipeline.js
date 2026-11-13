@@ -36,6 +36,23 @@ function realDeps() {
 
 const sceneFile = (workDir, i) => path.join(workDir, `scene-${String(i).padStart(2, '0')}.mp3`);
 
+const isQuestionVideo = (v) => Boolean(v && v.topicInfo && v.topicInfo.questions && v.topicInfo.questions.length);
+
+/**
+ * QUESTION_MIX: whether this auto-picked video is a question video. 'all': always. 'half': not when the brand's
+ * latest decided video was one; 'third': not when either of the latest two was. Only videos of the same brand that
+ * already have their topic count; this video itself never does. A video that asked for questions but got none (and
+ * so became a topic video) counts as a topic video, so the next turn asks again.
+ */
+async function questionTurn(redis, v, mix) {
+  const gap = mix === 'half' ? 1 : mix === 'third' ? 2 : 0;
+  if (!gap) return true;
+  const recent = (await store.listVideos(redis, { brandId: v.brandId || undefined, limit: 50 }))
+    .filter((o) => o.id !== v.id && o.done && o.done.topic && (o.brandId || null) === (v.brandId || null))
+    .slice(0, gap);
+  return !recent.some(isQuestionVideo);
+}
+
 /**
  * Make one video, resuming from whatever earlier runs already finished.
  * Stages: topic -> script -> voice (per scene) -> render -> ready. Each stage records `done.<stage>`.
@@ -57,11 +74,12 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
   if (!v.done.topic) {
     // Question mode (QUESTION_SOURCE set): real exam questions from the brand's site; the category is only a
     // preference. When none is usable the video gets a found topic as before, and the log says why.
-    const questionMode = !v.topic && Boolean(cfg.questionSource);
+    const wantsQuestions = !v.topic && Boolean(cfg.questionSource);
+    const questionMode = wantsQuestions && (await questionTurn(redis, v, cfg.questionMix));
     const site = cfg.questionSource === 'both' ? 'both sites' : cfg.questionSource;
     await startStage(
       'topic',
-      v.topic ? `Topic given: ${v.topic}` : questionMode ? `Finding questions on ${site}...` : `Finding a topic${v.category ? ` in "${v.category}"` : ''}...`
+      v.topic ? `Topic given: ${v.topic}` : questionMode ? `Finding questions on ${site}...` : `Finding a topic${v.category ? ` in "${v.category}"` : ''}${wantsQuestions ? ' (a topic video this turn, by the question mix)' : ''}...`
     );
     const category = v.category || undefined;
     let info = null;
