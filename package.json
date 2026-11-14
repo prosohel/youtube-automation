@@ -64,7 +64,7 @@
     "googleapis": "^189.0.0",
     "ioredis": "6.0.0",
     "katex": "0.16.9",
-    "lucide-react": "^1.68.0",
+    "lucide-react": "^1.70.0",
     "node-html-parser": "6.1.13",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
