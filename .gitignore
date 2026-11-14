@@ -16,3 +16,7 @@ redis-data/
 backups/
 .env.*
 !.env.example
+
+# Redis backups hold tokens and secrets
+backups/
+*.tgz
