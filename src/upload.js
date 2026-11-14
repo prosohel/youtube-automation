@@ -38,9 +38,20 @@ async function addToPlaylist(youtube, videoId, title) {
   return playlist.id;
 }
 
+/**
+ * YouTube refuses a title, description or tag holding "<" or ">" ("invalid or empty video title"), which math
+ * questions often do ("x² - 6 > 0"). They become the full-width signs, which read the same.
+ */
+const ytSafe = (text) => String(text ?? '').replace(/</g, '＜').replace(/>/g, '＞');
+
+/** At most n characters, never cutting an emoji or other two-part character in half. */
+const clip = (text, n) => Array.from(text).slice(0, n).join('');
+
 /** The title YouTube receives (Shorts get "#Shorts"). The worker also uses it to find an upload after a crash. */
-const youtubeTitle = (title, isShort = cfg.format === 'shorts') =>
-  (isShort && !/#shorts/i.test(title) ? `${title} #Shorts` : title).slice(0, 100);
+const youtubeTitle = (title, isShort = cfg.format === 'shorts') => {
+  const t = ytSafe(title);
+  return clip(isShort && !/#shorts/i.test(t) ? `${t} #Shorts` : t, 100);
+};
 
 /**
  * Upload a finished video. Returns the watch URL.
@@ -77,8 +88,8 @@ async function uploadVideo({
       requestBody: {
         snippet: {
           title: youtubeTitle(title, isShort),
-          description: description.slice(0, 4900),
-          tags: (tags || []).slice(0, 15),
+          description: clip(ytSafe(description), 4900),
+          tags: (tags || []).map(ytSafe).filter((t) => t.trim()).slice(0, 15),
           categoryId,
           defaultLanguage: languageCode(language), // the title and description's language
           defaultAudioLanguage: languageCode(language), // the spoken language ("Video language" in Studio)
@@ -128,4 +139,4 @@ async function uploadVideo({
   return `https://youtu.be/${id}`;
 }
 
-module.exports = { uploadVideo, youtubeTitle, languageCode, addToPlaylist };
+module.exports = { uploadVideo, youtubeTitle, ytSafe, languageCode, addToPlaylist };

@@ -417,6 +417,29 @@ test('uploadVideo uses the category, AI flag and Shorts title it is given', asyn
   assert.deepEqual(google.added(), [], 'no playlist set: none touched');
 });
 
+test('uploadVideo: "<" and ">" (math questions) become full-width signs; YouTube refuses the plain ones', async (t) => {
+  applyCfg(t, { privacy: 'private', language: 'Bangla', playlist: '', notifySubscribers: false });
+  const google = fakeGoogle(t);
+  const auth = { credentials: { refresh_token: 'given' } };
+  const title = '৪৩তম বিসিএস গণিত 5x - x² - 6 > 0 অসমতা শর্টকাট';
+  await uploadVideo({ videoFile: file, title, description: 'x < 2 অথবা x > 3', tags: ['a<b', '<>', 'ok'], auth, isShort: true });
+  const [body] = google.inserts;
+  assert.equal(body.snippet.title, '৪৩তম বিসিএস গণিত 5x - x² - 6 ＞ 0 অসমতা শর্টকাট #Shorts');
+  assert.equal(body.snippet.description, 'x ＜ 2 অথবা x ＞ 3');
+  assert.deepEqual(body.snippet.tags, ['a＜b', '＜＞', 'ok']);
+  for (const text of [body.snippet.title, body.snippet.description, ...body.snippet.tags]) assert.doesNotMatch(text, /[<>]/);
+});
+
+test('youtubeTitle: crash recovery looks for the same cleaned title; 100 characters without splitting an emoji', () => {
+  const { youtubeTitle } = require('../src/upload');
+  assert.equal(youtubeTitle('a > b', true), 'a ＞ b #Shorts');
+  assert.equal(youtubeTitle('a > b #shorts', true), 'a ＞ b #shorts');
+  assert.equal(youtubeTitle('a < b', false), 'a ＜ b');
+  const long = `${'ক'.repeat(99)}😀😀`;
+  assert.equal(Array.from(youtubeTitle(long, false)).length, 100);
+  assert.ok(youtubeTitle(long, false).endsWith('😀'), 'the emoji is whole, not half a surrogate pair');
+});
+
 test('uploadVideo adds the video to the named playlist, making it once, and a sign-in without playlist access only logs', async (t) => {
   applyCfg(t, { privacy: 'public', notifySubscribers: false, language: 'English' });
   const google = fakeGoogle(t);
