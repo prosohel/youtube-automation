@@ -8,6 +8,7 @@ const settings = require('./settings');
 const brands = require('./brands');
 const { enqueueVideo, addUnique } = require('./queues');
 const { validateRule, nextRuns, syncSchedulers } = require('./scheduler');
+const { slotStats, MIN_SAMPLES } = require('./slotInsights');
 const { computeOverview, workerState, slim } = require('./overview');
 const { pendingRecord } = require('./publishFlow');
 const redo = require('./redo');
@@ -279,6 +280,15 @@ function createApp({ redis, queues, password = '', secureCookies = false }) {
     res.json(slots.sort((a, b) => a.at.localeCompare(b.at)));
   });
 
+  // How the brand's public YouTube videos did by the hour they went live: median views after 24 hours, per local hour
+  // and per weekday + hour (?tz=, default Asia/Dhaka). Videos posted before the counts were kept are not in it.
+  app.get('/api/insights/times', async (req, res) => {
+    const tz = String(req.query.tz || 'Asia/Dhaka');
+    if (!validateRule({ brandId: 'x', kind: 'make', cron: '0 0 * * *', tz }).ok) throw bad(`Unknown time zone: ${tz}`);
+    const videos = await store.listVideos(redis, { limit: 5000, brandId: req.query.brand || undefined });
+    res.json({ tz, metric: 'views after 24 hours', minSamples: MIN_SAMPLES, ...slotStats(videos, tz) });
+  });
+
   app.get('/api/rules/preview', async (req, res) => {
     const check = validateRule({ brandId: 'preview', kind: 'make', cron: req.query.cron, tz: req.query.tz }); // a preview belongs to no brand
     if (!check.ok) throw bad(check.error);
@@ -298,6 +308,7 @@ function createApp({ redis, queues, password = '', secureCookies = false }) {
     if (rule.kind === 'publish') {
       Object.assign(rule, { platform: body.platform, pick: body.pick || 'oldest', privacy: body.privacy || undefined, caption: body.caption || '' });
       if (body.release === 'slot') rule.release = 'slot'; // YouTube: upload ahead, go public at the next slot
+      if (body.adapt === true) rule.adapt = true; // weekly: move the times toward the hours that do best
     }
     const check = validateRule(rule);
     if (!check.ok) throw bad(check.error);
@@ -317,7 +328,8 @@ function createApp({ redis, queues, password = '', secureCookies = false }) {
     if (!old) throw new HttpError(404, 'Rule not found');
     const rule = cleanRule(req.body);
     const brand = await activeBrandOr4xx(rule.brandId);
-    const saved = await store.saveRule(redis, { ...rule, brandId: brand.id, id: old.id, createdAt: old.createdAt });
+    const kept = old.adaptLog ? { adaptLog: old.adaptLog } : {}; // the weekly moves are the rule's history, not the form's
+    const saved = await store.saveRule(redis, { ...rule, ...kept, brandId: brand.id, id: old.id, createdAt: old.createdAt });
     await resync();
     res.json(withNext(saved));
   });

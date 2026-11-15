@@ -85,6 +85,32 @@ test('rules: invalid cron or time zone is rejected with 400; valid rules are sch
   assert.match(tt.json.error, /YouTube/);
   const plain = await call('PUT', `/api/rules/${slot.json.id}`, { ...slot.json, release: 'whenever' });
   assert.equal(plain.json.release, undefined);
+
+  // adapt: only with release 'slot'; the weekly moves (adaptLog) survive an edit on the dashboard.
+  assert.match((await call('PUT', `/api/rules/${slot.json.id}`, { ...plain.json, adapt: true })).json.error, /uploads ahead/);
+  const adapting = await call('PUT', `/api/rules/${slot.json.id}`, { ...plain.json, release: 'slot', adapt: true });
+  assert.equal(adapting.json.adapt, true);
+  const log = [{ at: '2026-11-16T22:00:00.000Z', from: '0 13 * * *', to: '0 15 * * *', tried: 15 }];
+  await require('../server/store').saveRule(redis, { ...adapting.json, adaptLog: log });
+  const edited = await call('PUT', `/api/rules/${slot.json.id}`, { ...adapting.json, adaptLog: [], enabled: false });
+  assert.deepEqual(edited.json.adaptLog, log);
+});
+
+test("insights/times: median 24-hour views by local hour of the brand's public videos", async (t) => {
+  const { call, redis } = await boot(t);
+  const store = require('../server/store');
+  const { id: brandId } = await seedBrand(redis);
+  for (const [releaseAt, h24] of [['2026-11-16T14:00:00.000Z', 100], ['2026-11-17T14:00:00.000Z', 300], ['2026-11-17T07:00:00.000Z', 20]]) {
+    const v = await store.createVideo(redis, { brandId });
+    await store.updateVideo(redis, v.id, { platforms: { youtube: { status: 'published', privacy: 'public', releaseAt, early: { h24 } } } });
+  }
+  const res = await call('GET', `/api/insights/times?brand=${brandId}`);
+  assert.equal(res.status, 200);
+  assert.equal(res.json.tz, 'Asia/Dhaka');
+  assert.equal(res.json.total, 3);
+  assert.deepEqual(res.json.hours[20], { hour: 20, n: 2, median: 200 });
+  assert.deepEqual(res.json.hours[13], { hour: 13, n: 1, median: 20 });
+  assert.equal((await call('GET', `/api/insights/times?tz=Mars/Base`)).status, 400);
 });
 
 test('rules preview returns the next 3 runs, or 400', async (t) => {

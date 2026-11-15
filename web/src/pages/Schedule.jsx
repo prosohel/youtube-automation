@@ -43,7 +43,7 @@ function parseCron(cron) {
   return { times, days: m[3] === '*' ? [] : m[3].split(',') };
 }
 
-const blank = { brandId: '', kind: 'publish', platform: 'youtube', mode: 'daily', times: '6:00 pm', days: [], cron: '0 18 * * *', tz: 'Asia/Dhaka', count: 1, category: '', pick: 'oldest', privacy: '', caption: '', release: 'now', enabled: true };
+const blank = { brandId: '', kind: 'publish', platform: 'youtube', mode: 'daily', times: '6:00 pm', days: [], cron: '0 18 * * *', tz: 'Asia/Dhaka', count: 1, category: '', pick: 'oldest', privacy: '', caption: '', release: 'now', adapt: false, enabled: true };
 
 /**
  * Go-live times for viewers in Bangladesh: lunch, after school/office, and the evening peak. Shorts get four a
@@ -66,7 +66,7 @@ function describe(rule) {
         times,
         what:
           rule.release === 'slot'
-            ? `Uploads the ${rule.pick === 'newest' ? 'newest' : 'oldest'} ready video ahead · it goes public at the next time`
+            ? `Uploads the ${rule.pick === 'newest' ? 'newest' : 'oldest'} ready video ahead · it goes public at the next time${rule.adapt ? ' · times adapt weekly' : ''}`
             : `Posts the ${rule.pick === 'newest' ? 'newest' : 'oldest'} ready video${rule.privacy ? ` · ${rule.privacy}` : ''}`,
       };
 }
@@ -112,7 +112,7 @@ function Editor({ initial, brands, brandName, onSaved, onCancel, setToast }) {
     if (f.kind === 'make') Object.assign(body, { count: Number(f.count), category: f.category });
     else {
       const slot = f.platform === 'youtube' && f.release === 'slot';
-      Object.assign(body, { platform: f.platform, pick: f.pick, privacy: slot ? undefined : f.privacy || undefined, caption: f.caption, release: slot ? 'slot' : 'now' });
+      Object.assign(body, { platform: f.platform, pick: f.pick, privacy: slot ? undefined : f.privacy || undefined, caption: f.caption, release: slot ? 'slot' : 'now', adapt: slot && Boolean(f.adapt) });
     }
     try {
       await api.send(f.id ? 'PUT' : 'POST', f.id ? `/api/rules/${f.id}` : '/api/rules', body);
@@ -247,6 +247,17 @@ function Editor({ initial, brands, brandName, onSaved, onCancel, setToast }) {
               </span>
             </label>
           )}
+          {f.platform === 'youtube' && f.release === 'slot' && (
+            <div className="field sc-adapt">
+              <span className="inline sc-adapt-row">
+                <Switch checked={Boolean(f.adapt)} onChange={(v) => set('adapt', v)} labelledBy="ed-adapt" describedBy="ed-adapt-hint" />
+                <span id="ed-adapt">Adapt the times to what works</span>
+              </span>
+              <span id="ed-adapt-hint" className="hint">
+                Every Monday the times move toward the hours whose videos get the most views in their first 24 hours. One time keeps trying a new hour. Nothing moves until each time has 4 videos counted.
+              </span>
+            </div>
+          )}
           {f.platform === 'youtube' && f.release !== 'slot' && (
             <label className="field">
               YouTube privacy
@@ -278,6 +289,89 @@ function Editor({ initial, brands, brandName, onSaved, onCancel, setToast }) {
         </div>
       </div>
     </form>
+  );
+}
+
+/** The hours of a plain "minute hours * * days" cron line, else none. */
+const cronHourList = (cron) => {
+  const m = /^\d{1,2} ([\d,]+) \* \* [\d,*]+$/.exec(String(cron || '').trim());
+  return m ? m[1].split(',').map(Number) : [];
+};
+
+const hourLabel = (h) => `${h % 12 || 12}${h < 12 ? 'am' : 'pm'}`;
+
+/** The rule's latest weekly move, as one line. */
+function AdaptNote({ entry }) {
+  const hrs = (cron) => cronHourList(cron).map(hourLabel).join(', ') || cron;
+  return (
+    <span className="faint sc-adapt-note">
+      Moved {new Date(entry.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}: {hrs(entry.from)} → {hrs(entry.to)}
+      {entry.tried !== null && entry.tried !== undefined ? ` (trying ${hourLabel(entry.tried)})` : ''}
+    </span>
+  );
+}
+
+/**
+ * Median views 24 hours after going live, per local hour the video went public: one bar per hour from 9 am to
+ * 11 pm (and any other hour that has videos). Striped: fewer than minSamples videos, not trusted yet. A dot
+ * under an hour: a YouTube rule posts then now.
+ */
+function BestTimes({ brandId, tz, ruleHours }) {
+  const { data } = usePoll(brandId ? `/api/insights/times?brand=${encodeURIComponent(brandId)}&tz=${encodeURIComponent(tz)}` : null, 300000);
+  if (!data) return null;
+  const shown = data.hours.filter((h) => (h.hour >= 9 && h.hour <= 23) || h.n > 0);
+  const max = Math.max(1, ...shown.map((h) => h.median || 0));
+  const trusted = shown.filter((h) => h.n >= data.minSamples);
+  const best = trusted.length ? trusted.reduce((a, b) => (b.median > a.median ? b : a)) : null;
+  const posts = new Set(ruleHours);
+  const views = (n) => Math.round(n).toLocaleString();
+  return (
+    <section className="card sc-best-card" aria-labelledby="best-h">
+      <div className="sc-card-head">
+        <div className="stack sc-tight">
+          <h2 id="best-h" className="eyebrow">When your videos do best</h2>
+          <span className="faint">Median views 24 hours after going public, by the hour it went public ({tz})</span>
+        </div>
+        <span className="faint">{plural(data.total, 'video')} counted</span>
+      </div>
+      {data.total === 0 ? (
+        <p className="empty">No numbers yet. Each public video is counted 24 hours after it goes live, from now on.</p>
+      ) : (
+        <>
+          <div className="sc-best-bars" role="list" aria-label="Median views by hour">
+            {shown.map((h) => {
+              const tip = `${hourLabel(h.hour)}: ${h.n ? `${views(h.median)} views (median of ${plural(h.n, 'video')})` : 'no videos yet'}${h.n && h.n < data.minSamples ? ', not enough to trust' : ''}${posts.has(h.hour) ? '. A rule posts at this hour.' : ''}`;
+              return (
+                <div key={h.hour} role="listitem" tabIndex={0} className={`sc-best-col${best && best.hour === h.hour ? ' is-best' : ''}`} title={tip} aria-label={tip}>
+                  <span className="sc-best-n" aria-hidden="true">{best && best.hour === h.hour ? views(h.median) : ''}</span>
+                  <span className={`sc-best-bar${h.n === 0 ? ' zero' : h.n < data.minSamples ? ' few' : ''}`} style={{ '--p': (h.median || 0) / max }} aria-hidden="true" />
+                  <span className="sc-best-hour" aria-hidden="true">{hourLabel(h.hour)}</span>
+                  <span className={`sc-best-dot${posts.has(h.hour) ? ' on' : ''}`} aria-hidden="true" />
+                </div>
+              );
+            })}
+          </div>
+          <div className="sc-best-legend faint" aria-hidden="true">
+            <span><i className="sc-key solid" /> {data.minSamples}+ videos</span>
+            <span><i className="sc-key few" /> fewer, not trusted yet</span>
+            <span><i className="sc-key dot" /> a rule posts at this hour</span>
+          </div>
+          <details className="sc-best-table">
+            <summary>Show as a table</summary>
+            <table>
+              <thead>
+                <tr><th scope="col">Hour</th><th scope="col">Videos</th><th scope="col">Median views after 24 h</th></tr>
+              </thead>
+              <tbody>
+                {shown.filter((h) => h.n > 0).map((h) => (
+                  <tr key={h.hour}><td>{hourLabel(h.hour)}</td><td>{h.n}</td><td>{views(h.median)}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
+        </>
+      )}
+    </section>
   );
 }
 
@@ -329,7 +423,7 @@ export default function Schedule() {
   };
   const edit = (rule) => {
     const parsed = parseCron(rule.cron);
-    setEditing({ ...blank, ...rule, release: rule.release || 'now', privacy: rule.privacy || '', caption: rule.caption || '', category: rule.category || '', ...(parsed ? { mode: parsed.days.length ? 'weekly' : 'daily', ...parsed } : { mode: 'custom' }) });
+    setEditing({ ...blank, ...rule, release: rule.release || 'now', adapt: Boolean(rule.adapt), privacy: rule.privacy || '', caption: rule.caption || '', category: rule.category || '', ...(parsed ? { mode: parsed.days.length ? 'weekly' : 'daily', ...parsed } : { mode: 'custom' }) });
   };
 
   const days = useMemo(() => {
@@ -434,6 +528,7 @@ export default function Schedule() {
                     <span className="sc-dot" aria-hidden="true">·</span>
                     <span>Next run <strong className="sc-next">{r.enabled && r.next[0] ? fmtTime(r.next[0]) : 'Off'}</strong></span>
                   </span>
+                  {r.adaptLog && r.adaptLog.length > 0 && <AdaptNote entry={r.adaptLog[r.adaptLog.length - 1]} />}
                 </div>
                 <div className="sc-rule-tags">
                   {brandTag}
@@ -467,6 +562,14 @@ export default function Schedule() {
           }}
           onCancel={() => setEditing(null)}
           setToast={setToast}
+        />
+      )}
+
+      {(picked !== ALL || brands.length === 1) && (
+        <BestTimes
+          brandId={picked !== ALL ? picked : brands[0] && brands[0].id}
+          tz={((rules || []).find((r) => r.platform === 'youtube') || {}).tz || 'Asia/Dhaka'}
+          ruleHours={(rules || []).filter((r) => r.enabled && r.platform === 'youtube').flatMap((r) => cronHourList(r.cron))}
         />
       )}
 

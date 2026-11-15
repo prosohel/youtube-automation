@@ -6,7 +6,8 @@ const { PLATFORMS } = require('./store');
  *         make: count (1-10), category? | publish: platform, pick ('oldest'|'newest'), privacy?, caption?, release? }
  * release (YouTube only): 'now' (default) posts at each run; 'slot' uploads private at each run and YouTube makes it
  * public at the rule's next run (releaseSlot), so every video is processed before it goes live and the cron times
- * are the times viewers get it.
+ * are the times viewers get it. adapt (with 'slot'): once a week the times move toward the hours that do best
+ * (server/slotInsights.js); the changes are kept in adaptLog.
  */
 function validateRule(rule = {}) {
   const fail = (error) => ({ ok: false, error });
@@ -38,6 +39,7 @@ function validateRule(rule = {}) {
     if (rule.platform !== 'youtube') return fail('Going public at the next slot is for YouTube only');
     if (rule.privacy && rule.privacy !== 'public') return fail('A video that goes public at the next slot is always public');
   }
+  if (rule.adapt && rule.release !== 'slot') return fail('Only a rule that uploads ahead can adapt its times');
   return { ok: true };
 }
 

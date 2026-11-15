@@ -3,6 +3,7 @@ const settings = require('./settings');
 const brands = require('./brands');
 const { brandContext } = require('./publishFlow');
 const youtubePublisher = require('./publishers/youtube');
+const { earlyViews } = require('./slotInsights');
 
 const BATCH = 50; // videos.list accepts up to 50 ids per call
 
@@ -23,9 +24,10 @@ async function clientForBrand(redis, brandId) {
  * skipped, and one whose sync fails is logged and left: neither stops the other brands, and their videos are never
  * marked removed. A video YouTube no longer returns is marked 'removed' only when it was uploaded to the channel the
  * brand has now (a brand reconnected to another channel no longer sees its old uploads; a record from before the
- * channel was kept is never marked). Returns the number of videos updated.
+ * channel was kept is never marked). A public video's views 24 and 48 hours after going live are kept as `early`
+ * (the go-live times learn from them). Returns the number of videos updated. now: the clock (tests).
  */
-async function syncYoutube({ redis, clientFor, log = () => {} }) {
+async function syncYoutube({ redis, clientFor, log = () => {}, now = () => new Date() }) {
   const tracked = (await store.listVideos(redis, { limit: 5000 })).filter(
     (v) => v.platforms && v.platforms.youtube && v.platforms.youtube.remoteId && v.platforms.youtube.status !== 'removed'
   );
@@ -60,6 +62,8 @@ async function syncYoutube({ redis, clientFor, log = () => {} }) {
                 checkedAt,
               }
             : { status: 'removed', checkedAt };
+          const early = it && earlyViews({ ...v.platforms.youtube, ...patch }, patch.views, now());
+          if (early) patch.early = early;
           await store.updateVideo(redis, v.id, (o) => ({ ...o, platforms: { ...o.platforms, youtube: { ...o.platforms.youtube, ...patch } } }));
           updated++;
         }

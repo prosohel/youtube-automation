@@ -174,3 +174,18 @@ test('F3: a brand whose channel is not recorded yet marks nothing removed', asyn
   await syncYoutube({ redis: r, clientFor: async () => fakeYoutube([]) });
   assert.equal((await store.getVideo(r, v.id)).platforms.youtube.status, 'published');
 });
+
+test('sync keeps the views a public video had 24 hours after it went live', async () => {
+  const r = await freshRedis();
+  const brand = await seedBrand(r, { name: 'A' });
+  const v = await trackedVideo(r, 'yt_e', brand.id);
+  await store.updateVideo(r, v.id, (o) => ({ ...o, platforms: { youtube: { ...o.platforms.youtube, releaseAt: '2026-11-10T14:00:00.000Z' } } }));
+  const yt = (views, privacyStatus = 'public') => fakeYoutube([{ id: 'yt_e', status: { privacyStatus }, statistics: { viewCount: String(views) } }]);
+  const at = (iso) => () => new Date(iso);
+  await syncYoutube({ redis: r, clientFor: async () => yt(40), now: at('2026-11-11T02:00:00Z') }); // 12 hours
+  assert.equal((await store.getVideo(r, v.id)).platforms.youtube.early, undefined);
+  await syncYoutube({ redis: r, clientFor: async () => yt(310), now: at('2026-11-11T15:30:00Z') }); // 25.5 hours
+  assert.deepEqual((await store.getVideo(r, v.id)).platforms.youtube.early, { h24: 310 });
+  await syncYoutube({ redis: r, clientFor: async () => yt(420), now: at('2026-11-11T18:30:00Z') });
+  assert.deepEqual((await store.getVideo(r, v.id)).platforms.youtube.early, { h24: 310 }, 'kept once');
+});

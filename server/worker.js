@@ -14,6 +14,7 @@ const { QUEUE, createQueues, enqueueVideo } = require('./queues');
 const { processTick, runPublish, recheckProcessing, markPublishJobFailed, recoverPublishRecords } = require('./publishFlow');
 const { syncSchedulers } = require('./scheduler');
 const { syncYoutube, clientForBrand } = require('./youtubeSync');
+const { adaptRules } = require('./slotInsights');
 
 const HEARTBEAT_KEY = 'worker:heartbeat';
 const log = (...a) => console.log(`[${localTime()}]`, ...a);
@@ -107,6 +108,7 @@ const defaultProcessors = () => ({
       return `removed ${n} local files`;
     }
     if (job.name === 'publish-recheck') return `settled ${await recheckProcessing({ redis: ctx.redis, log: ctx.log })}`;
+    if (job.name === 'slots-adapt') return `moved ${await adaptRules({ redis: ctx.redis, queues: ctx.queues, log: ctx.log })}`;
     if (job.name !== 'youtube-sync') return 'unknown';
     const clientFor = (brandId) => clientForBrand(ctx.redis, brandId);
     return `updated ${await syncYoutube({ redis: ctx.redis, clientFor, log: ctx.log })}`;
@@ -241,6 +243,8 @@ function startWorker({ redis, deps, outDir, workerOpts = {}, processors = {}, on
     await queues.maintenance.upsertJobScheduler('youtube-sync', { every: YOUTUBE_SYNC_EVERY_MS }, { name: 'youtube-sync' });
     await queues.maintenance.upsertJobScheduler('publish-recheck', { every: PUBLISH_RECHECK_EVERY_MS }, { name: 'publish-recheck' });
     await queues.maintenance.upsertJobScheduler('storage-clean', { every: 6 * 3600 * 1000 }, { name: 'storage-clean' });
+    // Monday 4 am: "upload ahead" rules with adapt on move their times toward the hours that do best.
+    await queues.maintenance.upsertJobScheduler('slots-adapt', { pattern: '0 4 * * 1', tz: 'Asia/Dhaka' }, { name: 'slots-adapt' });
     for (const v of await store.listVideos(redis, { limit: 1000 })) {
       if ((v.status === 'queued' || v.status === 'working') && !(await queues.videos.getJob(v.id))) {
         log(`Re-queueing ${v.id} (no job found)`);
