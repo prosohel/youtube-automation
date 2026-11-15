@@ -273,7 +273,7 @@ function createApp({ redis, queues, password = '', secureCookies = false }) {
     for (const r of (await rulesOf(req.query.brand || undefined)).filter((x) => x.enabled && validateRule(x).ok)) {
       for (const at of nextRuns(r, MAX_SLOTS, new Date(from))) {
         if (at.getTime() > until) break;
-        slots.push({ at: at.toISOString(), ruleId: r.id, brandId: r.brandId, kind: r.kind, platform: r.platform || null, count: r.count || null });
+        slots.push({ at: at.toISOString(), ruleId: r.id, brandId: r.brandId, kind: r.kind, platform: r.platform || null, count: r.count || null, release: r.release || 'now' });
       }
     }
     res.json(slots.sort((a, b) => a.at.localeCompare(b.at)));
@@ -295,7 +295,10 @@ function createApp({ redis, queues, password = '', secureCookies = false }) {
       name: body.name ? String(body.name).slice(0, 80) : '',
     };
     if (rule.kind === 'make') Object.assign(rule, { count: body.count === undefined ? 1 : Number(body.count), category: body.category || '', platforms: body.platforms });
-    if (rule.kind === 'publish') Object.assign(rule, { platform: body.platform, pick: body.pick || 'oldest', privacy: body.privacy || undefined, caption: body.caption || '' });
+    if (rule.kind === 'publish') {
+      Object.assign(rule, { platform: body.platform, pick: body.pick || 'oldest', privacy: body.privacy || undefined, caption: body.caption || '' });
+      if (body.release === 'slot') rule.release = 'slot'; // YouTube: upload ahead, go public at the next slot
+    }
     const check = validateRule(rule);
     if (!check.ok) throw bad(check.error);
     return rule;

@@ -50,12 +50,22 @@ export function Switch({ checked, onChange, label, labelledBy, describedBy, disa
   );
 }
 
+/** A YouTube upload waiting for its scheduled release (a 'slot' rule): the ISO time it goes public, else null. */
+export const scheduledRelease = (rec) =>
+  rec && rec.releaseAt && ['published', 'processing'].includes(rec.status) && rec.privacy !== 'public' && Date.parse(rec.releaseAt) > Date.now() ? rec.releaseAt : null;
+
 /** Status of a video on one platform, as a coloured chip. */
 export function PlatformStatus({ rec, platform }) {
   if (!rec) return <span className="faint">Not posted</span>;
-  const tone = { published: 'ok', processing: 'info', uploading: 'info', pending: 'info', interrupted: 'warn', failed: 'danger', skipped: 'warn', removed: 'neutral' }[rec.status] || 'neutral';
+  let tone = { published: 'ok', processing: 'info', uploading: 'info', pending: 'info', interrupted: 'warn', failed: 'danger', skipped: 'warn', removed: 'neutral' }[rec.status] || 'neutral';
   let label = { published: 'Published', processing: 'Processing', uploading: 'Uploading', pending: 'Waiting', interrupted: 'Will re-check', failed: 'Failed', skipped: 'Skipped', removed: 'Removed' }[rec.status] || rec.status;
   if (platform === 'youtube' && rec.status === 'published' && rec.privacy) label = rec.privacy[0].toUpperCase() + rec.privacy.slice(1);
+  const live = scheduledRelease(rec);
+  if (live) {
+    label = `Goes live ${fmtTime(live)}`;
+    tone = 'info';
+  }
+  else if (platform === 'youtube' && rec.status === 'published' && rec.releaseAt && rec.privacy === 'private') label = 'Public'; // released; the sync has not seen it yet
   const chip = (
     <Chip tone={tone}>
       {label}
@@ -107,7 +117,10 @@ export function StageBar({ video }) {
 export const isPublished = (v) => Object.values(v.platforms || {}).some((p) => p.status === 'published');
 /** Posted, but every posted copy is private (YouTube "private", TikTok "SELF_ONLY"), so nobody can see it yet. */
 export const isPrivateOnly = (v) =>
-  isPublished(v) && Object.values(v.platforms || {}).filter((p) => p.status === 'published').every((p) => ['private', 'SELF_ONLY'].includes(p.privacy));
+  isPublished(v) &&
+  Object.values(v.platforms || {})
+    .filter((p) => p.status === 'published')
+    .every((p) => ['private', 'SELF_ONLY'].includes(p.privacy) && !p.releaseAt); // a scheduled release goes public on its own
 
 /** One line naming the graphic Claude picked for a scene, e.g. "bars (3)" or "big number ৫ জিবি". */
 export function graphicLabel(visual) {

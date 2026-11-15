@@ -62,6 +62,8 @@ const youtubeTitle = (title, isShort = cfg.format === 'shorts') => {
  * playlist: a playlist title; the video is added to it (the playlist is made when missing). Needs a sign-in with the
  * 'youtube' scope (Reconnect YouTube in Integrations for tokens from before that); otherwise it is logged and skipped.
  * notifySubscribers: only a public upload notifies; private and unlisted never do.
+ * publishAt: an ISO time; the video is uploaded private and YouTube makes it public then (a scheduled release,
+ * which notifies like a public upload). privacy is ignored with it.
  * Note: each upload costs ~1,600 quota units of the default 10,000/day (a playlist adds ~100).
  */
 async function uploadVideo({
@@ -78,13 +80,16 @@ async function uploadVideo({
   language = cfg.language,
   playlist = cfg.playlist,
   notifySubscribers = cfg.notifySubscribers,
+  publishAt = null,
 }) {
   const youtube = google.youtube({ version: 'v3', auth });
+  if (publishAt) privacy = 'private'; // YouTube only takes publishAt on a private video
+  const goesPublic = publishAt ? true : privacy === 'public';
 
   const res = await youtube.videos.insert(
     {
       part: ['snippet', 'status'],
-      notifySubscribers: Boolean(notifySubscribers) && privacy === 'public',
+      notifySubscribers: Boolean(notifySubscribers) && goesPublic,
       requestBody: {
         snippet: {
           title: youtubeTitle(title, isShort),
@@ -96,6 +101,7 @@ async function uploadVideo({
         },
         status: {
           privacyStatus: privacy,
+          ...(publishAt ? { publishAt } : {}),
           selfDeclaredMadeForKids: false,
           // YouTube's "altered or synthetic content" disclosure. On by default because AI video clips
           // (Higgsfield) can look real. Set SYNTHETIC_MEDIA=false in .env for videos without them.
@@ -117,7 +123,7 @@ async function uploadVideo({
   process.stdout.write('\n');
 
   const id = res.data.id;
-  log(`Uploaded: https://youtu.be/${id} (${privacy})`);
+  log(`Uploaded: https://youtu.be/${id} (${publishAt ? `private, goes public ${publishAt}` : privacy})`);
 
   // Custom thumbnails need a phone-verified channel; do not fail the run if rejected.
   if (thumbFile) {

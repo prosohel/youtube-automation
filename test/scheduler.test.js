@@ -44,3 +44,28 @@ test('syncSchedulers keeps one job scheduler per enabled rule and removes the re
   ids = (await queues.ticks.getJobSchedulers()).map((s) => s.key || s.id);
   assert.deepEqual(ids, ['rule:r_a']);
 });
+
+test('release "slot" is a YouTube publish rule option that always goes public', () => {
+  const { validateRule: v } = require('../server/scheduler');
+  assert.deepEqual(v({ ...base, release: 'slot' }), { ok: true });
+  assert.deepEqual(v({ ...base, release: 'now' }), { ok: true });
+  assert.deepEqual(v({ ...base, release: 'slot', privacy: 'public' }), { ok: true });
+  assert.match(v({ ...base, release: 'later' }).error, /release/);
+  assert.match(v({ ...base, platform: 'tiktok', release: 'slot' }).error, /YouTube/);
+  assert.match(v({ ...base, release: 'slot', privacy: 'unlisted' }).error, /public/);
+});
+
+test('releaseSlot is the next run at least 15 minutes ahead that no other video holds', () => {
+  const { releaseSlot } = require('../server/scheduler');
+  const rule = { cron: '0 13,17,20,22 * * *', tz: 'Asia/Dhaka' }; // 07:00, 11:00, 14:00, 16:00 UTC
+  const at = (iso) => releaseSlot(rule, [], new Date(iso)).toISOString();
+  // The tick of the 13:00 slot fills 17:00.
+  assert.equal(at('2026-11-16T07:00:05Z'), '2026-11-16T11:00:00.000Z');
+  // 10 minutes before a slot is too close: the one after.
+  assert.equal(at('2026-11-16T10:50:00Z'), '2026-11-16T14:00:00.000Z');
+  // The 22:00 tick fills tomorrow's 13:00.
+  assert.equal(at('2026-11-16T16:00:00Z'), '2026-11-17T07:00:00.000Z');
+  // A slot already held (a tick run twice after a restart) is passed over.
+  const taken = ['2026-11-16T11:00:00.000Z', '2026-11-16T14:00:00.000Z'];
+  assert.equal(releaseSlot(rule, taken, new Date('2026-11-16T07:00:05Z')).toISOString(), '2026-11-16T16:00:00.000Z');
+});

@@ -5,6 +5,7 @@ const store = require('./store');
 const settings = require('./settings');
 const brands = require('./brands');
 const { enqueueVideo, addUnique } = require('./queues');
+const { releaseSlot } = require('./scheduler');
 
 const MAX_PUBLISH_ATTEMPTS = 3;
 const DEFAULT_CAPTION = '{title}\n\n{hashtags}';
@@ -150,10 +151,31 @@ async function processTick(job, { redis, queues, log = () => {} }) {
 }
 
 /**
+ * When a video posted by this rule goes public (ISO), or null to post as usual. A YouTube 'slot' rule: the next
+ * slot of the rule (releaseSlot) that no other YouTube video of the brand holds. Throws when none is free.
+ */
+const HOLDS_SLOT = ['uploading', 'interrupted', 'processing', 'published'];
+
+async function releaseTime(redis, rule, platform, video, now) {
+  if (!rule || rule.release !== 'slot' || platform !== 'youtube') return null;
+  const taken = (await store.listVideos(redis, { limit: 1000, brandId: video.brandId }))
+    .filter((v) => v.id !== video.id)
+    .map((v) => v.platforms && v.platforms.youtube)
+    // Only a video that is (or may be) on YouTube holds its slot: a failed or skipped one left it empty.
+    .filter((yt) => yt && yt.releaseAt && HOLDS_SLOT.includes(yt.status))
+    .map((yt) => yt.releaseAt);
+  const at = releaseSlot(rule, taken, now);
+  if (!at) throw Object.assign(new Error('Every upcoming slot of this rule already has a video'), { config: true });
+  return at.toISOString();
+}
+
+/**
  * Publish one video to one platform, with its own brand's accounts and settings only. Never posts twice: if an
  * earlier run stopped mid-upload (or failed after the platform gave an id), the platform is asked first.
+ * A YouTube 'slot' rule uploads it private with the slot it goes public at (releaseAt on the record).
+ * now: the clock (tests).
  */
-async function runPublish({ redis, videoId, platform, rule, getPublisher = require('./publishers').getPublisher, log = () => {} }) {
+async function runPublish({ redis, videoId, platform, rule, getPublisher = require('./publishers').getPublisher, log = () => {}, now = () => new Date() }) {
   const video = await store.getVideo(redis, videoId);
   if (!video) throw new Error(`Video ${videoId} not found`);
   const rec = (video.platforms && video.platforms[platform]) || {};
@@ -238,10 +260,19 @@ async function runPublish({ redis, videoId, platform, rule, getPublisher = requi
     await say(`${platform}: skipped: ${over}`);
     return setRec({});
   }
-  await setRec({ status: 'uploading', check: false, checks: 0, error: null, startedAt: new Date().toISOString() });
-  await say(`${platform}: uploading...`);
+  let releaseAt;
   try {
-    const res = await pub.publish(ctx);
+    releaseAt = await releaseTime(redis, rule, platform, video, now());
+  } catch (e) {
+    await setRec({ status: 'failed', error: e.message, attempts: rec.attempts || 0 });
+    await say(`${platform}: not posted: ${e.message}`);
+    throw e;
+  }
+  // The slot is held from here, so another upload of the brand never takes it too.
+  await setRec({ status: 'uploading', check: false, checks: 0, error: null, startedAt: new Date().toISOString(), ...(releaseAt ? { releaseAt } : {}) });
+  await say(`${platform}: uploading...${releaseAt ? ` (private, goes public ${releaseAt})` : ''}`);
+  try {
+    const res = await pub.publish(releaseAt ? { ...ctx, publishAt: releaseAt } : ctx);
     await say(`${platform}: ${res.state}${res.url ? ` ${res.url}` : ''}`);
     const done = { status: res.state, remoteId: res.remoteId, url: res.url, privacy: res.privacy, publishedAt: new Date().toISOString(), error: null };
     return setRec(res.channelId ? { ...done, channelId: res.channelId } : done);

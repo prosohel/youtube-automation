@@ -74,6 +74,17 @@ test('rules: invalid cron or time zone is rejected with 400; valid rules are sch
   assert.equal((await queues.ticks.getJobSchedulers()).length, 0);
   assert.equal((await call('DELETE', `/api/rules/${ok.json.id}`)).status, 204);
   assert.equal((await call('GET', '/api/rules')).json.length, 0);
+
+  // release 'slot': kept for YouTube (shown on the week view), refused elsewhere; anything else is plain 'now'.
+  const slot = await call('POST', '/api/rules', { brandId, kind: 'publish', platform: 'youtube', cron: '0 13,17,20,22 * * *', tz: 'Asia/Dhaka', release: 'slot' });
+  assert.equal(slot.status, 201);
+  assert.equal(slot.json.release, 'slot');
+  assert.ok((await call('GET', '/api/schedule/week')).json.every((x) => x.release === 'slot'));
+  const tt = await call('POST', '/api/rules', { brandId, kind: 'publish', platform: 'tiktok', cron: '0 18 * * *', tz: 'Asia/Dhaka', release: 'slot' });
+  assert.equal(tt.status, 400);
+  assert.match(tt.json.error, /YouTube/);
+  const plain = await call('PUT', `/api/rules/${slot.json.id}`, { ...slot.json, release: 'whenever' });
+  assert.equal(plain.json.release, undefined);
 });
 
 test('rules preview returns the next 3 runs, or 400', async (t) => {

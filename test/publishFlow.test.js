@@ -568,3 +568,35 @@ test('F9: a Facebook post with a Page ID but no Page token is a setup error and 
   assert.equal(rec.attempts, 0);
   assert.deepEqual(fetched, []);
 });
+
+test('a "slot" rule uploads ahead: YouTube gets the next free slot as publishAt and the record keeps it', async (t) => {
+  const { r, brand } = await setup(t);
+  const rule = await store.saveRule(r, { kind: 'publish', brandId: brand.id, platform: 'youtube', cron: '0 13,17,20,22 * * *', tz: 'Asia/Dhaka', enabled: true, release: 'slot' });
+  const now = new Date('2026-11-16T07:00:05Z'); // the 13:00 tick
+  // Another video of the brand already holds 17:00; one of another brand holds 20:00 (it does not count).
+  await readyVideo(r, brand, { platforms: { youtube: { status: 'published', releaseAt: '2026-11-16T11:00:00.000Z' } } });
+  const other = await seedBrand(r, { name: 'Other' });
+  await readyVideo(r, other, { platforms: { youtube: { status: 'published', releaseAt: '2026-11-16T14:00:00.000Z' } } });
+  // A failed upload of the brand at 20:00 never reached YouTube, so 20:00 is still free.
+  await readyVideo(r, brand, { platforms: { youtube: { status: 'failed', releaseAt: '2026-11-16T14:00:00.000Z' } } });
+  const v = await readyVideo(r, brand);
+  const seen = [];
+  const pub = {
+    findExisting: async () => null,
+    publish: async (c) => {
+      seen.push(c.publishAt);
+      return { remoteId: 'yt9', url: 'https://youtu.be/yt9', privacy: 'private', state: 'published' };
+    },
+  };
+  const rec = await runPublish({ redis: r, videoId: v.id, platform: 'youtube', rule, now: () => now, getPublisher: () => pub });
+  assert.deepEqual(seen, ['2026-11-16T14:00:00.000Z']);
+  assert.equal(rec.releaseAt, '2026-11-16T14:00:00.000Z');
+  assert.match((await store.getVideo(r, v.id)).log.join('\n'), /goes public/);
+
+  // "Publish now" (no rule) and a plain rule upload with no publishAt.
+  const w = await readyVideo(r, brand);
+  seen.length = 0;
+  const plain = await runPublish({ redis: r, videoId: w.id, platform: 'youtube', getPublisher: () => pub });
+  assert.deepEqual(seen, [undefined]);
+  assert.equal(plain.releaseAt, undefined);
+});

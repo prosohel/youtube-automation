@@ -477,3 +477,17 @@ function google_youtube_denied(t, denied) {
     google.youtube = prev;
   };
 }
+
+test('uploadVideo with publishAt uploads private and lets YouTube make it public then, notifying subscribers', async (t) => {
+  applyCfg(t, { privacy: 'public', language: 'English', playlist: '', notifySubscribers: true });
+  const google = fakeGoogle(t);
+  const auth = { credentials: { refresh_token: 'given' } };
+  await uploadVideo({ videoFile: file, title: 'Later', description: 'd', tags: [], auth, privacy: 'public', publishAt: '2026-11-16T14:00:00.000Z' });
+  const [body] = google.inserts;
+  assert.equal(body.status.privacyStatus, 'private', 'YouTube only takes publishAt on a private video');
+  assert.equal(body.status.publishAt, '2026-11-16T14:00:00.000Z');
+  assert.equal(body.params.notifySubscribers, true, 'it goes public, so subscribers hear about it');
+
+  await uploadVideo({ videoFile: file, title: 'Now', description: 'd', tags: [], auth, privacy: 'public' });
+  assert.equal(google.inserts[1].status.publishAt, undefined);
+});

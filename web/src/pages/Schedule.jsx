@@ -43,7 +43,13 @@ function parseCron(cron) {
   return { times, days: m[3] === '*' ? [] : m[3].split(',') };
 }
 
-const blank = { brandId: '', kind: 'publish', platform: 'youtube', mode: 'daily', times: '6:00 pm', days: [], cron: '0 18 * * *', tz: 'Asia/Dhaka', count: 1, category: '', pick: 'oldest', privacy: '', caption: '', enabled: true };
+const blank = { brandId: '', kind: 'publish', platform: 'youtube', mode: 'daily', times: '6:00 pm', days: [], cron: '0 18 * * *', tz: 'Asia/Dhaka', count: 1, category: '', pick: 'oldest', privacy: '', caption: '', release: 'now', enabled: true };
+
+/**
+ * Go-live times for viewers in Bangladesh: lunch, after school/office, and the evening peak. Shorts get four a
+ * day (all on the hour: one cron line), long videos one in the evening.
+ */
+const BEST_TIMES = { shorts: '1:00 pm, 5:00 pm, 8:00 pm, 10:00 pm', landscape: '7:30 pm' };
 
 function describe(rule) {
   const parsed = parseCron(rule.cron);
@@ -53,7 +59,16 @@ function describe(rule) {
   const times = parsed ? parsed.times.split(', ') : [];
   return rule.kind === 'make'
     ? { title: `Make ${rule.count} new video${rule.count > 1 ? 's' : ''}`, when, dayNames, times, what: rule.category ? `Category: ${rule.category}` : 'Topics from your categories' }
-    : { title: platformName(rule.platform), when, dayNames, times, what: `Posts the ${rule.pick === 'newest' ? 'newest' : 'oldest'} ready video${rule.privacy ? ` · ${rule.privacy}` : ''}` };
+    : {
+        title: platformName(rule.platform),
+        when,
+        dayNames,
+        times,
+        what:
+          rule.release === 'slot'
+            ? `Uploads the ${rule.pick === 'newest' ? 'newest' : 'oldest'} ready video ahead · it goes public at the next time`
+            : `Posts the ${rule.pick === 'newest' ? 'newest' : 'oldest'} ready video${rule.privacy ? ` · ${rule.privacy}` : ''}`,
+      };
 }
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
@@ -63,6 +78,8 @@ function Editor({ initial, brands, brandName, onSaved, onCancel, setToast }) {
   const { data: brandPage } = usePoll(f.brandId ? `/api/brands/${f.brandId}/settings` : null, 60000);
   const categories = (brandPage && brandPage.values.TOPIC_CATEGORIES) || [];
   const lang = contentLang(brandPage && brandPage.values.LANGUAGE);
+  const shorts = !brandPage || brandPage.values.VIDEO_FORMAT === 'shorts';
+  const bestTimes = () => setF((o) => ({ ...o, mode: 'daily', times: BEST_TIMES[shorts ? 'shorts' : 'landscape'], tz: 'Asia/Dhaka' }));
   // A rule whose brand has been archived keeps showing its brand; saving it is refused by the server.
   const brandOptions = f.brandId && !brands.some((b) => b.id === f.brandId) ? [...brands, { id: f.brandId, name: brandName(f.brandId), active: false }] : brands;
   const [preview, setPreview] = useState({ next: [], error: null });
@@ -93,7 +110,10 @@ function Editor({ initial, brands, brandName, onSaved, onCancel, setToast }) {
     if (built.error) return setToast(built.error);
     const body = { brandId: f.brandId, kind: f.kind, cron: built.cron, tz: f.tz, enabled: f.enabled };
     if (f.kind === 'make') Object.assign(body, { count: Number(f.count), category: f.category });
-    else Object.assign(body, { platform: f.platform, pick: f.pick, privacy: f.privacy || undefined, caption: f.caption });
+    else {
+      const slot = f.platform === 'youtube' && f.release === 'slot';
+      Object.assign(body, { platform: f.platform, pick: f.pick, privacy: slot ? undefined : f.privacy || undefined, caption: f.caption, release: slot ? 'slot' : 'now' });
+    }
     try {
       await api.send(f.id ? 'PUT' : 'POST', f.id ? `/api/rules/${f.id}` : '/api/rules', body);
       setToast('Rule saved');
@@ -194,6 +214,14 @@ function Editor({ initial, brands, brandName, onSaved, onCancel, setToast }) {
             <span className="hint">Separated by commas. 18:00 also works.</span>
           </label>
         )}
+        {f.kind === 'publish' && f.platform === 'youtube' && (
+          <div className="inline">
+            <button type="button" className="btn btn-sm" onClick={bestTimes}>
+              Best times for Bangladesh viewers
+            </button>
+            <span className="hint">{shorts ? 'Shorts: 1, 5, 8 and 10 pm' : 'Long videos: 7:30 pm'}, Asia/Dhaka</span>
+          </div>
+        )}
       </div>
 
       {f.kind === 'publish' && (
@@ -206,6 +234,20 @@ function Editor({ initial, brands, brandName, onSaved, onCancel, setToast }) {
             </select>
           </label>
           {f.platform === 'youtube' && (
+            <label className="field">
+              Goes public
+              <select value={f.release} onChange={(e) => set('release', e.target.value)}>
+                <option value="now">As soon as it is uploaded</option>
+                <option value="slot">At the next time (upload ahead)</option>
+              </select>
+              <span className="hint">
+                {f.release === 'slot'
+                  ? 'Each time uploads a video as private; YouTube makes it public at the following time, already processed in HD. The times are when viewers get it.'
+                  : 'The video is uploaded and public at each time.'}
+              </span>
+            </label>
+          )}
+          {f.platform === 'youtube' && f.release !== 'slot' && (
             <label className="field">
               YouTube privacy
               <select value={f.privacy} onChange={(e) => set('privacy', e.target.value)}>
@@ -287,7 +329,7 @@ export default function Schedule() {
   };
   const edit = (rule) => {
     const parsed = parseCron(rule.cron);
-    setEditing({ ...blank, ...rule, privacy: rule.privacy || '', caption: rule.caption || '', category: rule.category || '', ...(parsed ? { mode: parsed.days.length ? 'weekly' : 'daily', ...parsed } : { mode: 'custom' }) });
+    setEditing({ ...blank, ...rule, release: rule.release || 'now', privacy: rule.privacy || '', caption: rule.caption || '', category: rule.category || '', ...(parsed ? { mode: parsed.days.length ? 'weekly' : 'daily', ...parsed } : { mode: 'custom' }) });
   };
 
   const days = useMemo(() => {
@@ -463,6 +505,7 @@ export default function Schedule() {
                     <PlatformBadge id={s.kind === 'make' ? 'make' : s.platform} small />
                     {new Date(s.at).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true })}
                     {s.kind === 'make' && <Chip tone="info">make {s.count}</Chip>}
+                    {s.release === 'slot' && <Chip tone="ok">goes live</Chip>}
                     {chip(s.brandId)}
                   </div>
                 ))}

@@ -65,7 +65,8 @@ async function publish(ctx) {
   const v = ctx.video;
   const auth = authOf(ctx); // one sign-in for the check and the upload
   const ch = await ownChannel(ctx, ctx.youtube || google.youtube({ version: 'v3', auth }));
-  const privacy = ctx.privacy || s.PRIVACY_STATUS;
+  // ctx.publishAt (a 'slot' rule): uploaded private, YouTube makes it public then.
+  const privacy = ctx.publishAt ? 'private' : ctx.privacy || s.PRIVACY_STATUS;
   const url = await uploadVideo({
     videoFile: v.files.video,
     thumbFile: v.files.thumb,
@@ -80,6 +81,7 @@ async function publish(ctx) {
     language: s.LANGUAGE,
     playlist: s.YT_PLAYLIST,
     notifySubscribers: s.YT_NOTIFY_SUBSCRIBERS,
+    publishAt: ctx.publishAt || null,
   });
   const id = url.split('/').pop();
   await ctx.onRemoteId(id);
