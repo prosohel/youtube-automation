@@ -79,6 +79,8 @@ async function uploadVideo({
   playlist = cfg.playlist,
   notifySubscribers = cfg.notifySubscribers,
 }) {
+  // YouTube answers a blank title with "invalid or empty video title" after the whole file is sent; say so up front.
+  if (!ytSafe(title).trim()) throw new Error('YouTube upload: the video has no title (YouTube refuses an empty one)');
   const youtube = google.youtube({ version: 'v3', auth });
 
   const res = await youtube.videos.insert(

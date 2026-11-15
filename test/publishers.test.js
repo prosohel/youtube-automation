@@ -430,6 +430,16 @@ test('uploadVideo: "<" and ">" (math questions) become full-width signs; YouTube
   for (const text of [body.snippet.title, body.snippet.description, ...body.snippet.tags]) assert.doesNotMatch(text, /[<>]/);
 });
 
+test('uploadVideo: a blank title stops before YouTube with a clear message (dashboard and terminal share this path)', async (t) => {
+  applyCfg(t, { privacy: 'private', language: 'Bangla', playlist: '', notifySubscribers: false });
+  const google = fakeGoogle(t);
+  const auth = { credentials: { refresh_token: 'given' } };
+  for (const title of ['', '   ', undefined, null]) {
+    await assert.rejects(uploadVideo({ videoFile: file, title, description: 'd', tags: [], auth, isShort: true }), /no title/);
+  }
+  assert.deepEqual(google.inserts, [], 'nothing was sent to YouTube');
+});
+
 test('youtubeTitle: crash recovery looks for the same cleaned title; 100 characters without splitting an emoji', () => {
   const { youtubeTitle } = require('../src/upload');
   assert.equal(youtubeTitle('a > b', true), 'a ＞ b #Shorts');
