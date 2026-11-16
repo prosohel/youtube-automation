@@ -49,6 +49,11 @@ const SETTINGS_SCHEMA = [
   { key: 'MUSIC', scope: 'brand', cfg: 'music', group: 'visuals', type: 'enum', options: ['none', 'synth', 'folder'], default: 'none', label: 'Background music', hint: 'synth = an original track made in code per video (cuts snap to its beat); folder = a file from ./music' },
   { key: 'MUSIC_VOLUME', scope: 'brand', cfg: 'musicVolume', group: 'visuals', type: 'number', default: 0.12, label: 'Music volume (0-1)' },
   { key: 'LOUDNESS', cfg: 'loudness', group: 'visuals', type: 'boolean', default: true, label: 'Normalise loudness to -14 LUFS' },
+  {
+    key: 'HERO3D', cfg: 'hero3dMode', group: 'visuals', type: 'enum', options: ['auto', 'true', 'false'], default: 'auto', label: '3D objects (hero3d)',
+    optionLabels: { auto: 'Auto (on only with a GPU)', true: 'On', false: 'Off (drawn as a 2D icon)' },
+    hint: 'A slowly turning 3D object. Without a GPU it renders very slowly and can make Chrome stall, so Auto keeps it off there.',
+  },
   { key: 'CRITIQUE', cfg: 'critique', group: 'visuals', type: 'boolean', default: true, label: 'Critique loop (Claude scores a contact sheet; re-renders once if weak)' },
   { key: 'CRITIQUE_MIN', cfg: 'critiqueMin', group: 'visuals', type: 'number', default: 7, label: 'Critique: re-render under this score (1-10)' },
   { key: 'DIRECT_TRANSITIONS', cfg: 'directTransitions', group: 'visuals', subgroup: 'claude', type: 'boolean', default: true, label: 'Transitions', hint: "Off: the theme's own transitions." },

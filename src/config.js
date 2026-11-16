@@ -52,7 +52,9 @@ const cfg = (module.exports = {
   // The turning 3D object (hero3d). Software WebGL (swangle, a server without a GPU) needs well over Remotion's 30 s
   // per frame for it and Chrome locks up, which sent whole videos to the plain captions-only render. Default: on
   // only with a GPU backend; elsewhere the object is drawn as its 2D icon. HERO3D=true/false forces it.
-  hero3d: process.env.HERO3D ? process.env.HERO3D.toLowerCase() === 'true' : !['swangle', 'swiftshader'].includes((process.env.REMOTION_GL || (process.platform === 'win32' || process.platform === 'darwin' ? 'angle' : 'swangle')).toLowerCase()),
+  // cfg.hero3d (the resolved true/false) is set from hero3dMode below and again by applySettings.
+  // HERO3D: 'auto' (default), 'true' or 'false'; also settable from the dashboard (Settings > Visuals).
+  hero3dMode: (process.env.HERO3D || 'auto').toLowerCase(),
   // Loudness normalisation of the finished video (-14 LUFS, ffmpeg loudnorm). LOUDNESS=false skips it.
   loudness: (process.env.LOUDNESS || 'true').toLowerCase() !== 'false',
   // Critique loop: after a render Claude scores a contact sheet; under CRITIQUE_MIN it re-renders once with
@@ -136,6 +138,14 @@ const cfg = (module.exports = {
 });
 
 // Paths and the frame rate are fixed by the install, never by settings.
+/** cfg.hero3d from cfg.hero3dMode: 'true'/'false' force it; 'auto' = on only with a GPU GL backend (not swangle/swiftshader). */
+function resolveHero3d() {
+  const mode = String(cfg.hero3dMode || 'auto').toLowerCase();
+  if (mode === 'true' || mode === 'false') return mode === 'true';
+  return !['swangle', 'swiftshader'].includes(String(cfg.remotionGl || '').toLowerCase());
+}
+cfg.hero3d = resolveHero3d();
+
 const FIXED = new Set(['ROOT', 'OUT_DIR', 'CREDS_FILE', 'TOKEN_FILE', 'HISTORY_FILE', 'width', 'height', 'fps']);
 
 /** Overwrite known fields (unknown keys are ignored) and recompute the ones derived from them. */
@@ -155,5 +165,6 @@ cfg.applySettings = function applySettings(values = {}) {
   cfg.format = String(cfg.format || 'landscape').toLowerCase();
   cfg.width = cfg.format === 'shorts' ? 1080 : 1920;
   cfg.height = cfg.format === 'shorts' ? 1920 : 1080;
+  cfg.hero3d = resolveHero3d();
   return cfg;
 };
