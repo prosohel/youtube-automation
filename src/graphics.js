@@ -15,6 +15,12 @@ const CROWD_MODES = ['walk', 'queue', 'gather'];
 const METAPHOR_KINDS = ['castle', 'bubble', 'balance', 'fire', 'bridge'];
 const LUCIDE = require('lucide-react').icons;
 const HERO_OBJECTS = ['phone', 'coin', 'laptop', 'rocket', 'shield', 'lock', 'chip', 'cube'];
+// The 2D icon each 3D object becomes where 3D cannot render (no GPU: see cfg.hero3d).
+const HERO_ICONS = { phone: 'Smartphone', coin: 'Coins', laptop: 'Laptop', rocket: 'Rocket', shield: 'ShieldCheck', lock: 'Lock', chip: 'Cpu', cube: 'Box' };
+
+/** A hero3d visual as its plain icon; any other visual unchanged. */
+const without3d = (visual) =>
+  visual && visual.type === 'hero3d' ? { type: 'icon', icon: HERO_ICONS[visual.object] || 'Sparkles' } : visual;
 
 const BN_DIGITS = '০১২৩৪৫৬৭৮৯';
 const DIGIT = /[0-9০-৯]/;
@@ -218,7 +224,8 @@ function validateVisual(visual, opts) {
   if (EXAM_TYPES.includes(v.type)) return (opts && opts.examGraphics && checkExamVisual(v)) || icon;
   if (STORY_TYPES.includes(v.type)) return checkStoryVisual(v) || icon;
   if (!LIBRARY_TYPES.includes(v.type) || !(opts && opts.directGraphics)) return icon;
-  return CHECK[v.type](v, isBangla(opts.language)) || icon;
+  const checked = CHECK[v.type](v, isBangla(opts.language)) || icon;
+  return opts.hero3d === false ? without3d(checked) : checked;
 }
 
 function validateVisuals(script, opts) {
@@ -267,7 +274,10 @@ function graphicsPrompt(opts, recent = []) {
     `  - {"type":"bars","bars":[{"label":"ঢাকা","value":70},{"label":"চট্টগ্রাম","value":30}],"unit":"%","highlight":0}: 2-6 bars comparing amounts. labels: 1-3 short words (max 18 characters); values 0 or more; unit: 1-2 short words such as %, লাখ, কোটি টাকা (max 14); highlight = index of the bar to stress, omit for none; "pointer":true adds a silhouette presenter pointing at the stressed bar (landscape only). ${REAL}`,
     `  - {"type":"line","points":[{"label":"২০২২","value":10},{"label":"২০২৪","value":25},{"label":"২০২৬","value":60}],"unit":"লাখ"}: 3-8 points of a change over time. labels: a year or a short month and year (max 16 characters); unit: 1-2 short words (max 14). ${REAL}`,
     `  - {"type":"donut","slices":[{"label":"হ্যাঁ","share":60},{"label":"না","share":40}]}: 2-5 shares of a whole, adding up to 100. labels: 1-3 short words (max 18 characters). ${REAL}`,
-    '  - {"type":"hero3d","object":"phone","label":"আপনার ফোন"}: a lit, slowly turning 3D object for a scene about one real thing. object: one of phone, coin, laptop, rocket, shield, lock, chip, cube (phone = apps/devices, coin = money, laptop = work/software, rocket = launches/growth, shield = safety, lock = privacy/passwords, chip = AI/hardware, cube = abstract). label: optional, 1-3 words (max 30). At most one hero3d scene per video.',
+    // Not offered where 3D cannot render (cfg.hero3d false): Claude picks a graphic that will really be drawn.
+    ...(opts.hero3d === false
+      ? []
+      : ['  - {"type":"hero3d","object":"phone","label":"আপনার ফোন"}: a lit, slowly turning 3D object for a scene about one real thing. object: one of phone, coin, laptop, rocket, shield, lock, chip, cube (phone = apps/devices, coin = money, laptop = work/software, rocket = launches/growth, shield = safety, lock = privacy/passwords, chip = AI/hardware, cube = abstract). label: optional, 1-3 words (max 30). At most one hero3d scene per video.']),
     '  - {"type":"phoneApps","apps":["ক্যানভা","ক্লড","চ্যাটজিপিটি"],"label":"একটা ফোনেই পুরো স্টুডিও"}: a phone showing 2-4 app buttons (names max 14 characters each), label optional (max 60). For scenes about apps, tools or "everything is on your phone".',
     '  - {"type":"wireframe","title":"একটা ওয়েবসাইট","url":"yoursite.com","button":"অর্ডার করুন"}: a website or dashboard sketch. title max 48, url max 32, button max 16; all optional but give a title or a url. For websites, online shops, portfolios, dashboards.',
     '  - {"type":"orgTree","root":"এআই","children":["লেখা","ছবি","কোড"]}: one box on top branching into 2-4 below (root max 24, children max 22 characters). For hierarchies, categories, "X splits into A, B, C".',
@@ -289,6 +299,8 @@ module.exports = {
   BASIC_TYPES,
   LIBRARY_TYPES,
   HERO_OBJECTS,
+  HERO_ICONS,
+  without3d,
   FIGURE_SCENES,
   CROWD_MODES,
   METAPHOR_KINDS,

@@ -49,6 +49,10 @@ const cfg = (module.exports = {
   remotionVideoCacheMb: Number(process.env.REMOTION_VIDEO_CACHE_MB || 512),
   // Chrome's GL backend for Remotion (3D scenes): 'angle' on Windows/Mac, 'swangle' (software ANGLE, WebGL2) on Linux/Docker; plain swiftshader has no WebGL2 and breaks the light leaks
   remotionGl: process.env.REMOTION_GL || (process.platform === 'win32' || process.platform === 'darwin' ? 'angle' : 'swangle'),
+  // The turning 3D object (hero3d). Software WebGL (swangle, a server without a GPU) needs well over Remotion's 30 s
+  // per frame for it and Chrome locks up, which sent whole videos to the plain captions-only render. Default: on
+  // only with a GPU backend; elsewhere the object is drawn as its 2D icon. HERO3D=true/false forces it.
+  hero3d: process.env.HERO3D ? process.env.HERO3D.toLowerCase() === 'true' : !['swangle', 'swiftshader'].includes((process.env.REMOTION_GL || (process.platform === 'win32' || process.platform === 'darwin' ? 'angle' : 'swangle')).toLowerCase()),
   // Loudness normalisation of the finished video (-14 LUFS, ffmpeg loudnorm). LOUDNESS=false skips it.
   loudness: (process.env.LOUDNESS || 'true').toLowerCase() !== 'false',
   // Critique loop: after a render Claude scores a contact sheet; under CRITIQUE_MIN it re-renders once with

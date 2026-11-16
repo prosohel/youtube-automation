@@ -8,6 +8,7 @@ const { synthMusic, musicPlan, beatGrid, snapUp } = require('./music');
 const { SOUNDS, sceneDirection } = require('./direction');
 const { COLORS, pickPhotoScenes } = require('./thumbnail');
 const { EXAM_TYPES } = require('./examVisuals');
+const { without3d } = require('./graphics');
 
 const INTRO_SECONDS = 1.8;
 const OUTRO_SECONDS = 2.2;
@@ -336,7 +337,9 @@ async function prepareRender({ scenes, workDir, title, theme, direction, thumbna
     const wordFrames = Array.isArray(sc.wordTimes) ? sc.wordTimes.map((t) => Math.round(t * fps)) : null;
     // instant design: the bespoke component for this scene (index into the design folder's map), if one was accepted
     const custom = design && design.scenes && design.scenes[i] ? String(i) : null;
-    sceneProps.push({ frames, voiceFrames, narration: sc.narration, headline: sc.headline || '', visual: sc.visual || null, emoji, bg, audio, wordFrames, custom, ...sceneDirection(direction, i) });
+    // Scripts stored before 3D was switched off still hold hero3d scenes: draw them as their icon (see cfg.hero3d).
+    const visual = cfg.hero3d ? sc.visual || null : without3d(sc.visual || null);
+    sceneProps.push({ frames, voiceFrames, narration: sc.narration, headline: sc.headline || '', visual, emoji, bg, audio, wordFrames, custom, ...sceneDirection(direction, i) });
   }
 
   const thumb = await prepThumbnail(thumbnail, sceneProps, publicDir);

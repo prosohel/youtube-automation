@@ -252,3 +252,45 @@ test('hero3d objects: the renderer, the validator and the prompt list the same o
   assert.deepEqual(inPrompt, listed);
   for (const o of listed) assert.match(prompt, new RegExp(`${o} = `), `meaning for ${o}`);
 });
+
+test('no GPU (hero3d false): a 3D object becomes its icon, the prompt stops offering it, other graphics are untouched', () => {
+  const OFF = { ...ON, hero3d: false };
+  assert.deepEqual(G.validateVisual({ type: 'hero3d', object: 'lock', label: 'পিন' }, OFF), { type: 'icon', icon: 'Lock' });
+  assert.deepEqual(G.validateVisual({ type: 'hero3d', object: 'phone' }, OFF), { type: 'icon', icon: 'Smartphone' });
+  assert.equal(G.validateVisual({ type: 'hero3d', object: 'lock' }, ON).type, 'hero3d', 'with a GPU (or unset) 3D stays');
+  const bars = { type: 'bars', bars: [{ label: 'ক', value: 1 }, { label: 'খ', value: 2 }] };
+  assert.equal(G.validateVisual(bars, OFF).type, 'bars');
+  assert.doesNotMatch(G.graphicsPrompt(OFF, []), /hero3d/);
+  assert.match(G.graphicsPrompt(ON, []), /hero3d/);
+  // Every object has an icon that exists in the icon set the composition draws from.
+  const LUCIDE = require('lucide-react').icons;
+  for (const o of G.HERO_OBJECTS) assert.ok(LUCIDE[G.HERO_ICONS[o]], `icon for ${o}`);
+  // A stored script's visuals (render time): only hero3d changes.
+  assert.deepEqual(G.without3d({ type: 'hero3d', object: 'coin' }), { type: 'icon', icon: 'Coins' });
+  assert.deepEqual(G.without3d(bars), bars);
+  assert.equal(G.without3d(null), null);
+});
+
+test('cfg.hero3d: off with software WebGL, on with a GPU backend, HERO3D forces it', () => {
+  const load = (env) => {
+    const keep = { ...process.env };
+    delete process.env.HERO3D;
+    delete process.env.REMOTION_GL;
+    Object.assign(process.env, env);
+    const file = require.resolve('../src/config');
+    const prior = require.cache[file];
+    delete require.cache[file];
+    try {
+      return require('../src/config').hero3d;
+    } finally {
+      require.cache[file] = prior;
+      for (const k of Object.keys(process.env)) if (!(k in keep)) delete process.env[k];
+      Object.assign(process.env, keep);
+    }
+  };
+  assert.equal(load({ REMOTION_GL: 'swangle' }), false);
+  assert.equal(load({ REMOTION_GL: 'swiftshader' }), false);
+  assert.equal(load({ REMOTION_GL: 'angle' }), true);
+  assert.equal(load({ REMOTION_GL: 'swangle', HERO3D: 'true' }), true);
+  assert.equal(load({ REMOTION_GL: 'angle', HERO3D: 'false' }), false);
+});
