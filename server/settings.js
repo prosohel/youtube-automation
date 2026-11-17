@@ -142,6 +142,7 @@ const SETTINGS_SCHEMA = [
   { key: 'FACEBOOK_PAGE_TOKEN', scope: 'brand', group: 'meta', type: 'string', secret: true, default: '', label: 'Facebook Page access token' },
   { key: 'INSTAGRAM_USER_ID', scope: 'brand', group: 'meta', type: 'string', default: '', label: 'Instagram user ID' },
   { key: 'INSTAGRAM_ACCESS_TOKEN', scope: 'brand', group: 'meta', type: 'string', secret: true, default: '', label: 'Instagram access token (empty = Page token)' },
+  { key: 'FACEBOOK_TAG_FOLLOWERS', scope: 'brand', group: 'meta', type: 'boolean', default: true, label: 'Add @followers to Facebook posts', hint: 'Ends every Facebook description with @followers, which notifies the Page’s followers.' },
 ];
 
 const BY_KEY = new Map(SETTINGS_SCHEMA.map((s) => [s.key, s]));

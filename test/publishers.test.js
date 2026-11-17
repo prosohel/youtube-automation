@@ -167,7 +167,7 @@ test('facebook: start, upload, finish as PUBLISHED, status', async () => {
   assert.equal(fin.upload_phase, 'finish');
   assert.equal(fin.video_state, 'PUBLISHED');
   assert.equal(fin.video_id, 'fv_1');
-  assert.equal(fin.description, 'Caption #ai');
+  assert.equal(fin.description, 'Caption #ai\n\n@followers', 'followers are mentioned by default');
   assert.equal(res.url, 'https://www.facebook.com/reel/fv_1');
   assert.equal(res.state, 'published');
 });
@@ -192,7 +192,7 @@ test('facebook: a video over 90 s goes up as a Page video in the chunks Facebook
   assert.equal(phases[2].start_offset, '4');
   assert.equal(phases[2].video_file_chunk.size, 3);
   assert.equal(phases[3].upload_phase, 'finish');
-  assert.equal(phases[3].description, 'Caption #ai');
+  assert.equal(phases[3].description, 'Caption #ai\n\n@followers');
   assert.deepEqual(c.ids, ['pv_1'], 'the id is recorded once finish went through');
   assert.equal(res.url, 'https://www.facebook.com/55/videos/pv_1');
   assert.equal(res.state, 'published');
@@ -206,6 +206,25 @@ test('facebook: findExisting counts a Page video (no publishing phase) that is r
   assert.deepEqual(await find({ video_status: 'ready' }), { remoteId: 'pv_2', url: 'https://www.facebook.com/55/videos/pv_2', state: 'published' });
   assert.equal((await find({ video_status: 'processing' })).state, 'processing');
   assert.equal(await find({ video_status: 'error' }), null);
+});
+
+test('facebook: @followers is left out when the brand turns it off, and never doubled', async () => {
+  const routes = () => [
+    [/\/v27\.0\/55\/video_reels$/, 200, { video_id: 'fv_3', upload_url: 'https://rupload.facebook.com/video-upload/v27.0/fv_3' }],
+    ['rupload.facebook.com/video-upload', 200, { success: true }],
+    [/\/v27\.0\/55\/video_reels$/, 200, { success: true }],
+    [/\/fv_3\?fields=status/, 200, { status: { video_status: 'ready', publishing_phase: { publish_status: 'published' } } }],
+  ];
+  const s = { FACEBOOK_PAGE_ID: '55', FACEBOOK_PAGE_TOKEN: TOKEN, META_GRAPH_VERSION: 'v27.0' };
+  const off = fakeFetch(routes());
+  await getPublisher('facebook').publish(ctx({ ...s, FACEBOOK_TAG_FOLLOWERS: false }, off));
+  assert.equal(JSON.parse(off.calls[2].body).description, 'Caption #ai');
+  const already = fakeFetch(routes());
+  await getPublisher('facebook').publish(ctx(s, already, { caption: 'Hi @Followers friends' }));
+  assert.equal(JSON.parse(already.calls[2].body).description, 'Hi @Followers friends');
+  const empty = fakeFetch(routes());
+  await getPublisher('facebook').publish(ctx(s, empty, { caption: '' }));
+  assert.equal(JSON.parse(empty.calls[2].body).description, '@followers');
 });
 
 test('an API error names the platform and the API message, never the token', async () => {

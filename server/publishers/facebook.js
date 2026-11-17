@@ -14,6 +14,13 @@ function creds(ctx) {
 }
 
 const reelUrl = (id) => `https://www.facebook.com/reel/${id}`;
+
+/** The post text: the caption, ending with @followers (Facebook's mention of the Page's followers) unless turned off or already there. */
+function description(ctx) {
+  const base = String(ctx.caption || '').trim();
+  if (ctx.settings.FACEBOOK_TAG_FOLLOWERS === false || /@followers\b/i.test(base)) return base;
+  return base ? `${base}\n\n@followers` : '@followers';
+}
 const videoUrl = (page, id) => `https://www.facebook.com/${page}/videos/${id}`;
 
 const postJson = (ctx, url, body, token) =>
@@ -65,7 +72,7 @@ async function publishVideo(ctx, media) {
     ctx,
     'facebook',
     api,
-    { method: 'POST', body: form({ upload_phase: 'finish', upload_session_id: session, description: String(ctx.caption || ''), title: String(ctx.video.title || '').slice(0, 255), access_token: token }) },
+    { method: 'POST', body: form({ upload_phase: 'finish', upload_session_id: session, description: description(ctx), title: String(ctx.video.title || '').slice(0, 255), access_token: token }) },
     [token]
   );
   await ctx.onRemoteId(videoId);
@@ -106,7 +113,7 @@ async function publishReel(ctx) {
   await postJson(
     ctx,
     `${graph}/${page}/video_reels`,
-    { access_token: token, video_id: videoId, upload_phase: 'finish', video_state: 'PUBLISHED', description: String(ctx.caption || '') },
+    { access_token: token, video_id: videoId, upload_phase: 'finish', video_state: 'PUBLISHED', description: description(ctx) },
     token
   );
   ctx.log('Facebook: published, waiting for processing');
