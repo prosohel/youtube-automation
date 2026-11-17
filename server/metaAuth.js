@@ -38,7 +38,13 @@ async function takePending(redis, state) {
   return raw ? JSON.parse(raw) : null;
 }
 
-const pageSummary = (p) => ({ id: p.id, name: p.name, instagram: p.instagram ? { id: p.instagram.id, username: p.instagram.username || '' } : null });
+const pageSummary = (p) => ({
+  id: p.id,
+  name: p.name,
+  instagram: p.instagram ? { id: p.instagram.id, username: p.instagram.username || '' } : null,
+  // Facebook lists a Page without a token when the person's role on it cannot post (or the Page demands two-factor auth).
+  noAccess: p.token ? null : `Facebook gave no posting access to this Page${p.tasks ? ` (your role allows: ${p.tasks})` : ''}. Check your role on the Page and two-factor authentication.`,
+});
 
 /**
  * Exchange the code Facebook sent back for the person's Pages. In order: code -> short-lived user token ->
@@ -72,16 +78,24 @@ async function handleCallback(redis, code, pending, redirectUri, { fetch } = {})
   const mine = await request(
     ctx,
     'facebook',
-    `${g}/me/accounts?${new URLSearchParams({ fields: 'id,name,access_token,instagram_business_account{id,username}', limit: '100', access_token: userToken })}`,
+    `${g}/me/accounts?${new URLSearchParams({ fields: 'id,name,access_token,tasks,instagram_business_account{id,username}', limit: '100', access_token: userToken })}`,
     {},
     [...secrets, userToken]
   );
+  // Pages without a token are kept (shown as not usable) so the person can see why a Page is missing.
   const pages = (mine.body.data || [])
-    .filter((p) => p.id && p.access_token)
-    .map((p) => ({ id: String(p.id), name: p.name || '', token: p.access_token, instagram: p.instagram_business_account ? { id: String(p.instagram_business_account.id), username: p.instagram_business_account.username || '' } : null }));
+    .filter((p) => p.id)
+    .map((p) => ({
+      id: String(p.id),
+      name: p.name || '',
+      token: p.access_token || '',
+      tasks: Array.isArray(p.tasks) ? p.tasks.join(', ') : '',
+      instagram: p.instagram_business_account ? { id: String(p.instagram_business_account.id), username: p.instagram_business_account.username || '' } : null,
+    }));
   if (!pages.length) {
     throw new Error('Facebook: no Page came back. Sign in with an account that is an admin of the Page, and tick the Page on the Facebook screen.');
   }
+  if (pages.length === 1 && !pages[0].token) throw new Error(`Facebook: ${pages[0].noAccess || pageSummary(pages[0]).noAccess}`);
   if (pages.length === 1) {
     // Facebook's "Continue with previous settings" hands back only the Pages ticked the first time: say how to tick more.
     const other = await brands.accountHolder(redis, brandId, 'facebook', pages[0].id);
@@ -123,6 +137,7 @@ async function choosePage(redis, state, pageId) {
   const { brandId, pages } = JSON.parse(raw);
   const page = pages.find((p) => p.id === String(pageId));
   if (!page) throw Object.assign(new Error('That Page was not part of this sign-in'), { status: 400 }); // the choice keeps waiting
+  if (!page.token) throw Object.assign(new Error(`Facebook: ${pageSummary(page).noAccess}`), { status: 400 });
   if (!(await brands.getBrand(redis, brandId))) throw new Error(`Brand ${brandId} not found`);
   const saved = await savePage(redis, brandId, page); // a refused Page (another brand's) leaves the choice waiting
   await redis.del(choiceKey(state));

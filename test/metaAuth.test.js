@@ -95,7 +95,7 @@ test('several Pages: they wait, without tokens, until one is picked', async () =
   const fetch = fakeFetch([codeExchange, longExchange, accounts(page('p1', 'One'), page('p2', 'Two', 'ig2'))]);
   const got = await handleCallback(r, 'code_1', await pendingFor(r, a), REDIRECT, { fetch });
   assert.match(got.choose, /^[0-9a-f]{32}$/);
-  assert.deepEqual(got.pages, [{ id: 'p1', name: 'One', instagram: null, usedBy: null }, { id: 'p2', name: 'Two', instagram: { id: 'ig2', username: 'ig_ig2' }, usedBy: null }]);
+  assert.deepEqual(got.pages, [{ id: 'p1', name: 'One', instagram: null, usedBy: null, noAccess: null }, { id: 'p2', name: 'Two', instagram: { id: 'ig2', username: 'ig_ig2' }, usedBy: null, noAccess: null }]);
   assert.equal(JSON.stringify(got).includes('page_p'), false, 'no token leaves the server');
   assert.equal((await own(r, a)).FACEBOOK_PAGE_ID, '', 'nothing saved yet');
 
@@ -168,4 +168,20 @@ test('no Page, a refused code, or a deleted brand each say why, without the app 
   const none = fakeFetch([codeExchange]);
   await assert.rejects(handleCallback(r, 'code_3', { brandId: 'b_gone' }, REDIRECT, { fetch: none }), /Brand b_gone not found/);
   assert.equal(none.calls.length, 0);
+});
+
+test('a Page Facebook lists without a token is shown as not usable, with the reason, and cannot be picked', async () => {
+  const r = await boot();
+  const a = await seedBrand(r, { name: 'A' });
+  const locked = { id: 'p9', name: 'Locked', tasks: ['ANALYZE'] }; // no access_token: the role cannot post
+  const got = await handleCallback(r, 'code_1', await pendingFor(r, a), REDIRECT, { fetch: fakeFetch([codeExchange, longExchange, accounts(page('p1', 'One'), locked)]) });
+  assert.equal(got.pages[0].noAccess, null);
+  assert.match(got.pages[1].noAccess, /no posting access.*ANALYZE/);
+  await assert.rejects(choosePage(r, got.choose, 'p9'), /no posting access/);
+  assert.ok(await pendingChoice(r, got.choose), 'still waiting');
+  await choosePage(r, got.choose, 'p1');
+  assert.equal((await own(r, a)).FACEBOOK_PAGE_ID, 'p1');
+  // Only such a Page: the sign-in fails with that reason instead of saving nothing.
+  const b = await seedBrand(r, { name: 'B' });
+  await assert.rejects(handleCallback(r, 'code_2', await pendingFor(r, b), REDIRECT, { fetch: fakeFetch([codeExchange, longExchange, accounts(locked)]) }), /Facebook: .*no posting access/);
 });
