@@ -282,9 +282,9 @@ function Detail({ id, brandName, onChanged, setToast }) {
                 <PlatformBadge id={p.id} small />
                 <span className="q-plat-name">{p.name}</span>
                 <PlatformStatus rec={v.platforms[p.id]} platform={p.id} />
-                {(!v.platforms[p.id] || ['failed', 'interrupted'].includes(v.platforms[p.id].status)) && (
+                {(!v.platforms[p.id] || ['failed', 'interrupted', 'skipped'].includes(v.platforms[p.id].status)) && (
                   <button type="button" className="btn btn-sm" onClick={() => act('POST', `/api/videos/${v.id}/publish`, { platform: p.id }, `Publishing to ${p.name}`)}>
-                    Publish now
+                    {v.platforms[p.id] && v.platforms[p.id].status === 'skipped' ? 'Upload again' : 'Publish now'}
                   </button>
                 )}
               </div>
