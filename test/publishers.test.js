@@ -172,6 +172,42 @@ test('facebook: start, upload, finish as PUBLISHED, status', async () => {
   assert.equal(res.state, 'published');
 });
 
+test('facebook: a video over 90 s goes up as a Page video in the chunks Facebook asks for, then waits for processing', async () => {
+  const fetch = fakeFetch([
+    [/graph-video\.facebook\.com\/v27\.0\/55\/videos$/, 200, { video_id: 'pv_1', upload_session_id: 's_1', start_offset: '0', end_offset: '4' }],
+    [/graph-video\.facebook\.com\/v27\.0\/55\/videos$/, 200, { start_offset: '4', end_offset: '7' }],
+    [/graph-video\.facebook\.com\/v27\.0\/55\/videos$/, 200, { start_offset: '7', end_offset: '7' }],
+    [/graph-video\.facebook\.com\/v27\.0\/55\/videos$/, 200, { success: true }],
+    [/\/pv_1\?fields=status/, 200, { status: { video_status: 'processing' } }],
+    [/\/pv_1\?fields=status/, 200, { status: { video_status: 'ready' } }],
+  ]);
+  const c = ctx({ FACEBOOK_PAGE_ID: '55', FACEBOOK_PAGE_TOKEN: TOKEN, META_GRAPH_VERSION: 'v27.0' }, fetch, { media: { durationSec: 112, bytes: 7 } });
+  const res = await getPublisher('facebook').publish(c);
+  const phases = fetch.calls.slice(0, 4).map((call) => Object.fromEntries([...call.body.entries()]));
+  assert.equal(phases[0].upload_phase, 'start');
+  assert.equal(phases[0].file_size, String(fs.statSync(file).size));
+  assert.equal(phases[1].upload_phase, 'transfer');
+  assert.equal(phases[1].start_offset, '0');
+  assert.equal(phases[1].video_file_chunk.size, 4, 'the first chunk is what Facebook asked for');
+  assert.equal(phases[2].start_offset, '4');
+  assert.equal(phases[2].video_file_chunk.size, 3);
+  assert.equal(phases[3].upload_phase, 'finish');
+  assert.equal(phases[3].description, 'Caption #ai');
+  assert.deepEqual(c.ids, ['pv_1'], 'the id is recorded once finish went through');
+  assert.equal(res.url, 'https://www.facebook.com/55/videos/pv_1');
+  assert.equal(res.state, 'published');
+  assert.equal(fetch.calls.some((x) => x.url.includes('video_reels')), false, 'no Reel call');
+});
+
+test('facebook: findExisting counts a Page video (no publishing phase) that is ready or processing as posted', async () => {
+  const status = (st) => fakeFetch([[/fields=status/, 200, { status: st }]]);
+  const s = { FACEBOOK_PAGE_ID: '55', FACEBOOK_PAGE_TOKEN: TOKEN };
+  const find = (st) => getPublisher('facebook').findExisting(ctx(s, status(st), { record: { remoteId: 'pv_2' } }));
+  assert.deepEqual(await find({ video_status: 'ready' }), { remoteId: 'pv_2', url: 'https://www.facebook.com/55/videos/pv_2', state: 'published' });
+  assert.equal((await find({ video_status: 'processing' })).state, 'processing');
+  assert.equal(await find({ video_status: 'error' }), null);
+});
+
 test('an API error names the platform and the API message, never the token', async () => {
   const fetch = fakeFetch([[/video_reels/, 400, { error: { message: 'Invalid OAuth access token', code: 190 } }]]);
   const err = await getPublisher('facebook')

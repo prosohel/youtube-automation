@@ -254,6 +254,7 @@ async function runPublish({ redis, videoId, platform, rule, getPublisher = requi
 
   // Over a platform's length or size limit: skip with the reason instead of uploading and being rejected.
   const media = video.files && video.files.video ? await mediaInfo(video.files.video) : null;
+  ctx.media = media; // publishers may choose a format by it (Facebook: Reel or Page video)
   const over = checkLimits(platform, media);
   if (over) {
     await setRec({ status: 'skipped', error: over, attempts: rec.attempts || 0 });

@@ -1,14 +1,18 @@
 // What each platform accepts, checked before an upload starts. A video over a limit is skipped with a clear
 // reason instead of being uploaded three times and rejected three times.
-// Sources: Facebook Reels API (3-90 s), Instagram Reels API (up to 15 min, 300 MB), YouTube (15 min for
-// unverified accounts, 256 GB otherwise), TikTok per account (max_video_post_duration_sec from creator_info).
+// Sources: Facebook Reels API (3-90 s; longer videos go up as a Page video, up to 240 min / 10 GB), Instagram
+// Reels API (up to 15 min, 300 MB), YouTube (15 min for unverified accounts, 256 GB otherwise), TikTok per
+// account (max_video_post_duration_sec from creator_info).
 
 const { run } = require('./util');
 
 const MB = 1024 * 1024;
 
+/** The longest Facebook Reel; over it the Facebook publisher posts a Page video instead (docs read 2026-11-17). */
+const FACEBOOK_REEL_MAX_SEC = 90;
+
 const LIMITS = {
-  facebook: { minSec: 3, maxSec: 90, maxBytes: 1024 * MB, name: 'Facebook Reels' },
+  facebook: { minSec: 3, maxSec: 240 * 60, maxBytes: 10 * 1024 * MB, name: 'Facebook' },
   instagram: { minSec: 3, maxSec: 15 * 60, maxBytes: 300 * MB, name: 'Instagram Reels' },
   youtube: { minSec: 1, maxSec: 15 * 60, maxBytes: 256 * 1024 * MB, name: 'YouTube (unverified account: 15 min)' },
   tiktok: { minSec: 3, maxSec: 10 * 60, maxBytes: 4 * 1024 * MB, name: 'TikTok' },
@@ -49,4 +53,4 @@ class SkipError extends Error {
   }
 }
 
-module.exports = { LIMITS, checkLimits, mediaInfo, SkipError };
+module.exports = { LIMITS, FACEBOOK_REEL_MAX_SEC, checkLimits, mediaInfo, SkipError };

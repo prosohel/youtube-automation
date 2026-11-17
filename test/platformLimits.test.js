@@ -3,9 +3,12 @@ const assert = require('node:assert/strict');
 const L = require('../src/platformLimits');
 const { scriptShortfall, scriptTimeoutSec } = require('../src/script');
 
-test('a 10-minute video is skipped on Facebook Reels, fits Instagram and YouTube, and TikTok follows the account limit', () => {
+test('a 10-minute video fits Facebook (as a Page video), Instagram and YouTube, and TikTok follows the account limit', () => {
   const ten = { durationSec: 600, bytes: 500 * 1024 * 1024 };
-  assert.match(L.checkLimits('facebook', ten), /up to 1 min 30 s/);
+  assert.equal(L.checkLimits('facebook', ten), null);
+  assert.equal(L.FACEBOOK_REEL_MAX_SEC, 90);
+  assert.match(L.checkLimits('facebook', { durationSec: 241 * 60, bytes: 1 }), /Facebook allows up to 240 min 0 s/);
+  assert.match(L.checkLimits('facebook', { durationSec: 60, bytes: 11 * 1024 * 1024 * 1024 }), /10240 MB/);
   assert.match(L.checkLimits('instagram', ten), /300 MB/); // over the size, not the time
   assert.equal(L.checkLimits('instagram', { durationSec: 600, bytes: 200 * 1024 * 1024 }), null);
   assert.equal(L.checkLimits('youtube', ten), null);
