@@ -32,6 +32,14 @@ async function videoStatus(ctx, { graph, token }, id) {
 }
 
 async function publish(ctx) {
+  try {
+    return await publishAny(ctx);
+  } catch (e) {
+    throw pageAccessLost(e);
+  }
+}
+
+async function publishAny(ctx) {
   const media = ctx.media || (ctx.video && ctx.video.files && ctx.video.files.video ? await mediaInfo(ctx.video.files.video) : null);
   if (media && media.durationSec > FACEBOOK_REEL_MAX_SEC) return publishVideo(ctx, media);
   return publishReel(ctx);
@@ -158,8 +166,24 @@ async function findExisting(ctx) {
 
 async function test(ctx) {
   const { graph, page, token } = creds(ctx);
-  const { body } = await request(ctx, 'facebook', `${graph}/${page}?${new URLSearchParams({ fields: 'name', access_token: token })}`, {}, [token]);
-  return { ok: true, detail: `Page: ${body.name}` };
+  try {
+    const { body } = await request(ctx, 'facebook', `${graph}/${page}?${new URLSearchParams({ fields: 'name', access_token: token })}`, {}, [token]);
+    return { ok: true, detail: `Page: ${body.name}` };
+  } catch (e) {
+    throw pageAccessLost(e);
+  }
+}
+
+/**
+ * Facebook keeps an app's access only to the Pages ticked in its latest sign-in; a Page token for a Page left
+ * unticked fails with "... must be granted before impersonating a user's page". Say how to get it back.
+ */
+function pageAccessLost(e) {
+  if (!/impersonat/i.test(e.message)) return e;
+  return Object.assign(
+    new Error(`${e.message}. Facebook removed this app's access to the Page, usually because a later Facebook sign-in (for another brand) did not tick it. Press Connect Facebook, then "Edit settings" on the Facebook screen, and tick every Page your brands use.`),
+    { config: true, auth: true }
+  );
 }
 
 module.exports = { publish, findExisting, test };

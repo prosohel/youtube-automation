@@ -4,7 +4,7 @@ const { freshRedis, closeAll } = require('./helpers/redis');
 const settings = require('../server/settings');
 const brands = require('../server/brands');
 const { seedBrand } = require('./helpers/brands');
-const { startConnect, takePending, handleCallback, pendingChoice, choosePage } = require('../server/metaAuth');
+const { startConnect, takePending, handleCallback, pendingChoice, choosePage, droppedWarning } = require('../server/metaAuth');
 
 test.after(closeAll);
 
@@ -184,4 +184,22 @@ test('a Page Facebook lists without a token is shown as not usable, with the rea
   // Only such a Page: the sign-in fails with that reason instead of saving nothing.
   const b = await seedBrand(r, { name: 'B' });
   await assert.rejects(handleCallback(r, 'code_2', await pendingFor(r, b), REDIRECT, { fetch: fakeFetch([codeExchange, longExchange, accounts(locked)]) }), /Facebook: .*no posting access/);
+});
+
+test('a sign-in refreshes other brands\' Page tokens and names the brands whose Page was left unticked', async () => {
+  const r = await boot();
+  const a = await seedBrand(r, { name: 'A' });
+  const b = await seedBrand(r, { name: 'B' });
+  const c = await seedBrand(r, { name: 'C' });
+  await handleCallback(r, 'code_1', await pendingFor(r, a), REDIRECT, { fetch: fakeFetch([codeExchange, longExchange, accounts(page('p1', 'One'))]) });
+  await handleCallback(r, 'code_2', await pendingFor(r, b), REDIRECT, { fetch: fakeFetch([codeExchange, longExchange, accounts(page('p2', 'Two'))]) });
+  // C's sign-in ticks A's Page and its own, not B's: A gets the fresh token, B is reported as dropped.
+  const fresh = (id, name) => ({ ...page(id, name), access_token: `fresh_${id}` });
+  const got = await handleCallback(r, 'code_3', await pendingFor(r, c), REDIRECT, { fetch: fakeFetch([codeExchange, longExchange, accounts(fresh('p1', 'One'), fresh('p3', 'Three'))]) });
+  assert.ok(got.choose);
+  assert.deepEqual(got.dropped, [{ brand: 'B', page: 'Two' }]);
+  assert.equal((await own(r, a)).FACEBOOK_PAGE_TOKEN, 'fresh_p1');
+  assert.equal((await own(r, b)).FACEBOOK_PAGE_TOKEN, 'page_p2');
+  assert.match(droppedWarning(got.dropped), /"Two" \(B\).*tick every Page/);
+  assert.equal(droppedWarning([]), '');
 });

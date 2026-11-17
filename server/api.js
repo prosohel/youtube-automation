@@ -449,8 +449,10 @@ function createApp({ redis, queues, password = '', secureCookies = false }) {
     if (!pending) return backFromMeta(res, '', 'This Facebook sign-in expired. Press Connect Facebook again.');
     try {
       const got = await metaAuth.handleCallback(redis, String(req.query.code), pending, META_REDIRECT);
-      if (got.choose) return backFromMeta(res, brandId, 'choose', { state: got.choose });
-      backFromMeta(res, brandId, 'connected', { account: got.page.name || got.page.id });
+      const warning = metaAuth.droppedWarning(got.dropped);
+      const warn = warning ? { warn: warning } : {};
+      if (got.choose) return backFromMeta(res, brandId, 'choose', { state: got.choose, ...warn });
+      backFromMeta(res, brandId, 'connected', { account: got.page.name || got.page.id, ...warn });
     } catch (e) {
       backFromMeta(res, brandId, e.message);
     }

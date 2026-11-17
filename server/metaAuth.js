@@ -92,6 +92,7 @@ async function handleCallback(redis, code, pending, redirectUri, { fetch } = {})
       tasks: Array.isArray(p.tasks) ? p.tasks.join(', ') : '',
       instagram: p.instagram_business_account ? { id: String(p.instagram_business_account.id), username: p.instagram_business_account.username || '' } : null,
     }));
+  const others = await otherBrandsPages(redis, brandId, pages);
   if (!pages.length) {
     throw new Error('Facebook: no Page came back. Sign in with an account that is an admin of the Page, and tick the Page on the Facebook screen.');
   }
@@ -105,11 +106,40 @@ async function handleCallback(redis, code, pending, redirectUri, { fetch } = {})
         { conflict: true, status: 409 }
       );
     }
-    return savePage(redis, brandId, pages[0]);
+    const saved = await savePage(redis, brandId, pages[0]);
+    return others.dropped.length ? { ...saved, dropped: others.dropped } : saved;
   }
   const state = crypto.randomBytes(16).toString('hex');
   await redis.set(choiceKey(state), JSON.stringify({ brandId, pages }), 'EX', PENDING_SECONDS);
-  return { choose: state, pages: await summaries(redis, brandId, pages) };
+  const choice = { choose: state, pages: await summaries(redis, brandId, pages) };
+  return others.dropped.length ? { ...choice, dropped: others.dropped } : choice;
+}
+
+/**
+ * Facebook grants an app only the Pages ticked in the latest sign-in: a Page left unticked loses the app's access,
+ * and its saved token then fails with "(#200) ... must be granted before impersonating a user's page".
+ * So every other brand whose Page came back gets this sign-in's fresh token, and the brands whose Page did not
+ * come back are returned (dropped) so the person can be told to sign in again with every Page ticked.
+ */
+async function otherBrandsPages(redis, brandId, pages) {
+  const byId = new Map(pages.filter((p) => p.token).map((p) => [p.id, p]));
+  const all = await brands.listBrands(redis, { includeArchived: true });
+  const dropped = [];
+  for (const b of all) {
+    const pageId = b.id !== brandId && b.accounts && b.accounts.facebook && b.accounts.facebook.id;
+    if (!pageId) continue;
+    const page = byId.get(String(pageId));
+    if (page) await brands.saveBrandSettings(redis, b.id, { FACEBOOK_PAGE_TOKEN: page.token });
+    else if (!b.archived) dropped.push({ brand: b.name, page: b.accounts.facebook.name || pageId });
+  }
+  return { dropped };
+}
+
+/** One line telling the person which brands' Pages this sign-in left unticked, or '' when none. */
+function droppedWarning(dropped) {
+  if (!dropped || !dropped.length) return '';
+  const list = dropped.map((d) => `"${d.page}" (${d.brand})`).join(', ');
+  return `Facebook no longer gives this app access to ${list}, because they were not ticked in this sign-in. Connect Facebook again, press "Edit settings" on the Facebook screen and tick every Page your brands use.`;
 }
 
 /** The Pages without their tokens, each marked with the other brand that already uses it (usedBy), if any. */
@@ -160,4 +190,4 @@ async function savePage(redis, brandId, page) {
   return { page: { id: page.id, name: page.name }, instagram: page.instagram ? { id: page.instagram.id, username: page.instagram.username } : null };
 }
 
-module.exports = { SCOPES, startConnect, takePending, handleCallback, pendingChoice, choosePage };
+module.exports = { SCOPES, startConnect, takePending, handleCallback, pendingChoice, choosePage, droppedWarning };

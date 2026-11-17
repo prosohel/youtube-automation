@@ -306,6 +306,7 @@ export default function Integrations() {
   const tt = params.get('tiktok');
   const fb = params.get('meta');
   const ttAccount = params.get('account');
+  const fbWarn = params.get('warn');
   useEffect(() => {
     if (yt) setToast(yt === 'connected' ? `YouTube connected${channel ? `: ${channel}` : ''}` : `YouTube: ${yt}`);
   }, [yt, channel, setToast]);
@@ -315,8 +316,10 @@ export default function Integrations() {
   }, [tt, ttAccount, setToast]);
   useEffect(() => {
     // "choose" is handled on the brand card (which Page?); errors from the server already start with "Facebook:".
-    if (fb && fb !== 'choose') setToast(fb === 'connected' ? `Facebook connected${ttAccount ? `: ${ttAccount}` : ''}` : /^Facebook/.test(fb) ? fb : `Facebook: ${fb}`);
-  }, [fb, ttAccount, setToast]);
+    // warn: Pages of other brands this sign-in left unticked (Facebook removed the app's access to them).
+    if (fb === 'choose' && fbWarn) setToast(fbWarn);
+    if (fb && fb !== 'choose') setToast(fb === 'connected' ? `Facebook connected${ttAccount ? `: ${ttAccount}` : ''}${fbWarn ? `. ${fbWarn}` : ''}` : /^Facebook/.test(fb) ? fb : `Facebook: ${fb}`);
+  }, [fb, fbWarn, ttAccount, setToast]);
 
   if (!data) {
     return (
