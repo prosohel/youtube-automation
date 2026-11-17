@@ -185,9 +185,10 @@ function PagePicker({ state, brand, onDone, onChanged, setToast }) {
               <span>
                 <strong>{p.name || `Page ${p.id}`}</strong>
                 <span className="faint"> · {p.instagram ? `Instagram @${p.instagram.username || p.instagram.id}` : 'no Instagram account linked'}</span>
+                {p.usedBy && <span className="faint"> · used by brand {p.usedBy}</span>}
               </span>
-              <button type="button" className="btn btn-primary btn-sm" disabled={Boolean(busy)} onClick={() => pick(p)} aria-label={`Use ${p.name || p.id}`}>
-                {busy === p.id ? 'Saving…' : 'Use this Page'}
+              <button type="button" className="btn btn-primary btn-sm" disabled={Boolean(busy) || Boolean(p.usedBy)} onClick={() => pick(p)} aria-label={`Use ${p.name || p.id}`}>
+                {busy === p.id ? 'Saving…' : p.usedBy ? 'Taken' : 'Use this Page'}
               </button>
             </li>
           ))}

@@ -82,10 +82,30 @@ async function handleCallback(redis, code, pending, redirectUri, { fetch } = {})
   if (!pages.length) {
     throw new Error('Facebook: no Page came back. Sign in with an account that is an admin of the Page, and tick the Page on the Facebook screen.');
   }
-  if (pages.length === 1) return savePage(redis, brandId, pages[0]);
+  if (pages.length === 1) {
+    // Facebook's "Continue with previous settings" hands back only the Pages ticked the first time: say how to tick more.
+    const other = await brands.accountHolder(redis, brandId, 'facebook', pages[0].id);
+    if (other) {
+      throw Object.assign(
+        new Error(`Facebook only offered the Page "${pages[0].name || pages[0].id}", which brand "${other.name}" already uses. Connect again, press "Edit settings" on the Facebook screen and tick this brand's Page too.`),
+        { conflict: true, status: 409 }
+      );
+    }
+    return savePage(redis, brandId, pages[0]);
+  }
   const state = crypto.randomBytes(16).toString('hex');
   await redis.set(choiceKey(state), JSON.stringify({ brandId, pages }), 'EX', PENDING_SECONDS);
-  return { choose: state, pages: pages.map(pageSummary) };
+  return { choose: state, pages: await summaries(redis, brandId, pages) };
+}
+
+/** The Pages without their tokens, each marked with the other brand that already uses it (usedBy), if any. */
+async function summaries(redis, brandId, pages) {
+  return Promise.all(
+    pages.map(async (p) => {
+      const other = await brands.accountHolder(redis, brandId, 'facebook', p.id);
+      return { ...pageSummary(p), usedBy: other ? other.name : null };
+    })
+  );
 }
 
 /** The Pages waiting to be picked under this state, without their tokens: { brandId, pages } or null. */
@@ -93,7 +113,7 @@ async function pendingChoice(redis, state) {
   const raw = state ? await redis.get(choiceKey(state)) : null;
   if (!raw) return null;
   const { brandId, pages } = JSON.parse(raw);
-  return { brandId, pages: pages.map(pageSummary) };
+  return { brandId, pages: await summaries(redis, brandId, pages) };
 }
 
 /** Save the Page picked from a waiting choice for its brand; the choice is used up. */
@@ -104,8 +124,9 @@ async function choosePage(redis, state, pageId) {
   const page = pages.find((p) => p.id === String(pageId));
   if (!page) throw Object.assign(new Error('That Page was not part of this sign-in'), { status: 400 }); // the choice keeps waiting
   if (!(await brands.getBrand(redis, brandId))) throw new Error(`Brand ${brandId} not found`);
+  const saved = await savePage(redis, brandId, page); // a refused Page (another brand's) leaves the choice waiting
   await redis.del(choiceKey(state));
-  return savePage(redis, brandId, page);
+  return saved;
 }
 
 /**

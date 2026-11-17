@@ -245,6 +245,7 @@ async function ensureBrands(redis) {
 
 module.exports = {
   listBrands,
+  accountHolder,
   getBrand,
   createBrand,
   updateBrand,

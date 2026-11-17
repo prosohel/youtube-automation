@@ -95,7 +95,7 @@ test('several Pages: they wait, without tokens, until one is picked', async () =
   const fetch = fakeFetch([codeExchange, longExchange, accounts(page('p1', 'One'), page('p2', 'Two', 'ig2'))]);
   const got = await handleCallback(r, 'code_1', await pendingFor(r, a), REDIRECT, { fetch });
   assert.match(got.choose, /^[0-9a-f]{32}$/);
-  assert.deepEqual(got.pages, [{ id: 'p1', name: 'One', instagram: null }, { id: 'p2', name: 'Two', instagram: { id: 'ig2', username: 'ig_ig2' } }]);
+  assert.deepEqual(got.pages, [{ id: 'p1', name: 'One', instagram: null, usedBy: null }, { id: 'p2', name: 'Two', instagram: { id: 'ig2', username: 'ig_ig2' }, usedBy: null }]);
   assert.equal(JSON.stringify(got).includes('page_p'), false, 'no token leaves the server');
   assert.equal((await own(r, a)).FACEBOOK_PAGE_ID, '', 'nothing saved yet');
 
@@ -128,17 +128,34 @@ test('a wrong pick leaves the choice waiting; a Page without Instagram clears an
   assert.deepEqual(await accountsOf(r, a), { facebook: { id: 'p1', name: 'One' } });
 });
 
-test('a Page another brand already has is refused and nothing is saved', async () => {
+test('the only Page offered already belongs to another brand: refused, saying how to tick more Pages', async () => {
   const r = await boot();
   const a = await seedBrand(r, { name: 'A' });
   const b = await seedBrand(r, { name: 'B' });
   await handleCallback(r, 'code_1', await pendingFor(r, a), REDIRECT, { fetch: fakeFetch([codeExchange, longExchange, accounts(page('p1', 'Same'))]) });
   await assert.rejects(
     handleCallback(r, 'code_2', await pendingFor(r, b), REDIRECT, { fetch: fakeFetch([codeExchange, longExchange, accounts(page('p1', 'Same'))]) }),
-    (e) => e.conflict === true && /Already used by brand "A"/.test(e.message)
+    (e) => e.conflict === true && /only offered the Page "Same", which brand "A" already uses.*Edit settings/.test(e.message)
   );
   assert.equal((await own(r, b)).FACEBOOK_PAGE_TOKEN, '');
   assert.equal(await accountsOf(r, b).then((x) => x.facebook), undefined);
+});
+
+test('among several Pages, the ones other brands use are marked and refused; its own Page is fine again', async () => {
+  const r = await boot();
+  const a = await seedBrand(r, { name: 'A' });
+  const b = await seedBrand(r, { name: 'B' });
+  await handleCallback(r, 'code_1', await pendingFor(r, a), REDIRECT, { fetch: fakeFetch([codeExchange, longExchange, accounts(page('p1', 'One'))]) });
+  const got = await handleCallback(r, 'code_2', await pendingFor(r, b), REDIRECT, { fetch: fakeFetch([codeExchange, longExchange, accounts(page('p1', 'One'), page('p2', 'Two'))]) });
+  assert.deepEqual(got.pages.map((p) => [p.id, p.usedBy]), [['p1', 'A'], ['p2', null]]);
+  assert.deepEqual((await pendingChoice(r, got.choose)).pages.map((p) => p.usedBy), ['A', null]);
+  await assert.rejects(choosePage(r, got.choose, 'p1'), (e) => e.conflict === true);
+  assert.ok(await pendingChoice(r, got.choose), 'the choice still waits after a refused pick');
+  await choosePage(r, got.choose, 'p2');
+  assert.equal((await own(r, b)).FACEBOOK_PAGE_ID, 'p2');
+  // Reconnecting A with its own Page among several: not "used by" itself.
+  const again = await handleCallback(r, 'code_3', await pendingFor(r, a), REDIRECT, { fetch: fakeFetch([codeExchange, longExchange, accounts(page('p1', 'One'), page('p2', 'Two'))]) });
+  assert.deepEqual(again.pages.map((p) => p.usedBy), [null, 'B']);
 });
 
 test('no Page, a refused code, or a deleted brand each say why, without the app secret', async () => {
