@@ -8,8 +8,12 @@ const path = require('path');
 const cfg = require('./config');
 
 let client = null;
+let clientFor = '';
 function s3() {
-  if (client) return client;
+  // Rebuilt when the credentials change (they can be edited in the dashboard while the app runs).
+  const id = [cfg.r2.accountId, cfg.r2.accessKey, cfg.r2.secret].join('|');
+  if (client && clientFor === id) return client;
+  clientFor = id;
   const { S3Client } = require('@aws-sdk/client-s3');
   client = new S3Client({
     region: 'auto',

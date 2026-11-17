@@ -49,13 +49,26 @@ async function request(ctx, platform, url, opts = {}, secrets = []) {
     (err && err.code !== 'ok' && (err.message || err.code)) ||
     (body && body.debug_info && body.debug_info.message);
   if (!res.ok || apiError) {
-    const why = apiError || text.slice(0, 300) || 'no details';
+    let why = apiError || text.slice(0, 300) || 'no details';
+    // TikTok's messages are often only a link to its guidelines; the code says what is actually wrong.
+    const code = err && typeof err.code === 'string' && err.code !== 'ok' ? err.code : '';
+    if (code && !why.includes(code)) why = `${why} [${code}]`;
+    if (HINTS[code]) why = `${HINTS[code]} - ${why}`;
     const e = new Error(redact(`${NAMES[platform]}: ${why} (HTTP ${res.status})`, secrets));
     if (res.status === 401 || (err && (err.code === 190 || err.code === 'access_token_invalid'))) e.auth = true;
     throw e;
   }
   return { status: res.status, body: body || {} };
 }
+
+/** Plain-language fixes for API error codes whose own message does not say what to do. */
+const HINTS = {
+  unaudited_client_can_only_post_to_private_accounts:
+    'TikTok has not approved (audited) this app yet, so it can only post private videos: set TikTok privacy to SELF_ONLY for this brand and make the TikTok account private, or get the app audited',
+  spam_risk_too_many_posts: 'TikTok daily post limit reached for this account; try again tomorrow',
+  spam_risk_user_banned_from_posting: 'TikTok has blocked this account from posting',
+  reached_active_user_cap: 'This TikTok app reached its daily user limit; try again tomorrow',
+};
 
 const wait = (ctx, ms) => (ctx.sleep || sleep)(ms);
 

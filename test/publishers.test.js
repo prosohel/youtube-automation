@@ -491,3 +491,17 @@ test('uploadVideo with publishAt uploads private and lets YouTube make it public
   await uploadVideo({ videoFile: file, title: 'Now', description: 'd', tags: [], auth, privacy: 'public' });
   assert.equal(google.inserts[1].status.publishAt, undefined);
 });
+
+test('http: a TikTok error that is only a guidelines link gets its code and a plain fix', async () => {
+  const { request } = require('../server/publishers/http');
+  const reply = (status, body) => ({ ctx: { fetch: async () => new Response(JSON.stringify(body), { status }) } });
+  const guidelines = 'Please review our integration guidelines at https://developers.tiktok.com/doc/content-sharing-guidelines/';
+  const unaudited = reply(403, { error: { code: 'unaudited_client_can_only_post_to_private_accounts', message: guidelines } });
+  await assert.rejects(request(unaudited.ctx, 'tiktok', 'https://x'), (e) => {
+    assert.match(e.message, /^TikTok: TikTok has not approved \(audited\) this app yet.*SELF_ONLY/);
+    assert.match(e.message, /\[unaudited_client_can_only_post_to_private_accounts\] \(HTTP 403\)$/);
+    return true;
+  });
+  const other = reply(400, { error: { code: 'invalid_params', message: 'bad title' } });
+  await assert.rejects(request(other.ctx, 'tiktok', 'https://x'), { message: 'TikTok: bad title [invalid_params] (HTTP 400)' });
+});

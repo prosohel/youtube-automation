@@ -40,6 +40,12 @@ async function asBadRequest(fn) {
 
 const withNext = (r) => ({ ...r, next: validateRule(r).ok ? nextRuns(r, 3).map((d) => d.toISOString()) : [] });
 
+/** The storage settings (STORAGE, R2_*) from Redis into src/config.js, so the dashboard can link to files kept in R2. */
+async function loadStorageConfig(redis) {
+  const all = settings.toConfig(await settings.loadSettings(redis));
+  cfg.applySettings(Object.fromEntries(Object.entries(all).filter(([k]) => k === 'storage' || k.startsWith('r2.'))));
+}
+
 function createApp({ redis, queues, password = '', secureCookies = false }) {
   const app = express();
   // Behind a reverse proxy (Caddy, nginx, Cloudflare) the visitor's address is in X-Forwarded-For: TRUST_PROXY=1 reads it.
@@ -222,6 +228,8 @@ function createApp({ redis, queues, password = '', secureCookies = false }) {
 
   app.get('/api/media/:id/:kind', async (req, res) => {
     const v = await store.getVideo(redis, req.params.id);
+    // The worker loads the R2 settings itself; this process needs them too, or files moved to R2 are a 404.
+    await loadStorageConfig(redis);
     const kind = req.params.kind === 'thumb' ? 'thumb' : 'video';
     const file = v && v.files && v.files[kind];
     const key = v && v.files && v.files.r2 && v.files.r2[kind];
