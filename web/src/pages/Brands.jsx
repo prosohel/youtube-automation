@@ -120,7 +120,9 @@ function accountRows(brand, values) {
   const ytName = a.youtube ? text(a.youtube.name) || text(a.youtube.id) : '';
   const ttUser = a.tiktok ? text(a.tiktok.username).replace(/^@/, '') : '';
   const igId = (a.instagram && text(a.instagram.id)) || text(values && values.INSTAGRAM_USER_ID);
+  const igUser = a.instagram ? text(a.instagram.username).replace(/^@/, '') : '';
   const fbId = (a.facebook && text(a.facebook.id)) || text(values && values.FACEBOOK_PAGE_ID);
+  const fbName = a.facebook ? text(a.facebook.name) : '';
   const ig = Boolean(a.instagram || igId);
   const fb = Boolean(a.facebook || fbId);
   return [
@@ -134,9 +136,65 @@ function accountRows(brand, values) {
       detail: tt ? (ttUser ? `@${ttUser} · signed in` : 'Signed in') : 'Not signed in',
       href: `/api/tiktok/connect?brand=${enc(brand.id)}`, action: tt ? 'Reconnect' : 'Connect',
     },
-    { id: 'instagram', name: 'Instagram', on: ig, test: ['instagram', 'Test Instagram'], detail: ig ? (igId ? `Account ${igId}` : 'Connected') : 'Not set up', action: ig ? 'Edit' : 'Set up' },
-    { id: 'facebook', name: 'Facebook', on: fb, test: ['facebook', 'Test Facebook'], detail: fb ? (fbId ? `Page ${fbId}` : 'Connected') : 'Not set up', action: fb ? 'Edit' : 'Set up' },
+    {
+      id: 'facebook', name: 'Facebook', on: fb, test: ['facebook', 'Test Facebook'],
+      detail: fb ? (fbName ? `${fbName} · signed in` : fbId ? `Page ${fbId}` : 'Connected') : 'Not signed in',
+      href: `/api/meta/connect?brand=${enc(brand.id)}`, action: fb ? 'Reconnect' : 'Connect',
+    },
+    // Instagram comes with the Facebook Page it is linked to (Connect Facebook); the fields below are for a manual setup.
+    { id: 'instagram', name: 'Instagram', on: ig, test: ['instagram', 'Test Instagram'], detail: ig ? (igUser ? `@${igUser} · via the Page` : igId ? `Account ${igId}` : 'Connected') : 'Not set up', action: ig ? 'Edit' : 'Set up' },
   ];
+}
+
+/** After a Facebook sign-in that found several Pages: which one does this brand post as? One click saves it. */
+function PagePicker({ state, brand, onDone, onChanged, setToast }) {
+  const [waiting, setWaiting] = useState(null); // { brandId, pages } from the server
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState('');
+  useEffect(() => {
+    let gone = false;
+    api.get(`/api/meta/pages?state=${enc(state)}`).then((w) => !gone && setWaiting(w), (e) => !gone && setError(e.message));
+    return () => { gone = true; };
+  }, [state]);
+  const pick = async (page) => {
+    setBusy(page.id);
+    try {
+      const saved = await api.send('POST', '/api/meta/choose', { state, pageId: page.id });
+      setToast(`Facebook connected: ${saved.page.name || saved.page.id}${saved.instagram ? ` (Instagram @${saved.instagram.username || saved.instagram.id})` : ''}`);
+      await onChanged();
+      onDone();
+    } catch (e) {
+      setError(e.message);
+      setBusy('');
+    }
+  };
+  const forThisBrand = !waiting || waiting.brandId === brand.id;
+  return (
+    <section className="card" aria-labelledby="page-picker-h">
+      <div className="between" style={{ flexWrap: 'nowrap' }}>
+        <h2 id="page-picker-h" className="eyebrow">Which Facebook Page posts as <span lang={nameLang(brand.name)}>{brand.name}</span>?</h2>
+        <button type="button" className="btn btn-sm" onClick={onDone}>Cancel</button>
+      </div>
+      {error && <p className="muted" role="alert">{error}</p>}
+      {!error && !waiting && <p className="muted" role="status">Loading your Pages…</p>}
+      {waiting && !forThisBrand && <p className="muted" role="alert">This sign-in was started for another brand. Press Connect Facebook on this brand’s card.</p>}
+      {waiting && forThisBrand && (
+        <ul className="in-archived-list" aria-label="Your Facebook Pages">
+          {waiting.pages.map((p) => (
+            <li key={p.id} className="between" style={{ gap: 12 }}>
+              <span>
+                <strong>{p.name || `Page ${p.id}`}</strong>
+                <span className="faint"> · {p.instagram ? `Instagram @${p.instagram.username || p.instagram.id}` : 'no Instagram account linked'}</span>
+              </span>
+              <button type="button" className="btn btn-primary btn-sm" disabled={Boolean(busy)} onClick={() => pick(p)} aria-label={`Use ${p.name || p.id}`}>
+                {busy === p.id ? 'Saving…' : 'Use this Page'}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
 }
 
 /** The teal panel of the brand on screen: its name, on/off switch, a one-line summary and its accounts. */
@@ -305,6 +363,7 @@ function BrandView({ brand, focus, onChanged, setToast, side }) {
           {
             id: 'meta', platform: 'instagram', title: 'Instagram and Facebook', specs: group('meta'),
             sub: 'A Page or Instagram account can belong to one brand only.',
+            note: 'Connect Facebook signs in to this brand’s Page and fills these in, with the Instagram account linked to that Page. Edit them by hand only for a Page token you made yourself.',
           },
         ],
       },
@@ -420,7 +479,7 @@ function AddBrand({ brands, onAdded, onClose, setToast }) {
 export default function Brands({ setToast, head, side }) {
   const { data, error, reload } = usePoll('/api/brands?archived=1', 60000);
   const { picked } = useBrands();
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const [showArchived, setShowArchived] = useState(false);
   const [chosen, setChosen] = useState(null);
   const [adding, setAdding] = useState(false);
@@ -438,8 +497,11 @@ export default function Brands({ setToast, head, side }) {
     [onChanged],
   );
 
-  // After a YouTube or TikTok sign-in we come back to /integrations?brand=<id>&youtube=...: show that brand.
-  const returnedTo = params.get('youtube') || params.get('tiktok') ? params.get('brand') : null;
+  // After a YouTube, TikTok or Facebook sign-in we come back to /integrations?brand=<id>&youtube=...: show that brand.
+  const returnedTo = params.get('youtube') || params.get('tiktok') || params.get('meta') ? params.get('brand') : null;
+  // A Facebook sign-in with several Pages: /integrations?brand=<id>&meta=choose&state=<id> asks which one the brand posts as.
+  const choosing = params.get('meta') === 'choose' ? params.get('state') : null;
+  const doneChoosing = useCallback(() => setParams(returnedTo ? { brand: returnedTo } : {}, { replace: true }), [setParams, returnedTo]);
   // The brand picked in the sidebar is the one shown, until another is chosen here.
   useEffect(() => { if (picked && picked !== ALL) setChosen(picked); }, [picked]);
   useEffect(() => { if (returnedTo) setChosen(returnedTo); }, [returnedTo]);
@@ -500,6 +562,7 @@ export default function Brands({ setToast, head, side }) {
         )}
       </header>
       {addOpen && <AddBrand brands={live} onAdded={onAdded} onClose={live.length > 0 ? () => setAdding(false) : null} setToast={setToast} />}
+      {choosing && current && <PagePicker state={choosing} brand={current} onDone={doneChoosing} onChanged={onChanged} setToast={setToast} />}
       <section aria-label="Brands" className="stack" style={{ gap: 16 }}>
         {!data && <p className="muted" role="status">{error || 'Loading brands…'}</p>}
         {data && live.length === 0 && <p className="muted">No brands yet. Add one above.</p>}

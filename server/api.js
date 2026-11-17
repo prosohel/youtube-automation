@@ -14,6 +14,7 @@ const { pendingRecord } = require('./publishFlow');
 const redo = require('./redo');
 const youtubeAuth = require('./youtubeAuth');
 const tiktokAuth = require('./tiktokAuth');
+const metaAuth = require('./metaAuth');
 const { createAuth, MIN_LENGTH } = require('./auth');
 
 const WEB_DIST = path.join(cfg.ROOT, 'web', 'dist');
@@ -420,6 +421,53 @@ function createApp({ redis, queues, password = '', secureCookies = false }) {
     } catch (e) {
       backFromTiktok(res, brandId, e.message);
     }
+  });
+
+  // Facebook only accepts the redirect listed on the Meta app (Facebook Login -> Valid OAuth Redirect URIs): keep this path in sync there.
+  const META_REDIRECT = `${PUBLIC_URL}/meta/callback`;
+  const backFromMeta = (res, brandId, result, extra = {}) => {
+    const q = new URLSearchParams({ ...(brandId ? { brand: brandId } : {}), meta: result, ...extra });
+    res.redirect(`/integrations?${q}`);
+  };
+
+  // ?brand=<id>: the Page picked after the Facebook sign-in belongs to that brand (kept on this server under a random state).
+  app.get('/api/meta/connect', async (req, res) => {
+    const brandId = String(req.query.brand || '');
+    if (!brandId || !(await brands.getBrand(redis, brandId))) throw bad('Pick a brand to connect Facebook for');
+    try {
+      res.redirect(await metaAuth.startConnect(redis, META_REDIRECT, brandId));
+    } catch (e) {
+      backFromMeta(res, brandId, e.message); // e.g. no Meta app yet: say so on the brand's card
+    }
+  });
+
+  // One Page: saved, back with meta=connected&account=<Page name>. Several: back with meta=choose&state=<id> and the brand card asks which.
+  app.get('/meta/callback', async (req, res) => {
+    const pending = await metaAuth.takePending(redis, String(req.query.state || ''));
+    const brandId = pending ? pending.brandId : '';
+    if (!req.query.code) return backFromMeta(res, brandId, String(req.query.error_description || req.query.error_reason || req.query.error || 'cancelled'));
+    if (!pending) return backFromMeta(res, '', 'This Facebook sign-in expired. Press Connect Facebook again.');
+    try {
+      const got = await metaAuth.handleCallback(redis, String(req.query.code), pending, META_REDIRECT);
+      if (got.choose) return backFromMeta(res, brandId, 'choose', { state: got.choose });
+      backFromMeta(res, brandId, 'connected', { account: got.page.name || got.page.id });
+    } catch (e) {
+      backFromMeta(res, brandId, e.message);
+    }
+  });
+
+  /** The Pages waiting to be picked after a sign-in: { brandId, pages: [{ id, name, instagram }] }; 404 once used or expired. */
+  app.get('/api/meta/pages', async (req, res) => {
+    const waiting = await metaAuth.pendingChoice(redis, String(req.query.state || ''));
+    if (!waiting) throw new HttpError(404, 'This Facebook sign-in expired. Press Connect Facebook again.');
+    res.json(waiting);
+  });
+
+  /** { state, pageId }: save that Page (and its Instagram account) for the brand the sign-in was started for. */
+  app.post('/api/meta/choose', async (req, res) => {
+    const { state, pageId } = req.body || {};
+    if (!state || !pageId) throw bad('state and pageId are required');
+    res.json(await metaAuth.choosePage(redis, String(state), String(pageId)));
   });
 
   /* ---------- dashboard ---------- */

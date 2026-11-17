@@ -52,7 +52,9 @@ Add these to each developer console, replacing the domain:
 |---|---|---|
 | YouTube | Google Cloud → Credentials → OAuth client → Authorized redirect URIs | `https://studio.example.com/oauth2callback` |
 | TikTok | TikTok for Developers → your app → Login Kit → Redirect URI | `https://studio.example.com/tiktok/callback` |
-| Facebook / Instagram | Meta for Developers → app → Facebook Login → Valid OAuth Redirect URIs | `https://studio.example.com/meta/callback` (only if you use the login flow; page tokens from `.env` need none) |
+| Facebook / Instagram | Meta for Developers → app → Facebook Login (for Business) → Settings → Valid OAuth Redirect URIs | `https://studio.example.com/meta/callback` |
+
+For Meta, create a Business-type app with the use cases "Manage everything on your Page" and "Manage messaging & content on Instagram", then paste its App ID and App secret (App settings → Basic) into Integrations → Instagram and Facebook app. "Connect Facebook" on a brand's card signs in, lists the Pages that account manages and saves the chosen Page plus the Instagram account linked to it. Page tokens made this way do not expire.
 
 Google shows the "unverified app" screen until the OAuth consent screen is published; add your account as a test user.
 TikTok posts only to your own account until the app passes TikTok's audit. Meta posts to pages/IG accounts you admin in dev mode.

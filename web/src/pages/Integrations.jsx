@@ -15,7 +15,7 @@ const GROUPS = [
   // The apps below are shared by every brand; each brand signs in to its own accounts on its card under Brands.
   { id: 'youtube', title: 'YouTube app', platform: 'youtube', sub: 'The Google project every brand signs in through. Uploads stay private until Google approves it (YouTube API audit).', tests: [] },
   { id: 'tiktok', title: 'TikTok app', platform: 'tiktok', sub: 'Content Posting API. Until TikTok audits your app, posts can only be private (SELF_ONLY).', tests: [] },
-  { id: 'meta', title: 'Instagram and Facebook app', platform: 'instagram', sub: 'The Meta app behind both. Each brand adds its own Page and Instagram account.', tests: [] },
+  { id: 'meta', title: 'Instagram and Facebook app', platform: 'instagram', sub: 'The Meta app every brand signs in through: Connect Facebook on a brand card picks its Page and the Instagram account linked to it. Until Meta reviews the app, only Pages you manage can be connected.', tests: [] },
 ];
 
 /** The compact list of shared keys: which secret makes each one ready, and the test that proves it. */
@@ -27,6 +27,7 @@ const KEY_ROWS = [
   { id: 'r2', group: 'storage', mono: 'R2', name: 'Cloudflare R2 storage', test: 'r2', keys: () => ['R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY'], unused: (v) => v.STORAGE !== 'r2' },
   { id: 'youtube-app', group: 'youtube', platform: 'youtube', name: 'YouTube app', keys: () => ['YOUTUBE_CLIENT_SECRET'] },
   { id: 'tiktok-app', group: 'tiktok', platform: 'tiktok', name: 'TikTok app', keys: () => ['TIKTOK_CLIENT_SECRET'] },
+  { id: 'meta-app', group: 'meta', platform: 'instagram', name: 'Instagram and Facebook app', keys: () => ['META_APP_SECRET'] },
 ];
 
 const isSecret = (spec) => Boolean(spec.secret);
@@ -303,6 +304,7 @@ export default function Integrations() {
   const yt = params.get('youtube');
   const channel = params.get('channel');
   const tt = params.get('tiktok');
+  const fb = params.get('meta');
   const ttAccount = params.get('account');
   useEffect(() => {
     if (yt) setToast(yt === 'connected' ? `YouTube connected${channel ? `: ${channel}` : ''}` : `YouTube: ${yt}`);
@@ -311,6 +313,10 @@ export default function Integrations() {
     // Errors from the server already start with "TikTok:"; TikTok's own (a cancelled sign-in) do not.
     if (tt) setToast(tt === 'connected' ? `TikTok connected${ttAccount ? `: ${ttAccount}` : ''}` : /^TikTok/.test(tt) ? tt : `TikTok: ${tt}`);
   }, [tt, ttAccount, setToast]);
+  useEffect(() => {
+    // "choose" is handled on the brand card (which Page?); errors from the server already start with "Facebook:".
+    if (fb && fb !== 'choose') setToast(fb === 'connected' ? `Facebook connected${ttAccount ? `: ${ttAccount}` : ''}` : /^Facebook/.test(fb) ? fb : `Facebook: ${fb}`);
+  }, [fb, ttAccount, setToast]);
 
   if (!data) {
     return (

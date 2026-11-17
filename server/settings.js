@@ -136,6 +136,8 @@ const SETTINGS_SCHEMA = [
   { key: 'TIKTOK_REFRESH_TOKEN', scope: 'brand', group: 'tiktok', type: 'string', secret: true, default: '', label: 'TikTok refresh token' },
   { key: 'TIKTOK_PRIVACY', scope: 'brand', group: 'tiktok', type: 'enum', options: ['SELF_ONLY', 'MUTUAL_FOLLOW_FRIENDS', 'FOLLOWER_OF_CREATOR', 'PUBLIC_TO_EVERYONE'], default: 'SELF_ONLY', label: 'TikTok privacy' },
   { key: 'META_GRAPH_VERSION', group: 'meta', type: 'string', default: 'v27.0', label: 'Meta Graph API version' },
+  { key: 'META_APP_ID', group: 'meta', type: 'string', default: '', label: 'Meta app ID' },
+  { key: 'META_APP_SECRET', group: 'meta', type: 'string', secret: true, default: '', label: 'Meta app secret' },
   { key: 'FACEBOOK_PAGE_ID', scope: 'brand', group: 'meta', type: 'string', default: '', label: 'Facebook Page ID' },
   { key: 'FACEBOOK_PAGE_TOKEN', scope: 'brand', group: 'meta', type: 'string', secret: true, default: '', label: 'Facebook Page access token' },
   { key: 'INSTAGRAM_USER_ID', scope: 'brand', group: 'meta', type: 'string', default: '', label: 'Instagram user ID' },

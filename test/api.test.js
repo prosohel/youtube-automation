@@ -540,6 +540,77 @@ test('the TikTok callback sends the person back to the brand it was started for'
   assert.deepEqual(seen, [['good', brand.id, callback()], ['bad', brand.id, callback()]]);
 });
 
+test('Facebook connect needs a brand and the Meta app, then sends the person to Facebook', async (t) => {
+  const { call, redis } = await boot(t);
+  assert.equal((await call('GET', '/api/meta/connect')).status, 400);
+  assert.equal((await call('GET', '/api/meta/connect?brand=b_gone')).status, 400);
+  const brand = await seedBrand(redis, { name: 'A' });
+  const noApp = await call('GET', `/api/meta/connect?brand=${brand.id}`);
+  assert.equal(noApp.status, 302, 'no Meta app yet: back to the brand with the reason');
+  assert.match(decodeURIComponent(noApp.headers.get('location')), /^\/integrations\?brand=b_\w+&meta=Add\+the\+Meta\+app\+ID\+and\+secret/);
+
+  await require('../server/settings').saveSettings(redis, { META_APP_ID: 'app_1', META_APP_SECRET: 'sec_1' });
+  const ok = await call('GET', `/api/meta/connect?brand=${brand.id}`);
+  assert.equal(ok.status, 302);
+  const to = new URL(ok.headers.get('location'));
+  assert.equal(to.origin, 'https://www.facebook.com');
+  assert.equal(to.searchParams.get('redirect_uri'), callback().replace('/tiktok/', '/meta/'));
+  const pending = await require('../server/metaAuth').takePending(redis, to.searchParams.get('state'));
+  assert.equal(pending.brandId, brand.id);
+});
+
+test('the Facebook callback saves one Page, or asks which Page when there are several', async (t) => {
+  const { call, redis } = await boot(t);
+  const metaAuth = require('../server/metaAuth');
+  const real = metaAuth.handleCallback;
+  const seen = [];
+  // Never Facebook: the exchange is stubbed.
+  metaAuth.handleCallback = async (r, code, pending, redirect) => {
+    seen.push([code, pending.brandId, redirect]);
+    if (code === 'bad') throw new Error('Already used by brand "A"');
+    if (code === 'many') {
+      await r.set('meta:choose:st_many', JSON.stringify({ brandId: pending.brandId, pages: [{ id: 'p1', name: 'One', token: 't1', instagram: null }, { id: 'p2', name: 'Two', token: 't2', instagram: { id: 'ig2', username: 'two' } }] }), 'EX', 600);
+      return { choose: 'st_many', pages: [] };
+    }
+    return { page: { id: 'p1', name: 'Tech Co' }, instagram: null };
+  };
+  t.after(() => {
+    metaAuth.handleCallback = real;
+  });
+  await require('../server/settings').saveSettings(redis, { META_APP_ID: 'app_1', META_APP_SECRET: 'sec_1' });
+  const brand = await seedBrand(redis, { name: 'A' });
+  const state = async () => new URL((await call('GET', `/api/meta/connect?brand=${brand.id}`)).headers.get('location')).searchParams.get('state');
+  const redirect = callback().replace('/tiktok/', '/meta/');
+
+  const ok = await call('GET', `/meta/callback?state=${await state()}&code=good`);
+  assert.equal(ok.status, 302);
+  assert.equal(ok.headers.get('location'), `/integrations?brand=${brand.id}&meta=connected&account=Tech+Co`);
+  const refused = await call('GET', `/meta/callback?state=${await state()}&code=bad`);
+  assert.equal(new URL(refused.headers.get('location'), 'http://x').searchParams.get('meta'), 'Already used by brand "A"');
+  const denied = await call('GET', `/meta/callback?state=${await state()}&error=access_denied&error_reason=user_denied&error_description=${encodeURIComponent('Permissions error')}`);
+  assert.equal(denied.headers.get('location'), `/integrations?brand=${brand.id}&meta=Permissions+error`);
+  const stale = await call('GET', '/meta/callback?state=unknown&code=good');
+  assert.match(decodeURIComponent(stale.headers.get('location')), /^\/integrations\?meta=.*Connect\+Facebook\+again/);
+  assert.equal((await call('GET', '/meta/callback')).headers.get('location'), '/integrations?meta=cancelled');
+
+  const many = await call('GET', `/meta/callback?state=${await state()}&code=many`);
+  assert.equal(many.headers.get('location'), `/integrations?brand=${brand.id}&meta=choose&state=st_many`);
+  const pages = await call('GET', '/api/meta/pages?state=st_many');
+  assert.equal(pages.status, 200);
+  assert.equal(pages.json.brandId, brand.id);
+  assert.deepEqual(pages.json.pages.map((p) => p.id), ['p1', 'p2']);
+  assert.equal(JSON.stringify(pages.json).includes('t1'), false, 'no Page token leaves the server');
+  assert.equal((await call('GET', '/api/meta/pages?state=nope')).status, 404);
+  assert.equal((await call('POST', '/api/meta/choose', { state: 'st_many' })).status, 400);
+  assert.equal((await call('POST', '/api/meta/choose', { state: 'st_many', pageId: 'p9' })).status, 400);
+  const chosen = await call('POST', '/api/meta/choose', { state: 'st_many', pageId: 'p2' });
+  assert.equal(chosen.status, 200);
+  assert.deepEqual(chosen.json, { page: { id: 'p2', name: 'Two' }, instagram: { id: 'ig2', username: 'two' } });
+  assert.equal((await call('GET', `/api/brands/${brand.id}/settings`)).json.values.FACEBOOK_PAGE_ID, 'p2');
+  assert.equal((await call('POST', '/api/meta/choose', { state: 'st_many', pageId: 'p2' })).status, 410, 'a choice works once');
+  assert.deepEqual(seen, [['good', brand.id, redirect], ['bad', brand.id, redirect], ['many', brand.id, redirect]]);
+});
+
 test('F6: a brandId sent as a list is stored as the brand\'s id', async (t) => {
   const { call, redis } = await boot(t);
   const brand = await seedBrand(redis, { name: 'A' });
