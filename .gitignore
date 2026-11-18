@@ -20,3 +20,7 @@ backups/
 # Redis backups hold tokens and secrets
 backups/
 *.tgz
+
+# Claude Code: local-only
+.claude/worktrees/
+.claude/settings.local.json
