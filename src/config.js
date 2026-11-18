@@ -24,6 +24,8 @@ const cfg = (module.exports = {
 
   niche: process.env.NICHE || 'technology tips',
   language: process.env.LANGUAGE || 'English',
+  // Country (2-letter code) whose Google Trends headlines inform topic picks; '' = no trend hints (src/topics.js)
+  trendGeo: (process.env.TREND_GEO ?? 'BD').trim().toUpperCase(),
   voice: process.env.VOICE || 'en-US-AndrewNeural',
   // Animated Remotion video (set USE_REMOTION=false for the plain ffmpeg pipeline)
   useRemotion: (process.env.USE_REMOTION || 'true').toLowerCase() !== 'false',

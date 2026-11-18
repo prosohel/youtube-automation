@@ -154,7 +154,7 @@ test('a video may override only the option keys, cleaned like settings; blanks m
 test('BRAND_KEYS is exactly what each brand keeps for itself', () => {
   const expected = [
     // channel
-    'NICHE', 'LANGUAGE', 'VIDEO_FORMAT', 'TARGET_MINUTES', 'TOPIC_CATEGORIES', 'PRIVACY_STATUS', 'YT_CATEGORY_ID', 'YT_PLAYLIST', 'YT_NOTIFY_SUBSCRIBERS', 'SYNTHETIC_MEDIA',
+    'NICHE', 'LANGUAGE', 'TREND_GEO', 'VIDEO_FORMAT', 'TARGET_MINUTES', 'TOPIC_CATEGORIES', 'PRIVACY_STATUS', 'YT_CATEGORY_ID', 'YT_PLAYLIST', 'YT_NOTIFY_SUBSCRIBERS', 'SYNTHETIC_MEDIA',
     'QUESTION_SOURCE', 'QUESTION_MIX', 'QUESTION_SUBJECT', 'QUESTIONS_PER_VIDEO', 'EXTRA_LINK', 'SCRIPT_MODE', 'VIDEO_INSTRUCTIONS',
     // look
     'THEME', 'VISUALS', 'THUMB_STYLE', 'THUMB_INTRO', 'MUSIC', 'MUSIC_VOLUME', 'DESIGN_MODE', 'DESIGN_MINUTES',
@@ -260,4 +260,15 @@ test('question mode settings are per brand, in the Channel card, off by default,
   assert.equal(typeof cfg.questionSource, 'string');
   assert.equal(typeof cfg.questionSubject, 'string');
   assert.equal(typeof cfg.questionsPerVideo, 'number');
+});
+
+test('TREND_GEO is a country dropdown: Bangladesh by default, empty means no trend hints', () => {
+  const spec = S.SETTINGS_SCHEMA.find((s) => s.key === 'TREND_GEO');
+  assert.equal(spec.type, 'enum');
+  assert.equal(spec.default, 'BD');
+  assert.ok(spec.options.every((o) => o in spec.optionLabels), 'every country has a label');
+  const imp = (v) => S.importFromEnv({ TREND_GEO: v }, fs.mkdtempSync(path.join(os.tmpdir(), 'set-'))).TREND_GEO;
+  assert.equal(imp('in'), 'IN');
+  assert.equal(imp(''), '');
+  assert.equal(imp('Bangladesh'), undefined, 'a bad value is skipped, keeping the default');
 });

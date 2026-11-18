@@ -29,10 +29,12 @@ const TOPIC_SCHEMA = {
   required: ['candidates', 'best'],
 };
 
-/** Best-effort: pull today's Google Trends headlines as extra context. Never fatal. */
+/** Best-effort: pull today's Google Trends headlines for cfg.trendGeo as extra context. Never fatal. */
 async function fetchTrendHints() {
+  const geo = String(cfg.trendGeo || '').trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(geo)) return []; // empty or malformed: no hints
   try {
-    const res = await fetch('https://trends.google.com/trending/rss?geo=US', {
+    const res = await fetch(`https://trends.google.com/trending/rss?geo=${geo}`, {
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return [];
@@ -62,7 +64,7 @@ ${category ? `Every topic must belong to this category: "${category}".\n` : ''}
 ${cfg.instructions ? `The channel owner's standing instructions for this channel's videos (pick topics that suit them):\n${cfg.instructions}\n` : ''}${cfg.videoPrompt ? `The owner's request for this particular video (every topic must suit it):\n${cfg.videoPrompt}\n` : ''}
 Propose 8 distinct video topics that people are likely searching for right now.
 Prefer evergreen search demand with a fresh angle over pure news chasing.
-${trends.length ? `Today's broad trending searches (use only if relevant to the niche): ${trends.join('; ')}` : ''}
+${trends.length ? `Today's trending searches in ${String(cfg.trendGeo).toUpperCase()} (use only if relevant to the niche): ${trends.join('; ')}` : ''}
 ${done.length ? `Already published, do NOT repeat or closely overlap:\n- ${done.join('\n- ')}` : ''}
 
 Then pick the single best one.

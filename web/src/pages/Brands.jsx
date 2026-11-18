@@ -7,7 +7,7 @@ import { Chip, contentLang, Icon, ICONS, PlatformBadge, Switch } from '../compon
 import { buildPatch, FieldGrid, goTo, TestResult, useTests } from './Integrations.jsx';
 
 // What each section of a brand card edits. Every key here is a brand key (the server sends no other in /api/brands/:id/settings).
-const CHANNEL_KEYS = ['NICHE', 'VIDEO_INSTRUCTIONS', 'LANGUAGE', 'SCRIPT_MODE', 'VIDEO_FORMAT', 'TARGET_MINUTES', 'TOPIC_CATEGORIES', 'QUESTION_SOURCE', 'QUESTION_MIX', 'QUESTION_SUBJECT', 'QUESTIONS_PER_VIDEO', 'EXTRA_LINK'];
+const CHANNEL_KEYS = ['NICHE', 'VIDEO_INSTRUCTIONS', 'LANGUAGE', 'TREND_GEO', 'SCRIPT_MODE', 'VIDEO_FORMAT', 'TARGET_MINUTES', 'TOPIC_CATEGORIES', 'QUESTION_SOURCE', 'QUESTION_MIX', 'QUESTION_SUBJECT', 'QUESTIONS_PER_VIDEO', 'EXTRA_LINK'];
 const YOUTUBE_KEYS = ['PRIVACY_STATUS', 'YT_CATEGORY_ID', 'YT_PLAYLIST', 'YT_NOTIFY_SUBSCRIBERS', 'SYNTHETIC_MEDIA'];
 const LOOK_KEYS = ['THEME', 'VISUALS', 'DESIGN_MODE', 'DESIGN_MINUTES', 'THUMB_STYLE', 'THUMB_INTRO', 'SHOW_BRAND', 'BRAND_HANDLE'];
 const SIGN_IN_KEYS = ['YOUTUBE_TOKEN', 'TIKTOK_ACCESS_TOKEN', 'TIKTOK_REFRESH_TOKEN'];
