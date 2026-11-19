@@ -55,7 +55,7 @@ test('redoPatch: unknown stage or a stage that never ran is refused', () => {
   assert.throws(() => redoPatch(finished({ done: { topic: true, script: true } }), 'render'), /voice is not finished/);
   assert.throws(() => redoPatch(finished({ done: { topic: true } }), 'voice'), /no script yet/);
   assert.throws(() => redoPatch(finished({ done: { topic: true, script: true, voice: true } }), 'thumbnail'), /not rendered yet/);
-  assert.deepEqual(REDO_STAGES, ['script', 'voice', 'render', 'thumbnail']);
+  assert.deepEqual(REDO_STAGES, ['script', 'voice', 'audio', 'render', 'thumbnail']);
 });
 
 test('postedOn: a published or in-flight platform blocks a redo, a failed one does not', () => {
@@ -97,6 +97,35 @@ test('pipeline: redo render keeps script and voice, redo voice records again, re
   assert.equal(calls.filter((c) => c.startsWith('voice:')).length, 5);
   assert.equal(done.status, 'ready');
   assert.equal(done.topicInfo.topic, 'টপিক');
+});
+
+test('pipeline: redo audio records every scene again and does not render', async () => {
+  const r = await freshRedis();
+  const outDir = tmpOut();
+  const calls = [];
+  const deps = fakeDeps(calls, { outDir });
+  const v = await store.createVideo(r, { topic: 'টপিক' });
+  let done = await runVideoJob(v.id, { redis: r, deps, outDir });
+  const video = done.files.video;
+
+  const patch = redoPatch(done, 'audio');
+  assert.equal(patch.done.render, true, 'the render stays done');
+  assert.equal(patch.done.voice, false);
+
+  calls.length = 0;
+  await store.updateVideo(r, v.id, (o) => ({ ...o, ...patch, status: 'queued' }));
+  done = await runVideoJob(v.id, { redis: r, deps, outDir });
+  assert.equal(calls.filter((c) => c.startsWith('voice:')).length, 5, 'every scene again');
+  assert.deepEqual(calls.filter((c) => c === 'script' || c.startsWith('render:')), [], 'no script, no render');
+  assert.equal(done.status, 'ready');
+  assert.equal(done.redo, null);
+  assert.equal(done.voiceNewer, true);
+  assert.equal(done.files.video, video);
+
+  // A later render uses the new voice and clears the flag.
+  await store.updateVideo(r, v.id, (o) => ({ ...o, ...redoPatch(o, 'render'), status: 'queued' }));
+  done = await runVideoJob(v.id, { redis: r, deps, outDir });
+  assert.equal(done.voiceNewer, false);
 });
 
 test('pipeline: redo thumbnail renders only the still and swaps the thumbnail file', async () => {

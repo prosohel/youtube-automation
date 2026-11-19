@@ -177,12 +177,38 @@ function createApp({ redis, queues, password = '', secureCookies = false }) {
   app.post('/api/videos/:id/retry', async (req, res) => {
     const v = await getVideoOr404(req.params.id);
     if (v.status === 'working') throw new HttpError(409, 'This video is being made right now');
-    const next = await store.updateVideo(redis, v.id, { status: 'queued', error: null });
+    const next = await store.updateVideo(redis, v.id, { status: 'queued', error: null, stopRequested: false });
     await enqueueVideo(queues, v.id);
     res.json(next);
   });
 
-  // Redo one part of a video: script (then voice and video), voice (then video), video, or the thumbnail only.
+  // Stop a video that is waiting or being made. Waiting: its job is removed and it is marked stopped at once. Being
+  // made: the worker is told (stopRequested), ends the Claude call / ffmpeg / render and marks it stopped. Either way
+  // the finished steps stay, and Retry carries on from them.
+  app.post('/api/videos/:id/stop', async (req, res) => {
+    const v = await getVideoOr404(req.params.id);
+    if (v.status !== 'queued' && v.status !== 'working') throw new HttpError(409, 'This video is not waiting or being made');
+    const job = await queues.videos.getJob(v.id);
+    const active = job ? (await job.getState()) === 'active' : false;
+    if (v.status === 'queued' && !active) {
+      let removed = true;
+      try {
+        if (job) await job.remove();
+      } catch {
+        removed = false; // the worker took it just now: ask it to stop instead
+      }
+      if (removed) {
+        await store.updateVideo(redis, v.id, (o) => ({ ...o, status: 'stopped', stage: 'stopped', error: null, stopRequested: false }));
+        await store.appendLog(redis, v.id, 'Stopped by you. Retry carries on from the last finished step.');
+        return res.json(await store.getVideo(redis, v.id));
+      }
+    }
+    await store.updateVideo(redis, v.id, { stopRequested: true });
+    await store.appendLog(redis, v.id, 'Stop requested, ending the current step...');
+    res.json(await store.getVideo(redis, v.id));
+  });
+
+  // Redo one part of a video: script (then voice and video), voice (then video), audio (the voice only), video, or the thumbnail only.
   app.post('/api/videos/:id/redo', async (req, res) => {
     const v = await getVideoOr404(req.params.id);
     const { stage, style } = req.body || {};
@@ -195,7 +221,7 @@ function createApp({ redis, queues, password = '', secureCookies = false }) {
     } catch (e) {
       throw bad(e.message);
     }
-    const next = await store.updateVideo(redis, v.id, (o) => ({ ...o, ...patch, status: 'queued', stage: 'queued', error: null }));
+    const next = await store.updateVideo(redis, v.id, (o) => ({ ...o, ...patch, status: 'queued', stage: 'queued', error: null, stopRequested: false }));
     await store.appendLog(redis, v.id, `Redo requested: ${stage}${stage === 'thumbnail' ? ` (${patch.redo.thumbnail.style})` : ''}`);
     await enqueueVideo(queues, v.id);
     res.json(next);
@@ -220,7 +246,7 @@ function createApp({ redis, queues, password = '', secureCookies = false }) {
     const v = await getVideoOr404(req.params.id);
     const job = await queues.videos.getJob(v.id);
     if (job) {
-      if ((await job.getState()) === 'active') throw new HttpError(409, 'This video is being made right now; pause the queue or wait');
+      if ((await job.getState()) === 'active') throw new HttpError(409, 'This video is being made right now: press Stop first');
       await job.remove();
     }
     await store.deleteVideo(redis, v.id);

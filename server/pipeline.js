@@ -10,6 +10,7 @@ const { localDate } = require('../src/util');
 const { extraLabel, withExtraLink } = require('../src/extraLink');
 const { sourceLabel } = require('../src/examVisuals');
 const { fitToClip } = require('../src/wordTiming');
+const { throwIfStopped } = require('../src/cancel');
 
 /** The real stage functions. Tests pass their own. Required lazily: Remotion etc. load only when used. */
 function realDeps() {
@@ -65,6 +66,7 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
   const save = (fn) => store.updateVideo(redis, videoId, fn);
   const markDone = (stage, extra = {}) => save((o) => ({ ...o, ...extra, done: { ...o.done, [stage]: true } }));
   const startStage = async (stage, line) => {
+    throwIfStopped(); // "Stop": the worker aborts the signal; nothing more is started
     await save({ stage });
     await say(line);
   };
@@ -132,6 +134,7 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
           await say(`Voice ${i + 1}/${scenes.length}: already done`);
           continue;
         }
+        throwIfStopped();
         fs.rmSync(file, { force: true });
         const voiced = await deps.synthScene(provider, scenes[i].narration, file, workDir, i);
         const duration = await deps.audioDuration(file);
@@ -163,6 +166,7 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
     try {
       await voiceAll(provider);
     } catch (e) {
+      throwIfStopped(); // a stop is not a voice failure: no second voice
       if (provider.edge) throw e;
       // Never mix two voices in one video: redo every scene with the free voice.
       await say(`${provider.name} failed (${e.message}). Redoing all scenes with the free Edge voice.`);
@@ -172,6 +176,11 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
       await voiceAll(provider);
     }
     v = await markDone('voice', { voiceProvider: voiceId(provider) });
+    // "Redo voice only" (server/redo.js): the video file is not rendered again, so it still has the old voice.
+    if (v.redo && v.redo.audioOnly) {
+      v = await save((o) => ({ ...o, redo: null, ...(o.done.render ? { voiceNewer: true } : {}) }));
+      await say(v.voiceNewer ? 'New voice recorded. The video file still has the old voice; Redo > Video uses the new one.' : 'New voice recorded.');
+    }
   }
 
   if (!v.done.render) {
@@ -187,6 +196,7 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
       const design = await deps.designScenes({ script: v.script, scenes: v.scenes, theme: v.theme, workDir, thumbnail, say });
       v = await save({ design });
     }
+    throwIfStopped();
     const res = await deps.renderAny({ scenes: v.scenes, workDir, slug: v.slug, title: v.title, theme: v.theme, direction: v.direction, thumbnail, sourceLabel: sourceLabel(v.topicInfo && v.topicInfo.siteName), extraLabel: extraLabel(cfg.extraLink), design: v.design || null });
     const credits = res.credits || [];
     // Cloudflare R2: the finished files go to the bucket; the dashboard streams from there, local copies expire.
@@ -205,6 +215,7 @@ async function runVideoJob(videoId, { redis, deps = realDeps(), log = () => {}, 
       review: res.review || null, // the critic's scores (src/critique.js)
       renderer: res.plain ? 'plain' : 'remotion', // plain = the ffmpeg fallback: captions only, no graphics
       redo: null,
+      voiceNewer: false,
       description: credits.length ? `${v.description}\n\n${credits.join('\n')}` : v.description,
     });
     if (res.review) await say(`Critique: min ${res.review.min}/10, avg ${res.review.avg}${res.review.rerendered ? ` - re-rendered with ${res.review.applied.join(', ')}` : ''}: ${res.review.verdict}`);

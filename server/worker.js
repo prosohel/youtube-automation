@@ -9,6 +9,7 @@ const store = require('./store');
 const settings = require('./settings');
 const brands = require('./brands');
 const { localTime } = require('../src/util');
+const { withSignal } = require('../src/cancel');
 const { runVideoJob } = require('./pipeline');
 const { QUEUE, createQueues, enqueueVideo } = require('./queues');
 const { processTick, runPublish, recheckProcessing, markPublishJobFailed, recoverPublishRecords } = require('./publishFlow');
@@ -27,6 +28,7 @@ const PLATFORM_CFG = ['youtubeClientSecret'];
 // The settings every brand shares. Brand keys are never applied here: a brand's own values come in with its video.
 const SHARED_CFG = settings.SETTINGS_SCHEMA.filter((spec) => spec.cfg && !settings.isBrandKey(spec.key)).map((spec) => spec.cfg);
 const VIDEO_WAIT_MS = 10 * 60 * 1000; // a switched-off brand's video is looked at again after this
+const STOP_POLL_MS = 1500; // how often a video being made looks for the dashboard's Stop button
 
 /** The shared settings from Redis into src/config.js. A brand's settings come in with its video (runWithVideoConfig). */
 async function loadConfig(redis) {
@@ -137,12 +139,15 @@ const PUBLISH_RECHECK_EVERY_MS = 10 * 60 * 1000; // posts a platform was still p
  * video waits (moved back to delayed, ten minutes at a time) without using up an attempt.
  * ready: resolves once the move into brands is done; no video is looked at before that.
  */
-function createVideoProcessor({ redis, deps, outDir, log: say = log, ready = Promise.resolve() }) {
+function createVideoProcessor({ redis, deps, outDir, log: say = log, ready = Promise.resolve(), stopPollMs = STOP_POLL_MS }) {
   return async (job, token) => {
     await ready;
     const { videoId } = job.data;
     const video = await store.getVideo(redis, videoId);
     if (!video) return 'deleted';
+    // Stopped while it waited (or the stop arrived just as this job started): nothing is made.
+    if (video.status === 'stopped') return 'stopped';
+    if (video.stopRequested) return markStopped(redis, videoId, say);
     const brand = video.brandId ? await brands.getBrand(redis, video.brandId) : null;
     if (!brand) throw new Error('This video has no brand');
     if (!brand.active || brand.archived) {
@@ -152,14 +157,42 @@ function createVideoProcessor({ redis, deps, outDir, log: say = log, ready = Pro
       await job.moveToDelayed(Date.now() + VIDEO_WAIT_MS, token);
       throw new DelayedError();
     }
-    return runWithVideoConfig(redis, brand.id, async () => {
-      await loadHistory(redis, videoId, brand.id);
-      const own = Object.keys(video.overrides || {}).map((k) => `${k}=${video.overrides[k]}`).join(', ');
-      say(`Video ${videoId}: attempt ${job.attemptsMade + 1}${own ? ` (own options: ${own})` : ''}${video.prompt ? ' (custom prompt)' : ''}`);
-      await runVideoJob(videoId, { redis, deps, outDir, log: (l) => say(`${videoId}: ${l}`) });
-      return 'ready';
-    }, video);
+    // The dashboard's Stop sets video.stopRequested; this looks for it while the video is made and aborts the signal
+    // that the Claude CLI, ffmpeg and the Remotion render all listen to (src/cancel.js).
+    const stop = new AbortController();
+    const watch = setInterval(() => {
+      store.getVideo(redis, videoId).then((v) => v && v.stopRequested && stop.abort()).catch(() => {});
+    }, stopPollMs);
+    try {
+      const result = await withSignal(stop.signal, () =>
+        runWithVideoConfig(redis, brand.id, async () => {
+          await loadHistory(redis, videoId, brand.id);
+          const own = Object.keys(video.overrides || {}).map((k) => `${k}=${video.overrides[k]}`).join(', ');
+          say(`Video ${videoId}: attempt ${job.attemptsMade + 1}${own ? ` (own options: ${own})` : ''}${video.prompt ? ' (custom prompt)' : ''}`);
+          await runVideoJob(videoId, { redis, deps, outDir, log: (l) => say(`${videoId}: ${l}`) });
+          return 'ready';
+        }, video)
+      );
+      // A stop that came too late (the video finished first) must not stay on the record.
+      await store.updateVideo(redis, videoId, (o) => (o.stopRequested ? { ...o, stopRequested: false } : o)).catch(() => {});
+      return result;
+    } catch (e) {
+      // Any error after the stop is the stop (a killed process reports itself in many ways). The job ends normally:
+      // BullMQ does not retry it and no "failed" is recorded.
+      if (stop.signal.aborted || (e && e.stopped)) return markStopped(redis, videoId, say);
+      throw e;
+    } finally {
+      clearInterval(watch);
+    }
   };
+}
+
+/** The video is left as it was (finished stages stay done); Retry carries on from there. */
+async function markStopped(redis, videoId, say) {
+  await store.updateVideo(redis, videoId, (o) => ({ ...o, status: 'stopped', stage: 'stopped', error: null, stopRequested: false }));
+  await store.appendLog(redis, videoId, 'Stopped by you. Retry carries on from the last finished step.').catch(() => {});
+  say(`Video ${videoId}: stopped`);
+  return 'stopped';
 }
 
 /** Brands or settings could not be set up, so the worker can do nothing: its own process exits and Docker restarts it. */
@@ -277,4 +310,4 @@ if (require.main === module) {
   process.on('SIGINT', stop);
 }
 
-module.exports = { startWorker, createVideoProcessor, loadConfig, loadHistory, runWithVideoConfig, HEARTBEAT_KEY };
+module.exports = { startWorker, createVideoProcessor, markStopped, loadConfig, loadHistory, runWithVideoConfig, HEARTBEAT_KEY };

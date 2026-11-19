@@ -7,7 +7,7 @@ import { ALL, nameLang, useBrands, withBrand } from '../brand.js';
 import { BrandChip, Chip, contentLang, fmtTime, graphicLabel, Icon, ICONS, isPublished, PlatformBadge, PlatformStatus, PLATFORMS, StageBar, useToast, VideoStatus } from '../components/ui.jsx';
 
 const TABS = [
-  ['active', 'In progress', (v) => v.status === 'queued' || v.status === 'working'],
+  ['active', 'In progress', (v) => v.status === 'queued' || v.status === 'working' || v.status === 'stopped'],
   ['ready', 'Ready', (v) => v.status === 'ready' && !isPublished(v)],
   ['published', 'Published', isPublished],
   ['failed', 'Failed', (v) => v.status === 'failed' || Object.values(v.platforms || {}).some((p) => p.status === 'failed')],
@@ -158,6 +158,7 @@ function AddVideo({ brands, picked, onAdded, setToast }) {
 const REDO = [
   ['render', 'Video', 'Renders the video again from the finished script and voice. No AI call, no voice credits.'],
   ['thumbnail', 'Thumbnail', 'A new thumbnail design only. The video keeps its opening frame.'],
+  ['audio', 'Voice only', 'Records every scene again (voice credits) and stops. The video file is not rendered, so it keeps the old voice until you redo the Video.'],
   ['voice', 'Voice + video', 'Records every scene again (voice credits), then renders the video.'],
   ['script', 'Script + voice + video', 'Writes a new script for the same topic (AI call), records it, renders it.'],
 ];
@@ -170,7 +171,7 @@ function Redo({ v, act }) {
   const [style, setStyle] = useState('');
   const info = REDO.find(([id]) => id === stage);
   const go = () => {
-    const costly = stage === 'script' ? 'an AI call and voice credits' : stage === 'voice' ? 'voice credits' : null;
+    const costly = stage === 'script' ? 'an AI call and voice credits' : stage === 'voice' || stage === 'audio' ? 'voice credits' : null;
     if (costly && !window.confirm(`${info[1]}: this uses ${costly}. Continue?`)) return;
     act('POST', `/api/videos/${v.id}/redo`, { stage, ...(stage === 'thumbnail' ? { style } : {}) }, `Queued: ${info[1].toLowerCase()} again`);
   };
@@ -238,6 +239,9 @@ function Detail({ id, brandName, onChanged, setToast }) {
       {v.renderer === 'plain' && v.status === 'ready' && (
         <div className="banner tone-warn">Plain render: captions only, no graphics (the animated render failed; the log says why). Redo a part → Video tries again.</div>
       )}
+      {v.voiceNewer && v.status === 'ready' && (
+        <div className="banner tone-warn">A new voice was recorded, but the video file still has the old voice. Redo a part → Video puts the new voice in.</div>
+      )}
       {v.files && v.files.video && v.status === 'ready' && (
         <video className="preview" controls preload="metadata" src={`/api/media/${v.id}/video?v=${encodeURIComponent(v.updatedAt || '')}`} poster={v.files.thumb ? `/api/media/${v.id}/thumb?v=${encodeURIComponent(v.updatedAt || '')}` : undefined} />
       )}
@@ -292,7 +296,7 @@ function Detail({ id, brandName, onChanged, setToast }) {
           </div>
         </div>
       )}
-      {(v.status === 'ready' || v.status === 'failed') && !postedSomewhere(v) && <Redo v={v} act={act} />}
+      {(v.status === 'ready' || v.status === 'failed' || v.status === 'stopped') && !postedSomewhere(v) && <Redo v={v} act={act} />}
       {scenes.length > 0 && (
         <details className="q-script">
           <summary>Script · {scenes.length} scenes</summary>
@@ -311,9 +315,19 @@ function Detail({ id, brandName, onChanged, setToast }) {
         <div className="logbox">{(v.log || []).slice(-60).join('\n') || 'No log yet'}</div>
       </div>
       <div className="q-actions">
-        {(v.status === 'failed' || v.status === 'queued') && (
-          <button type="button" className="btn" onClick={() => act('POST', `/api/videos/${v.id}/retry`, undefined, 'Queued again')}>
-            <Icon d={ICONS.retry} size={16} /> {v.status === 'failed' ? 'Retry' : 'Queue again'}
+        {(v.status === 'working' || v.status === 'queued') && (
+          <button
+            type="button"
+            className="btn btn-danger"
+            disabled={Boolean(v.stopRequested)}
+            onClick={() => window.confirm('Stop this video? The steps already finished are kept, and Retry carries on from them.') && act('POST', `/api/videos/${v.id}/stop`, undefined, 'Stopping…')}
+          >
+            {v.stopRequested ? 'Stopping…' : 'Stop'}
+          </button>
+        )}
+        {(v.status === 'failed' || v.status === 'queued' || v.status === 'stopped') && (
+          <button type="button" className="btn" onClick={() => act('POST', `/api/videos/${v.id}/retry`, undefined, v.status === 'stopped' ? 'Resumed' : 'Queued again')}>
+            <Icon d={ICONS.retry} size={16} /> {v.status === 'failed' ? 'Retry' : v.status === 'stopped' ? 'Resume' : 'Queue again'}
           </button>
         )}
         {v.status !== 'working' && (

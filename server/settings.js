@@ -87,6 +87,15 @@ const SETTINGS_SCHEMA = [
   { key: 'NICHE', scope: 'brand', cfg: 'niche', group: 'channel', type: 'string', default: 'technology tips', label: 'Channel niche (used to pick topics)' },
   { key: 'LANGUAGE', scope: 'brand', cfg: 'language', group: 'channel', type: 'string', default: 'English', label: 'Language' },
   {
+    key: 'TREND_GEO', scope: 'brand', cfg: 'trendGeo', group: 'channel', type: 'enum', default: 'BD', label: 'Trends country',
+    options: ['BD', 'IN', 'PK', 'NP', 'LK', 'AE', 'SA', 'MY', 'SG', 'GB', 'US', 'CA', 'AU', ''],
+    optionLabels: {
+      BD: 'Bangladesh', IN: 'India', PK: 'Pakistan', NP: 'Nepal', LK: 'Sri Lanka', AE: 'United Arab Emirates', SA: 'Saudi Arabia', MY: 'Malaysia',
+      SG: 'Singapore', GB: 'United Kingdom', US: 'United States', CA: 'Canada', AU: 'Australia', '': 'None (no trend hints)',
+    },
+    optionHints: { BD: 'Topic picks use that country\'s Google Trends searches as hints.', '': 'Claude picks topics without trend hints.' },
+  },
+  {
     key: 'VIDEO_INSTRUCTIONS', scope: 'brand', cfg: 'instructions', group: 'channel', type: 'text', default: '', label: 'Video instructions (optional)',
     hint: 'Free text for the script writer: tone, what to always or never do, who the viewer is, how to open and close, words to avoid. Claude follows it for every video of this brand.',
   },

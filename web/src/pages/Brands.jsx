@@ -7,7 +7,7 @@ import { Chip, contentLang, Icon, ICONS, PlatformBadge, Switch } from '../compon
 import { buildPatch, FieldGrid, goTo, TestResult, useTests } from './Integrations.jsx';
 
 // What each section of a brand card edits. Every key here is a brand key (the server sends no other in /api/brands/:id/settings).
-const CHANNEL_KEYS = ['NICHE', 'VIDEO_INSTRUCTIONS', 'LANGUAGE', 'SCRIPT_MODE', 'VIDEO_FORMAT', 'TARGET_MINUTES', 'TOPIC_CATEGORIES', 'QUESTION_SOURCE', 'QUESTION_MIX', 'QUESTION_SUBJECT', 'QUESTIONS_PER_VIDEO', 'EXTRA_LINK'];
+const CHANNEL_KEYS = ['NICHE', 'VIDEO_INSTRUCTIONS', 'LANGUAGE', 'TREND_GEO', 'SCRIPT_MODE', 'VIDEO_FORMAT', 'TARGET_MINUTES', 'TOPIC_CATEGORIES', 'QUESTION_SOURCE', 'QUESTION_MIX', 'QUESTION_SUBJECT', 'QUESTIONS_PER_VIDEO', 'EXTRA_LINK'];
 const YOUTUBE_KEYS = ['PRIVACY_STATUS', 'YT_CATEGORY_ID', 'YT_PLAYLIST', 'YT_NOTIFY_SUBSCRIBERS', 'SYNTHETIC_MEDIA'];
 const LOOK_KEYS = ['THEME', 'VISUALS', 'DESIGN_MODE', 'DESIGN_MINUTES', 'THUMB_STYLE', 'THUMB_INTRO', 'SHOW_BRAND', 'BRAND_HANDLE'];
 const SIGN_IN_KEYS = ['YOUTUBE_TOKEN', 'TIKTOK_ACCESS_TOKEN', 'TIKTOK_REFRESH_TOKEN'];
@@ -249,10 +249,10 @@ function BrandHero({ brand, values, focus, onChanged, setToast, results, runTest
     values && values.VIDEO_FORMAT ? (values.VIDEO_FORMAT === 'shorts' ? 'Shorts' : 'Landscape') : '',
   ].filter(Boolean).join(' · ');
   const rows = accountRows(brand, values);
-  // Videos are queued, working, ready (not posted yet), failed or published: together, every video of the brand.
+  // Videos are queued, working, ready (not posted yet), failed, stopped or published: together, every video of the brand.
   const c = overview && overview.counts;
   const stats = [
-    ['Videos', c ? c.queued + c.working + c.ready + c.failed + c.published : null],
+    ['Videos', c ? c.queued + c.working + c.ready + c.failed + (c.stopped || 0) + c.published : null],
     ['Published', c ? c.published : null],
     ['Rules', rules ? rules.length : null],
   ];

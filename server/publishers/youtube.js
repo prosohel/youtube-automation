@@ -82,6 +82,7 @@ async function publish(ctx) {
     playlist: s.YT_PLAYLIST,
     notifySubscribers: s.YT_NOTIFY_SUBSCRIBERS,
     publishAt: ctx.publishAt || null,
+    note: (l) => ctx.log(`YouTube: ${l}`), // a failed thumbnail shows in the video's log
   });
   const id = url.split('/').pop();
   await ctx.onRemoteId(id);

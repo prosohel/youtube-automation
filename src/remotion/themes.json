@@ -675,6 +675,7 @@
     "label": "Vox: Story (cartoon parable)",
     "mood": "short stories with a lesson, life advice, psychology, habits, money lessons, fables about people",
     "family": "vox",
+    "cast": "library",
     "dark": false,
     "bg": [
       "#efe4cf",

@@ -194,4 +194,11 @@ module.exports = [
       text: 'শতকরা লাভ ও ক্ষতি সবসময় ক্রয়মূল্যের উপর হিসাব হয়, বিক্রয়মূল্যের উপর নয়। তাই, লাভ% $= \\dfrac{\\text{লাভ}}{\\text{ক্রয়মূল্য}} \\times 100$ এই সূত্রটি মনে রাখুন',
     },
   },
+  // Story scenes (src/storyVisuals.js), vox-story theme. Two people with name tags and papers, a hook banner, a close shot.
+  { name: 'story-two', visual: { type: 'scene', character: 'man', skin: '2', outfit: 'blue', pose: 'hold', setting: 'office', props: ['paper', 'paper'], notes: ['৳ ২৫,০০০', '৳ ১২,০০০'], label: 'রাফি', speaker: 'other', other: { character: 'boss', skin: '1', outfit: 'purple', pose: 'point', label: 'ম্যানেজার' }, banner: 'নিজের মুখের এক কথায় গেলো ৩ লাখ ১২ হাজার!', line: 'তোমার যা ইচ্ছে দিন, স্যার', keyword: 'স্যার' } },
+  { name: 'story-close', visual: { type: 'scene', character: 'woman', skin: '3', outfit: 'green', pose: 'sad', setting: 'village', props: [], label: 'রহিমা', shot: 'close', line: 'সেদিন সে চুপ করে রইল', keyword: 'চুপ' } },
+  { name: 'story-class', visual: { type: 'scene', character: 'girl', skin: '1', outfit: 'yellow', pose: 'happy', setting: 'classroom', props: ['book'], line: 'পরীক্ষায় প্রথম হলো মিতু', keyword: 'প্রথম', other: { character: 'woman', skin: '2', outfit: 'red', pose: 'stand', label: 'শিক্ষিকা' } } },
+  { name: 'story-shop', visual: { type: 'scene', character: 'man', skin: '2', outfit: 'red', pose: 'point', setting: 'shop', props: ['paper'], notes: ['বাকি ৫০০'], label: 'দোকানদার', other: { character: 'boy', skin: '3', outfit: 'green', pose: 'sad', label: 'ক্রেতা' }, line: 'বাকির খাতা ভরে উঠল', keyword: 'বাকির' } },
+  { name: 'story-field', visual: { type: 'scene', character: 'man', skin: '3', outfit: 'yellow', pose: 'think', setting: 'field', props: ['basket'], label: 'কৃষক', line: 'এবার ফলন হলো না', keyword: 'ফলন' } },
+  { name: 'story-family', visual: { type: 'scene', character: 'elder', skin: '2', outfit: 'green', pose: 'think', setting: 'home', props: ['cup'], label: 'দাদু', speaker: 'main', other: { character: 'hijab', skin: '1', outfit: 'purple', pose: 'happy', label: 'মা' }, line: 'আগে ভাবো, তারপর কথা দাও', keyword: 'ভাবো' } },
 ];

@@ -144,6 +144,7 @@ export const VIDEO_STATUS = {
   working: ['info', 'Making'],
   ready: ['ok', 'Ready'],
   failed: ['danger', 'Failed'],
+  stopped: ['warn', 'Stopped'],
 };
 
 export function VideoStatus({ video }) {

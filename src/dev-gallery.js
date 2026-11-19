@@ -1,6 +1,6 @@
 // Contact sheet of every scene graphic, so the look can be reviewed without making a video.
 // Usage: npm run render:gallery -- [--themes=neon,vox-paper,news] [--formats=shorts,landscape] [--only=bars,donut]
-//        [--brand=@TechBangla] [--source=mathsuggestion.com] [--frame=intro|outro]
+//        [--at=10,14,18]  [--brand=@TechBangla] [--source=mathsuggestion.com] [--frame=intro|outro]
 // --brand sets the brandLabel prop (the small channel name on the intro and outro); --source=<site> the outro's sourceLabel. --frame=intro or outro takes the
 // still from the intro (frame 30) or the outro (20 frames before the end) instead of mid-scene. Exam samples are
 // validated as question-mode scenes (examGraphics) and shown mid-countdown, after the reveal, or fully written.
@@ -53,6 +53,7 @@ const sceneTiming = (visual) => {
   const [site] = arg('source', [null]);
   const [extra] = arg('extra', [null]); // --extra=ziggasa.com: the brand's own site on the outro
   const [frameName] = arg('frame', [null]);
+  const at = arg('at', null); // --at=10,14,18: stills at those frames of the scene (blink, mouth), one file each, no contact sheet
   if (frameName && !FRAME_NAMES.includes(frameName)) throw new Error(`Unknown --frame "${frameName}" (intro or outro)`);
   const samples = SAMPLES.filter((s) => !only || only.includes(s.name) || only.includes(s.visual.type));
   if (!samples.length) throw new Error(`No sample matches --only=${only.join(',')}`);
@@ -78,7 +79,7 @@ const sceneTiming = (visual) => {
         const visual = validateVisual(raw, { directGraphics: true, examGraphics: true, language: 'Bangla' });
         if (visual.type !== raw.type) log(`Gallery: WARNING sample "${name}" failed validation and shows as an icon`);
         const { voiceFrames, frames, still } = sceneTiming(visual);
-        const stillFrame = { intro: 30, outro: INTRO_FRAMES + frames + OUTRO_FRAMES - 1 - 20 }[frameName] ?? INTRO_FRAMES + still;
+        const shots = at ? at.map(Number) : [null];
         const inputProps = {
           title: 'Gallery',
           kicker: null,
@@ -97,13 +98,18 @@ const sceneTiming = (visual) => {
             { frames, voiceFrames, narration: name, headline: 'অনলাইন প্রতারণার নতুন কৌশল', visual, emoji: null, bg: null, audio: null },
           ],
         };
-        const output = path.join(outDir, `${format}-${themeId}-${name}${frameName ? `-${frameName}` : ''}.jpg`);
         const composition = await selectComposition({ serveUrl, id: 'Main', inputProps });
-        await renderStill({ composition, serveUrl, output, frame: stillFrame, imageFormat: 'jpeg', inputProps, scale: 0.5 });
-        stills.push(output);
-        log(`Gallery: ${path.basename(output)}`);
+        for (const shot of shots) {
+          const stillFrame = shot !== null ? INTRO_FRAMES + shot : { intro: 30, outro: INTRO_FRAMES + frames + OUTRO_FRAMES - 1 - 20 }[frameName] ?? INTRO_FRAMES + still;
+          const output = path.join(outDir, `${format}-${themeId}-${name}${frameName ? `-${frameName}` : ''}${shot !== null ? `-f${shot}` : ''}.jpg`);
+          await renderStill({ composition, serveUrl, output, frame: stillFrame, imageFormat: 'jpeg', inputProps, scale: 0.5 });
+          stills.push(output);
+          log(`Gallery: ${path.basename(output)}`);
+        }
       }
     }
+
+    if (at) continue; // several frames of one scene are looked at one by one
 
     // Tile the stills (row = theme, column = sample) from a numbered copy, which ffmpeg reads as a sequence.
     const seqDir = fs.mkdtempSync(path.join(outDir, 'seq-'));
