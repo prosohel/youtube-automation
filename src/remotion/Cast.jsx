@@ -1,6 +1,7 @@
 import React from 'react';
 import { interpolate, random, useCurrentFrame, useVideoConfig } from 'remotion';
-import { GRAIN, accentFor, bodyFont, headFont, pop, theme, twos } from './shared';
+import { GRAIN, accentFor, bodyFont, estWidth, headFont, pop, theme, twos } from './shared';
+import { Bust, bustSize } from './Bust';
 
 /*
  * The story cast (vox-story theme): flat paper-cutout people, props and places drawn as SVG, plus the
@@ -15,6 +16,7 @@ const clamp01 = (v) => Math.min(1, Math.max(0, v));
 
 const SKIN = { 1: '#f1c9a5', 2: '#c98b5a', 3: '#7a4a2b' };
 const HAIR = '#2b1d16';
+const CUTOUT_KIND = { hijab: 'woman', elder: 'man', boss: 'man' };
 const OUTFIT = { red: '#c9472f', blue: '#2e6b8a', green: '#3f7d5a', yellow: '#e0a62d', purple: '#6c4a8f' };
 const DARK = '#2a221a';
 const PAPER = '#faf4e8';
@@ -27,6 +29,7 @@ const LINE = '#5a4a3a';
  * `f` drives the blink and the breathing; `holding` is a prop drawn in the hands (hold pose).
  */
 const Person = ({ kind, skin, outfit, pose, f, seed = 0, flip = false, holding = null }) => {
+  kind = CUTOUT_KIND[kind] || kind; // hijab / elder / boss exist only in the library cast
   const tone = SKIN[skin] || SKIN[2];
   const cloth = OUTFIT[outfit] || OUTFIT.red;
   const t = twos(f);
@@ -133,6 +136,27 @@ const Person = ({ kind, skin, outfit, pose, f, seed = 0, flip = false, holding =
 };
 
 /* ---------- props (each drawn in a 100×100 box) ---------- */
+
+/** A paper (bill, slip, notice, result, letter) that shows a short line of text; the text is the scene's own. */
+const paperProp = (a, note) => {
+  const size = Math.min(22, 76 / Math.max(1, estWidth(note, 1)));
+  return (
+    <g>
+      <rect x={4} y={14} width={92} height={74} rx={4} fill={PAPER} stroke={LINE} strokeWidth={3} />
+      <rect x={4} y={14} width={92} height={14} rx={4} fill={a} />
+      <rect x={14} y={36} width={40} height={4} fill={LINE} opacity={0.35} />
+      {note ? (
+        <text x={50} y={66} textAnchor="middle" fontSize={size} fontWeight="800" fontFamily={headFont()} fill={DARK}>{note}</text>
+      ) : (
+        <g fill={LINE} opacity={0.35}>
+          <rect x={14} y={50} width={72} height={4} />
+          <rect x={14} y={62} width={60} height={4} />
+          <rect x={14} y={74} width={44} height={4} />
+        </g>
+      )}
+    </g>
+  );
+};
 
 const PROP = {
   phone: (a) => (
@@ -260,6 +284,7 @@ const PROP = {
       <rect x={30} y={42} width={40} height={6} fill={PAPER} />
     </g>
   ),
+  paper: paperProp,
   trophy: (a) => (
     <g>
       <path d="M 28 12 L 72 12 L 66 56 Q 50 70 34 56 Z" fill="#d9a441" />
@@ -270,15 +295,15 @@ const PROP = {
   ),
 };
 
-const Prop = ({ name, accent, size = 100 }) => {
+const Prop = ({ name, accent, size = 100, note = '' }) => {
   const draw = PROP[name];
   if (!draw) return null;
-  return <g transform={`scale(${size / 100})`}>{draw(accent)}</g>;
+  return <g transform={`scale(${size / 100})`}>{draw(accent, note)}</g>;
 };
 
 /* ---------- settings (drawn in a 1000×600 box behind the people) ---------- */
 
-const Setting = ({ name, accent, f }) => {
+const Setting = ({ name, accent, f, lib = false }) => {
   const t = twos(f);
   const sway = Math.sin(t / 12) * 3;
   switch (name) {
@@ -337,8 +362,69 @@ const Setting = ({ name, accent, f }) => {
           <rect x={574} y={426} width={26} height={150} fill="#6d4c30" />
           <g transform="translate(140 300) scale(1.1)"><Prop name="laptop" accent={accent} /></g>
           <g transform="translate(330 316) scale(0.8)"><Prop name="cup" accent={accent} /></g>
-          <circle cx={160} cy={170} r={60} fill="none" stroke={LINE} strokeWidth={6} />
-          <path d={`M 160 170 L 160 130 M 160 170 L ${160 + Math.cos(t / 20) * 30} ${170 + Math.sin(t / 20) * 30}`} stroke={DARK} strokeWidth={6} strokeLinecap="round" />
+          {lib ? null : <circle cx={160} cy={170} r={60} fill="none" stroke={LINE} strokeWidth={6} />}
+          {lib ? null : <path d={`M 160 170 L 160 130 M 160 170 L ${160 + Math.cos(t / 20) * 30} ${170 + Math.sin(t / 20) * 30}`} stroke={DARK} strokeWidth={6} strokeLinecap="round" />}
+        </g>
+      );
+    case 'classroom':
+      return (
+        <g>
+          <rect x={90} y={50} width={520} height={230} rx={8} fill="#2f5d4a" stroke="#8c6440" strokeWidth={14} />
+          <path d="M 130 110 L 330 110 M 130 160 L 270 160 M 130 210 L 400 210" stroke={PAPER} strokeWidth={6} strokeLinecap="round" opacity={0.7} />
+          <rect x={300} y={282} width={140} height={10} fill="#8c6440" />
+          {[0, 1].map((i) => (
+            <g key={i} transform={`translate(${70 + i * 260} 410)`}>
+              <rect x={0} y={0} width={200} height={20} fill="#b98a5c" />
+              <rect x={10} y={20} width={16} height={140} fill="#8c6440" />
+              <rect x={174} y={20} width={16} height={140} fill="#8c6440" />
+              <rect x={30} y={-34} width={44} height={34} rx={3} fill={accent} />
+            </g>
+          ))}
+        </g>
+      );
+    case 'shop':
+      return (
+        <g>
+          {[0, 1, 2].map((r) => (
+            <g key={r}>
+              <rect x={60} y={70 + r * 100} width={560} height={10} fill="#8c6440" />
+              {[0, 1, 2, 3, 4, 5].map((i) => <rect key={i} x={76 + i * 90} y={r % 2 ? 28 + r * 100 : 34 + r * 100} width={64} height={r % 2 ? 42 : 36} rx={4} fill={i % 3 === 0 ? accent : i % 3 === 1 ? '#e0a62d' : '#58a06f'} />)}
+            </g>
+          ))}
+          <rect x={40} y={400} width={620} height={30} fill="#b98a5c" />
+          <rect x={50} y={430} width={600} height={150} fill="#8c6440" />
+          <rect x={50} y={430} width={600} height={12} fill="#6d4c30" />
+          <rect x={760} y={80} width={150} height={110} rx={6} fill={accent} />
+          <rect x={780} y={110} width={110} height={10} fill={PAPER} />
+          <rect x={792} y={134} width={86} height={10} fill={PAPER} />
+        </g>
+      );
+    case 'village':
+      return (
+        <g>
+          <circle cx={820} cy={110} r={48} fill="#f3d27a" />
+          <rect x={60} y={300} width={250} height={230} fill="#cdb690" />
+          <path d="M 30 306 L 185 170 L 340 306 Z" fill="#a07a3e" />
+          <rect x={150} y={400} width={70} height={130} fill="#8c6440" />
+          <rect x={90} y={340} width={44} height={44} fill="#bcd3dc" stroke={PAPER} strokeWidth={6} />
+          <rect x={720} y={250} width={26} height={270} fill="#8c6440" />
+          <path d={`M 733 260 Q ${650 + sway} 210 600 270 M 733 260 Q ${820 + sway} 200 880 260 M 733 260 Q ${700 + sway} 180 690 150 M 733 260 Q ${770 + sway} 170 790 140`} stroke="#3f7d5a" strokeWidth={22} strokeLinecap="round" fill="none" />
+          <rect x={-1000} y={520} width={3000} height={80} fill="#8fb36b" />
+          <path d="M 330 600 Q 480 540 640 560 L 700 600 Z" fill="#cdb690" />
+        </g>
+      );
+    case 'field':
+      return (
+        <g>
+          <circle cx={160} cy={120} r={54} fill="#f3d27a" />
+          <rect x={-1000} y={330} width={3000} height={270} fill="#8fb36b" />
+          <rect x={-1000} y={330} width={3000} height={16} fill="#6fa055" />
+          {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+            <g key={i} transform={`translate(${60 + i * 140} 410)`}>
+              <path d={`M 0 90 Q ${-10 + sway} 40 4 ${10 + (i % 2) * 10}`} stroke="#e0a62d" strokeWidth={6} fill="none" strokeLinecap="round" />
+              <circle cx={4} cy={6 + (i % 2) * 10} r={9} fill="#e0a62d" />
+            </g>
+          ))}
         </g>
       );
     default:
@@ -349,6 +435,46 @@ const Setting = ({ name, accent, f }) => {
       );
   }
 };
+
+/** A role name tag over a person: a dark pill with the label, popping in with the scene. */
+const Tag = ({ text, cx, y, on }) => {
+  const size = 34;
+  const w = Math.max(120, estWidth(text, size) + 56);
+  return (
+    <g opacity={on} transform={`translate(${cx} ${y + (1 - on) * 16})`}>
+      <rect x={-w / 2} y={-30} width={w} height={60} rx={14} fill={DARK} />
+      <rect x={-w / 2 + 8} y={-22} width={w - 16} height={44} rx={9} fill="none" stroke={PAPER} strokeWidth={2} opacity={0.35} />
+      <text x={0} y={12} textAnchor="middle" fontSize={size} fontWeight="700" fontFamily={bodyFont()} fill={PAPER}>{text}</text>
+    </g>
+  );
+};
+
+/** The hook sign across the top of a scene: a chalkboard in a wooden frame. */
+const Banner = ({ text, isShort, on, top }) => (
+  <div
+    style={{
+      position: 'absolute',
+      left: '50%',
+      top: top ?? (isShort ? -30 : -20),
+      width: isShort ? 880 : 1000,
+      transform: `translateX(-50%) translateY(${(1 - on) * -60}px) rotate(${(1 - on) * -2}deg)`,
+      opacity: on,
+      background: '#2f5d4a',
+      backgroundImage: GRAIN,
+      border: '10px solid #8c6440',
+      borderRadius: 10,
+      padding: isShort ? '22px 30px' : '16px 26px',
+      boxShadow: '0 12px 30px rgba(40,25,10,0.28)',
+      textAlign: 'center',
+      fontFamily: headFont(),
+      fontSize: isShort ? 52 : 42,
+      lineHeight: 1.35,
+      color: PAPER,
+    }}
+  >
+    {text}
+  </div>
+);
 
 /* ---------- the on-screen line with its orange keyword ---------- */
 
@@ -393,30 +519,138 @@ const StoryScene = ({ v, accent, isShort, start }) => {
   const T = theme();
   const enter = clamp01(pop(f, fps, start, 14));
   const propIn = (k) => clamp01(pop(f, fps, start + 8 + k * 6, 10));
-  const held = v.pose === 'hold' && v.props[0] ? <Prop name={v.props[0]} accent={accent} size={100} /> : null;
-  const loose = v.pose === 'hold' ? v.props.slice(1) : v.props;
+  const notes = v.notes || []; // the text each paper prop shows, by position in props
+  const heldAt = v.pose === 'hold' && v.props[0] && v.props[0] !== 'paper' ? 0 : -1;
+  const held = heldAt === 0 ? <Prop name={v.props[0]} accent={accent} size={100} /> : null;
+  const loose = v.props.map((p, i) => ({ p, i })).filter(({ i }) => i !== heldAt);
+  const close = v.shot === 'close';
+  const two = !!v.other && !close;
   // Rooms have their furniture on the left, so the person stands on the right; open places centre them.
-  const indoors = v.setting === 'home' || v.setting === 'office';
-  const personX = indoors ? 540 : v.setting === 'none' ? 300 : 290;
+  const indoors = ['home', 'office', 'classroom', 'shop'].includes(v.setting);
+  const personX = close ? 300 : indoors ? 540 : v.setting === 'none' ? 300 : 290;
   const propX = indoors ? 140 : 720;
   const box = isShort ? 1000 : 800;
+  // Two people face each other: smaller, one each side, the props between them.
+  const mainAt = two ? { x: 110, y: 451, s: 1.6 } : { x: personX, y: 354, s: 2 };
+  const otherAt = { x: 570, y: 451, s: 1.6 };
+  const otherIn = clamp01(pop(f, fps, start + 5, 14));
+  const tagIn = clamp01(pop(f, fps, start + 12, 12));
+  // A close shot leans in slowly on the one person.
+  const zoom = close ? interpolate(f, [0, 120], [1.18, 1.32], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }) : 1;
+  const tagY = (at) => at.y + 36 * at.s - 62;
   return (
     // Sits a little low on the page (there are no captions underneath in this theme).
     <div style={{ position: 'relative', width: isShort ? 1000 : 1400, height: isShort ? 1000 : 640, marginTop: isShort ? 160 : 0 }}>
-      <svg viewBox="0 0 1000 1000" width={box} height={box} style={{ position: 'absolute', left: '50%', top: isShort ? 0 : -80, transform: 'translateX(-50%)', overflow: 'visible' }}>
+      <svg viewBox="0 0 1000 1000" width={box} height={box} style={{ position: 'absolute', left: '50%', top: isShort ? 0 : -80, transform: `translateX(-50%) scale(${zoom})`, transformOrigin: '50% 62%', overflow: 'visible' }}>
         <g transform="translate(0 400)" opacity={enter}>
           <Setting name={v.setting} accent={T.accents[1]} f={f} />
         </g>
         {/* the person, a paper cutout popping up from the ground line */}
-        <g transform={`translate(${personX} ${354 + (1 - enter) * 80}) scale(2)`} opacity={enter}>
-          <Person kind={v.character} skin={v.skin} outfit={v.outfit} pose={v.pose} f={f} seed={1} holding={held} />
+        <g transform={`translate(${mainAt.x} ${mainAt.y + (1 - enter) * 80}) scale(${mainAt.s})`} opacity={enter}>
+          <Person kind={v.character} skin={v.skin} outfit={v.outfit} pose={v.pose} f={f} seed={1} holding={held} flip={false} />
         </g>
-        {loose.map((p, k) => (
-          <g key={p} transform={`translate(${propX + (indoors ? 0 : k * 160)} ${indoors ? 560 + k * 200 : 760 - (1 - propIn(k)) * 40}) scale(${1.9 * propIn(k)})`} opacity={propIn(k)}>
-            <Prop name={p} accent={T.accents[3]} />
+        {two ? (
+          <g transform={`translate(${otherAt.x} ${otherAt.y + (1 - otherIn) * 80}) scale(${otherAt.s})`} opacity={otherIn}>
+            <Person kind={v.other.character} skin={v.other.skin} outfit={v.other.outfit} pose={v.other.pose} f={f} seed={2} flip />
           </g>
-        ))}
+        ) : null}
+        {loose.map(({ p, i }, k) => {
+          const note = notes[i] || '';
+          const at = two
+            ? { x: 430, y: 520 + k * 120 - (1 - propIn(k)) * 40, s: 1.4 }
+            : { x: propX + (indoors ? 0 : k * 160), y: indoors ? 560 + k * 200 : 760 - (1 - propIn(k)) * 40, s: p === 'paper' ? 2.4 : 1.9 };
+          return (
+            <g key={`${p}${i}`} transform={`translate(${at.x} ${at.y}) scale(${at.s * propIn(k)})`} opacity={propIn(k)}>
+              <Prop name={p} accent={T.accents[3]} note={note} />
+            </g>
+          );
+        })}
+        {v.label ? <Tag text={v.label} cx={mainAt.x + 100 * mainAt.s} y={tagY(mainAt)} on={tagIn} /> : null}
+        {two && v.other.label ? <Tag text={v.other.label} cx={otherAt.x + 100 * otherAt.s} y={tagY(otherAt)} on={tagIn} /> : null}
       </svg>
+      {v.banner ? <Banner text={v.banner} isShort={isShort} on={clamp01(pop(f, fps, start + 2, 14))} /> : null}
+      <Line text={v.line} keyword={v.keyword} isShort={isShort} f={f} fps={fps} start={start} />
+    </div>
+  );
+};
+
+/* ---------- a scene drawn with the library cast: waist-up people behind a desk ---------- */
+
+/** Foreground desk (indoors) or low mound (outdoors) that hides the bottom edge of the busts. */
+const Foreground = ({ indoors }) =>
+  indoors ? (
+    <g>
+      <rect x={-1000} y={790} width={3000} height={260} fill="#8c6440" />
+      <rect x={-1000} y={790} width={3000} height={26} fill="#b98a5c" />
+      <rect x={-1000} y={816} width={3000} height={8} fill="#6d4c30" />
+      {[0, 1, 2].map((i) => <rect key={i} x={40 + i * 330} y={850} width={280} height={150} rx={6} fill="none" stroke="#6d4c30" strokeWidth={6} opacity={0.5} />)}
+    </g>
+  ) : (
+    <g>
+      <path d="M -1000 830 L -200 830 Q 150 770 500 800 Q 850 770 1200 830 L 2000 830 L 2000 1050 L -1000 1050 Z" fill="#8c7a5b" />
+      <path d="M -1000 830 L -200 830 Q 150 770 500 800 Q 850 770 1200 830 L 2000 830 L 2000 850 L 1200 850 Q 850 790 500 820 Q 150 790 -200 850 L -1000 850 Z" fill="#a99572" />
+    </g>
+  );
+
+const LibraryScene = ({ v, accent, isShort, start, voiceFrames }) => {
+  const f = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const T = theme();
+  const enter = clamp01(pop(f, fps, start, 14));
+  const otherIn = clamp01(pop(f, fps, start + 5, 14));
+  const tagIn = clamp01(pop(f, fps, start + 12, 12));
+  const propIn = (k) => clamp01(pop(f, fps, start + 8 + k * 6, 10));
+  const notes = v.notes || [];
+  const close = v.shot === 'close';
+  const two = !!v.other && !close;
+  const indoors = ['home', 'office', 'classroom', 'shop'].includes(v.setting);
+  const heldAt = v.pose === 'hold' && v.props[0] ? 0 : -1; // a library person holds the first prop up in front of the chest
+  const held = heldAt === 0 ? <Prop name={v.props[0]} accent={accent} size={100} note={notes[0] || ''} /> : null;
+  const loose = v.props.map((p, i) => ({ p, i })).filter(({ i }) => i !== heldAt);
+  const voiced = f < (voiceFrames || 0) - 3;
+  const mainTalks = voiced && v.speaker === 'main';
+  const otherTalks = voiced && v.speaker === 'other';
+  // The desk top is at y=790 of the 1000-wide canvas; each person is placed so the desk cuts them at the chest.
+  const base = close ? 2.6 : two ? 1.7 : 2.3;
+  const place = (kind, centre) => {
+    const s = base * bustSize(kind);
+    return { x: centre - (280 * s) / 2, y: 790 - 0.875 * 280 * s, s };
+  };
+  const mainAt = place(v.character, two ? 255 : 500);
+  const otherAt = two ? place(v.other.character, 745) : null;
+  const zoom = close ? interpolate(f, [0, 120], [1.0, 1.1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }) : 1;
+  const tagY = (at) => at.y + 10 * at.s - 34;
+  const slots = two ? [mainAt.x + 140 * mainAt.s - 70, otherAt.x + 140 * otherAt.s - 70] : [70, 790];
+  // The canvas shows y 110..1000 of the 1000-wide drawing: the room, the people, the desk. Wider than the old cutout box.
+  const sc = isShort ? 1.08 : 0.95;
+  const H = 890 * sc;
+  return (
+    <div style={{ position: 'relative', width: isShort ? 1080 : 1400, height: H, marginTop: isShort ? 200 : 0 }}>
+      <svg viewBox="-1000 110 3000 890" width={3000 * sc} height={H} style={{ position: 'absolute', left: '50%', top: 0, transform: `translateX(-50%) scale(${zoom})`, transformOrigin: '50% 70%', overflow: 'visible' }}>
+        <g transform="translate(0 400)" opacity={enter}>
+          <Setting name={v.setting} accent={T.accents[1]} f={f} lib />
+        </g>
+        <g transform={`translate(${mainAt.x} ${mainAt.y + (1 - enter) * 90}) scale(${mainAt.s})`} opacity={enter}>
+          <Bust kind={v.character} skin={v.skin} outfit={v.outfit} pose={v.pose} f={f} seed={1} talking={mainTalks} holding={held} />
+        </g>
+        {two ? (
+          <g transform={`translate(${otherAt.x} ${otherAt.y + (1 - otherIn) * 90}) scale(${otherAt.s})`} opacity={otherIn}>
+            <Bust kind={v.other.character} skin={v.other.skin} outfit={v.other.outfit} pose={v.other.pose} f={f} seed={2} talking={otherTalks} flip />
+          </g>
+        ) : null}
+        <g opacity={enter}><Foreground indoors={indoors} /></g>
+        {loose.map(({ p, i }, k) => {
+          const s = (p === 'paper' ? 1.5 : 1.3) * propIn(k);
+          return (
+            <g key={`${p}${i}`} transform={`translate(${slots[i % slots.length]} ${812 - 96 * s}) scale(${s})`} opacity={propIn(k)}>
+              <Prop name={p} accent={T.accents[3]} note={notes[i] || ''} />
+            </g>
+          );
+        })}
+        {v.label ? <Tag text={v.label} cx={mainAt.x + 140 * mainAt.s} y={tagY(mainAt)} on={tagIn} /> : null}
+        {two && v.other.label ? <Tag text={v.other.label} cx={otherAt.x + 140 * otherAt.s} y={tagY(otherAt)} on={tagIn} /> : null}
+      </svg>
+      {v.banner ? <Banner text={v.banner} isShort={isShort} on={clamp01(pop(f, fps, start + 2, 14))} top={isShort ? -150 : -20} /> : null}
       <Line text={v.line} keyword={v.keyword} isShort={isShort} f={f} fps={fps} start={start} />
     </div>
   );
@@ -530,7 +764,9 @@ const ChapterCard = ({ v, isShort, start }) => {
 };
 
 /** One cleaned story visual (shapes: src/storyVisuals.js). */
-export const StoryVisual = ({ visual, accent, isShort, start }) => {
+export const StoryVisual = ({ visual, accent, isShort, start, voiceFrames }) => {
   if (visual.type === 'chapter') return <ChapterCard v={visual} isShort={isShort} start={start} />;
+  // The theme picks the cast: library people (Bust.jsx) or the drawn paper cutouts above.
+  if (theme().cast === 'library') return <LibraryScene v={visual} accent={accent} isShort={isShort} start={start} voiceFrames={voiceFrames} />;
   return <StoryScene v={visual} accent={accent} isShort={isShort} start={start} />;
 };

@@ -307,7 +307,7 @@ const StockVisual = ({ visual, accent, isShort, voiceFrames, frames, narration, 
     // Story scenes: a drawn character and its one line, or a full-screen chapter card.
     return (
       <Stage isShort={isShort} tall>
-        <StoryVisual visual={v} accent={accent} isShort={isShort} start={START} />
+        <StoryVisual visual={v} accent={accent} isShort={isShort} start={START} voiceFrames={voiceFrames} />
       </Stage>
     );
   }
