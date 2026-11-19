@@ -4,7 +4,7 @@
 
 const { STYLES: THUMB_STYLES } = require('../src/thumbnail');
 
-const REDO_STAGES = ['script', 'voice', 'render', 'thumbnail'];
+const REDO_STAGES = ['script', 'voice', 'audio', 'render', 'thumbnail'];
 
 /** Platform states during which the posted copy would no longer match a remade file. */
 const BUSY_PLATFORM = ['pending', 'uploading', 'processing', 'published'];
@@ -50,6 +50,12 @@ function redoPatch(video, stage, opts = {}) {
   if (stage === 'voice') {
     if (!done.script) throw new Error('There is no script yet; retry the video instead');
     return { done: { ...done, voice: false, render: false }, scenes: [], voiceProvider: null, review: null, renderer: null, redo: null };
+  }
+  if (stage === 'audio') {
+    if (!done.script) throw new Error('There is no script yet; retry the video instead');
+    // Only the narration is recorded again. done.render stays as it is, so the pipeline does not render; the
+    // pipeline marks the video as having a newer voice than its file (voiceNewer) until the next render.
+    return { done: { ...done, voice: false }, scenes: [], voiceProvider: null, redo: { audioOnly: true } };
   }
   if (stage === 'render') {
     if (!done.voice) throw new Error('The voice is not finished yet; retry the video instead');

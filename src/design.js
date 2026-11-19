@@ -191,6 +191,11 @@ Then re-read each file against the contract (imports, default export, no forbidd
  */
 async function designScenes({ script, scenes, theme, workDir, thumbnail = null, isShort = cfg.format === 'shorts', fps = cfg.fps, say = log }) {
   const { runAgent } = require('./llm');
+  if (cfg.llmProvider === 'api') {
+    // The design pass runs Claude Code with tools; the API provider cannot. Say so once and skip the whole pass.
+    say('Design pass skipped: DESIGN_MODE=instant needs LLM_PROVIDER=claude-code (this worker uses the API); using the library visuals');
+    return null;
+  }
   const dir = path.join(workDir, DESIGN_DIR);
   fs.rmSync(dir, { recursive: true, force: true });
   fs.mkdirSync(dir, { recursive: true });
@@ -234,6 +239,8 @@ async function designScenes({ script, scenes, theme, workDir, thumbnail = null, 
     summary = res.text || '';
   } catch (e) {
     say(`Design pass failed (${e.message}); using the library visuals`);
+    // Nothing was written (the CLI could not start, say): no "rejected scene" noise. A timeout that left a manifest is still read.
+    if (!fs.existsSync(path.join(dir, 'manifest.json'))) return null;
   }
   const design = readDesign(dir, scenes.length);
   const ok = Object.keys(design.scenes);
