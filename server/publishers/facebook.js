@@ -41,8 +41,38 @@ async function publish(ctx) {
 
 async function publishAny(ctx) {
   const media = ctx.media || (ctx.video && ctx.video.files && ctx.video.files.video ? await mediaInfo(ctx.video.files.video) : null);
-  if (media && media.durationSec > FACEBOOK_REEL_MAX_SEC) return publishVideo(ctx, media);
-  return publishReel(ctx);
+  const res = media && media.durationSec > FACEBOOK_REEL_MAX_SEC ? await publishVideo(ctx, media) : await publishReel(ctx);
+  await setThumbnail(ctx, res.remoteId); // posted by now: the thumbnail never decides whether the post counts
+  return res;
+}
+
+/**
+ * Make the designed thumbnail the video's cover (Graph API: POST /{video-id}/thumbnails with is_preferred, docs read
+ * 2026-11-19). Without it Facebook picks a frame itself, often a mid-scene one. Best effort: a refusal is written to
+ * the video's log and never fails the post. A video still processing is tried again once.
+ */
+async function setThumbnail(ctx, videoId) {
+  const f = ctx.video && ctx.video.files && ctx.video.files.thumb;
+  if (!f || !videoId || !fs.existsSync(f)) return false;
+  const { graph, token } = creds(ctx);
+  const image = await fs.promises.readFile(f);
+  let last = '';
+  for (let i = 0; i < 2; i++) {
+    try {
+      const fd = new FormData();
+      fd.append('is_preferred', 'true');
+      fd.append('access_token', token);
+      fd.append('source', new Blob([image], { type: 'image/jpeg' }), 'thumbnail.jpg');
+      await request(ctx, 'facebook', `${graph}/${videoId}/thumbnails`, { method: 'POST', body: fd }, [token]);
+      ctx.log('Facebook: thumbnail set');
+      return true;
+    } catch (e) {
+      last = e.message;
+      if (i === 0) await wait(ctx, 10000);
+    }
+  }
+  ctx.log(`Facebook: thumbnail NOT set: ${last} (Facebook then uses a frame of its own; check the Page token's permissions in Integrations)`);
+  return false;
 }
 
 /**
@@ -186,4 +216,4 @@ function pageAccessLost(e) {
   );
 }
 
-module.exports = { publish, findExisting, test };
+module.exports = { publish, findExisting, test, setThumbnail };

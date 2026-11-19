@@ -53,6 +53,50 @@ const youtubeTitle = (title, isShort = cfg.format === 'shorts') => {
   return clip(isShort && !/#shorts/i.test(t) ? `${t} #Shorts` : t, 100);
 };
 
+// YouTube takes a custom thumbnail up to 2 MB (JPG/PNG). Right after an upload the video may not be known to the
+// thumbnail endpoint yet, so a "not found", a rate limit or a server error is tried again after these waits.
+const THUMB_MAX = 2 * 1024 * 1024;
+const THUMB_RETRY_MS = [5000, 15000, 30000];
+
+/** Why a thumbnail was refused, in words that say what to do. */
+function thumbReason(e) {
+  const status = Number(e.status || e.code);
+  const msg = String(e.message || e);
+  if (status === 403 || /forbidden|permission|verif/i.test(msg)) {
+    return `${msg} (YouTube only allows custom thumbnails on a verified channel: verify the channel at youtube.com/verify; if it is verified, press Reconnect YouTube in Integrations)`;
+  }
+  if (status === 400) return `${msg} (the image was refused: it must be a JPG or PNG under 2 MB)`;
+  return msg;
+}
+
+/** Set the video's thumbnail; never throws. Returns true when YouTube accepted it. */
+async function setThumbnail(youtube, videoId, thumbFile, note, retryMs) {
+  if (!fs.existsSync(thumbFile)) {
+    note(`Thumbnail skipped: the file ${thumbFile} is missing`);
+    return false;
+  }
+  const size = fs.statSync(thumbFile).size;
+  if (size > THUMB_MAX) {
+    note(`Thumbnail skipped: ${Math.round(size / 1024)} KB is over YouTube's 2 MB limit`);
+    return false;
+  }
+  for (let i = 0; ; i++) {
+    try {
+      await youtube.thumbnails.set({ videoId, media: { body: fs.createReadStream(thumbFile) } });
+      note('Thumbnail set on YouTube');
+      return true;
+    } catch (e) {
+      const status = Number(e.status || e.code);
+      const again = (status === 404 || status === 429 || status >= 500 || !status) && i < retryMs.length;
+      if (!again) {
+        note(`Thumbnail NOT set: ${thumbReason(e)}`);
+        return false;
+      }
+      await new Promise((r) => setTimeout(r, retryMs[i]));
+    }
+  }
+}
+
 /**
  * Upload a finished video. Returns the watch URL.
  * privacy: overrides PRIVACY_STATUS (a schedule rule can set its own).
@@ -64,6 +108,7 @@ const youtubeTitle = (title, isShort = cfg.format === 'shorts') => {
  * notifySubscribers: only a public upload notifies; private and unlisted never do.
  * publishAt: an ISO time; the video is uploaded private and YouTube makes it public then (a scheduled release,
  * which notifies like a public upload). privacy is ignored with it.
+ * note: a function that gets the upload's notes (thumbnail set or refused, playlist); default: the console log.
  * Note: each upload costs ~1,600 quota units of the default 10,000/day (a playlist adds ~100).
  */
 async function uploadVideo({
@@ -81,6 +126,8 @@ async function uploadVideo({
   playlist = cfg.playlist,
   notifySubscribers = cfg.notifySubscribers,
   publishAt = null,
+  note = log, // where upload notes go; the dashboard passes its job log so a failed thumbnail is seen
+  thumbRetryMs = THUMB_RETRY_MS,
 }) {
   const youtube = google.youtube({ version: 'v3', auth });
   if (publishAt) privacy = 'private'; // YouTube only takes publishAt on a private video
@@ -126,13 +173,7 @@ async function uploadVideo({
   log(`Uploaded: https://youtu.be/${id} (${publishAt ? `private, goes public ${publishAt}` : privacy})`);
 
   // Custom thumbnails need a phone-verified channel; do not fail the run if rejected.
-  if (thumbFile) {
-    try {
-      await youtube.thumbnails.set({ videoId: id, media: { body: fs.createReadStream(thumbFile) } });
-    } catch (e) {
-      log(`Thumbnail skipped: ${e.message}`);
-    }
-  }
+  if (thumbFile) await setThumbnail(youtube, id, thumbFile, note, thumbRetryMs);
   if (playlist) {
     try {
       await addToPlaylist(youtube, id, playlist);

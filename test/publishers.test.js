@@ -227,6 +227,80 @@ test('facebook: @followers is left out when the brand turns it off, and never do
   assert.equal(JSON.parse(empty.calls[2].body).description, '@followers');
 });
 
+const thumbFile = path.join(path.dirname(file), 't.jpg');
+fs.writeFileSync(thumbFile, Buffer.alloc(500, 1));
+const withThumb = { ...video, files: { ...video.files, thumb: thumbFile } };
+const FB = { FACEBOOK_PAGE_ID: '55', FACEBOOK_PAGE_TOKEN: TOKEN, META_GRAPH_VERSION: 'v27.0' };
+const reelRoutes = (id) => [
+  [/\/v27\.0\/55\/video_reels$/, 200, { video_id: id, upload_url: 'https://rupload.facebook.com/video-upload/v27.0/' + id }],
+  ['rupload.facebook.com/video-upload', 200, { success: true }],
+  [/\/v27\.0\/55\/video_reels$/, 200, { success: true }],
+  [`/${id}?fields=status`, 200, { status: { video_status: 'ready', publishing_phase: { publish_status: 'published' } } }],
+];
+
+test('facebook: the designed thumbnail is sent as the preferred cover once the post is up', async () => {
+  const fetch = fakeFetch([...reelRoutes('fv_9'), [/\/v27\.0\/fv_9\/thumbnails$/, 200, { success: true }]]);
+  const logs = [];
+  const res = await getPublisher('facebook').publish(ctx(FB, fetch, { video: withThumb, log: (l) => logs.push(l) }));
+  const last = fetch.calls[fetch.calls.length - 1];
+  assert.match(last.url, /\/fv_9\/thumbnails$/);
+  const form = Object.fromEntries([...last.body.entries()]);
+  assert.equal(form.is_preferred, 'true');
+  assert.equal(form.source.size, 500, 'the thumbnail file itself is uploaded');
+  assert.ok(logs.includes('Facebook: thumbnail set'));
+  assert.equal(res.state, 'published');
+});
+
+test('facebook: a refused thumbnail is logged, tried twice and never fails the post', async () => {
+  const bad = [/\/fv_8\/thumbnails$/, 400, { error: { message: 'Permission denied', code: 200 } }];
+  const fetch = fakeFetch([...reelRoutes('fv_8'), bad, bad]);
+  const logs = [];
+  const res = await getPublisher('facebook').publish(ctx(FB, fetch, { video: withThumb, log: (l) => logs.push(l) }));
+  assert.equal(res.state, 'published');
+  assert.equal(fetch.calls.filter((c) => c.url.endsWith('/thumbnails')).length, 2);
+  assert.ok(logs.some((l) => /thumbnail NOT set: .*Permission denied/.test(l)));
+  assert.equal(logs.some((l) => l.includes(TOKEN)), false, 'the token is never logged');
+});
+
+test('youtube: a thumbnail not yet known is retried; a refusal says why and never fails the upload', async (t) => {
+  const google = fakeGoogle(t);
+  const notes = [];
+  const auth = { credentials: { refresh_token: 'x' } };
+  // First call: 404 (video still processing), then accepted.
+  let calls = 0;
+  const real = google.made;
+  const yt = require('googleapis').google;
+  const make = yt.youtube;
+  yt.youtube = (o) => {
+    const api = make(o);
+    api.thumbnails.set = async () => {
+      calls++;
+      if (calls === 1) throw Object.assign(new Error('Not found'), { code: 404 });
+      return {};
+    };
+    return api;
+  };
+  t.after(() => { yt.youtube = make; });
+  const url = await uploadVideo({ videoFile: file, thumbFile, title: 'T', description: 'd', tags: [], auth, note: (l) => notes.push(l), thumbRetryMs: [0, 0] });
+  assert.equal(url, 'https://youtu.be/yt_new');
+  assert.equal(calls, 2);
+  assert.ok(notes.includes('Thumbnail set on YouTube'));
+  assert.ok(real);
+
+  // A channel that is not verified: one try, a plain reason, the URL is still returned.
+  calls = 0;
+  yt.youtube = (o) => {
+    const api = make(o);
+    api.thumbnails.set = async () => { calls++; throw Object.assign(new Error('The authenticated user cannot upload custom video thumbnails'), { code: 403 }); };
+    return api;
+  };
+  notes.length = 0;
+  const url2 = await uploadVideo({ videoFile: file, thumbFile, title: 'T', description: 'd', tags: [], auth, note: (l) => notes.push(l), thumbRetryMs: [0, 0] });
+  assert.equal(url2, 'https://youtu.be/yt_new');
+  assert.equal(calls, 1, 'a 403 is not retried');
+  assert.ok(notes.some((l) => /Thumbnail NOT set: .*youtube\.com\/verify/.test(l)));
+});
+
 test('an API error names the platform and the API message, never the token', async () => {
   const fetch = fakeFetch([[/video_reels/, 400, { error: { message: 'Invalid OAuth access token', code: 190 } }]]);
   const err = await getPublisher('facebook')
