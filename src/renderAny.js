@@ -1,6 +1,7 @@
 const cfg = require('./config');
 const { log } = require('./util');
 const { EXAM_TYPES } = require('./examVisuals');
+const { StopError, stopped } = require('./cancel');
 
 const hasExamScenes = (scenes) => (scenes || []).some((s) => s && s.visual && EXAM_TYPES.includes(s.visual.type));
 
@@ -23,6 +24,7 @@ async function renderAny({ scenes, workDir, slug, title, theme, direction, thumb
       const { result, review } = await reviewAndFix(renderWithRemotion, args, first);
       return { ...result, review };
     } catch (e) {
+      if (stopped()) throw e instanceof StopError ? e : new StopError(); // stopped by the user: no plain fallback
       if (exam) throw refuse(e.message);
       log(`Remotion render failed: ${e.message}`);
       log('Falling back to the plain ffmpeg renderer...');

@@ -249,10 +249,10 @@ function BrandHero({ brand, values, focus, onChanged, setToast, results, runTest
     values && values.VIDEO_FORMAT ? (values.VIDEO_FORMAT === 'shorts' ? 'Shorts' : 'Landscape') : '',
   ].filter(Boolean).join(' · ');
   const rows = accountRows(brand, values);
-  // Videos are queued, working, ready (not posted yet), failed or published: together, every video of the brand.
+  // Videos are queued, working, ready (not posted yet), failed, stopped or published: together, every video of the brand.
   const c = overview && overview.counts;
   const stats = [
-    ['Videos', c ? c.queued + c.working + c.ready + c.failed + c.published : null],
+    ['Videos', c ? c.queued + c.working + c.ready + c.failed + (c.stopped || 0) + c.published : null],
     ['Published', c ? c.published : null],
     ['Rules', rules ? rules.length : null],
   ];

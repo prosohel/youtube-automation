@@ -91,6 +91,7 @@ async function computeOverview(redis, queues, { brandId, now = new Date() } = {}
     working: videos.filter((v) => v.status === 'working').length,
     ready: videos.filter((v) => v.status === 'ready' && !published(v)).length,
     failed: videos.filter((v) => v.status === 'failed').length,
+    stopped: videos.filter((v) => v.status === 'stopped').length,
     published: videos.filter(published).length,
     privateOnly: videos.filter((v) => published(v) && privateOnly(v)).length,
   };

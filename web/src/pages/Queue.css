@@ -41,6 +41,7 @@
 .q-thumb.is-ready { background: var(--gold); color: var(--gold-ink); }
 .q-thumb.is-published { background: var(--ok-bg); color: var(--ok); }
 .q-thumb.is-failed { background: var(--danger-bg); color: var(--danger); }
+.q-thumb.is-stopped { background: var(--warn-bg); color: var(--warn); }
 .q-row-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .q-row-title { font-weight: 700; font-size: 13.5px; overflow-wrap: anywhere; }
 .q-row-meta { font-size: 12px; color: var(--ink-4); overflow-wrap: anywhere; }

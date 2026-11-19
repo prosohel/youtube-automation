@@ -1,5 +1,6 @@
 const fs = require('fs');
 const { spawn } = require('child_process');
+const { currentSignal, stopOr } = require('./cancel');
 
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
@@ -7,13 +8,13 @@ function ensureDir(dir) {
 
 function run(cmd, args, opts = {}) {
   return new Promise((resolve, reject) => {
-    const p = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], ...opts });
+    const p = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], signal: currentSignal(), ...opts }); // the signal: "Stop" ends the process
     let out = '';
     let err = '';
     p.stdout.on('data', (d) => (out += d));
     p.stderr.on('data', (d) => (err += d));
     p.on('error', (e) =>
-      reject(new Error(`Could not start "${cmd}": ${e.message}. Is it installed and on PATH?`))
+      reject(stopOr(e).stopped ? stopOr(e) : new Error(`Could not start "${cmd}": ${e.message}. Is it installed and on PATH?`))
     );
     p.on('close', (code) =>
       code === 0

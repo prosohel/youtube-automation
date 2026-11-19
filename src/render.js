@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const cfg = require('./config');
 const { run, log, ensureDir } = require('./util');
+const { throwIfStopped, remotionCancel } = require('./cancel');
 const { fetchClip } = require('./footage');
 const { SYNTH_SOUNDS, ensureSound } = require('./sfx');
 const { synthMusic, musicPlan, beatGrid, snapUp } = require('./music');
@@ -220,6 +221,7 @@ async function renderWithRemotion(args) {
   const { renderMedia, selectComposition } = require('@remotion/renderer');
   const { fps } = cfg;
   const { serveUrl, inputProps, credits, thumb, theme } = await prepareRender(args);
+  throwIfStopped(); // the bundling above cannot be cancelled: look before the long part starts
   const composition = await selectComposition({ serveUrl, id: 'Main', inputProps });
   const videoFile = path.join(cfg.OUT_DIR, `${args.slug}.mp4`);
 
@@ -235,6 +237,7 @@ async function renderWithRemotion(args) {
     crf: 18,
     outputLocation: videoFile,
     inputProps,
+    ...remotionCancel(), // "Stop" cancels the render
     onProgress: ({ progress }) => {
       const pct = Math.floor(progress * 100);
       if (pct >= lastPct + 10) {

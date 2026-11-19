@@ -4,6 +4,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 const cfg = require('./config');
 const { parseJson } = require('./util');
+const { currentSignal, stopOr } = require('./cancel');
 
 const SYSTEM =
   'You are a professional YouTube content writer and strategist. You return the requested data only, ' +
@@ -62,7 +63,7 @@ function viaClaudeCode({ prompt, schema, tools = [], cwd: dir = null, timeoutSec
   ];
 
   return new Promise((resolve, reject) => {
-    const p = spawn(cfg.claudeBin, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
+    const p = spawn(cfg.claudeBin, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'], signal: currentSignal() }); // "Stop" ends it
     let out = '';
     let err = '';
     const timer = setTimeout(() => {
@@ -74,6 +75,7 @@ function viaClaudeCode({ prompt, schema, tools = [], cwd: dir = null, timeoutSec
     p.stderr.on('data', (d) => (err += d));
     p.on('error', (e) => {
       clearTimeout(timer);
+      if (stopOr(e).stopped) return reject(stopOr(e));
       reject(
         new Error(
           `Could not start "${cfg.claudeBin}": ${e.message}. Install Claude Code and log in by running "claude" once, ` +
@@ -160,7 +162,7 @@ function runAgent({ prompt, cwd, timeoutSec = 600, maxTurns = 100, tools = ['Rea
   ];
   return new Promise((resolve, reject) => {
     const t0 = Date.now();
-    const p = spawn(cfg.claudeBin, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
+    const p = spawn(cfg.claudeBin, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'], signal: currentSignal() }); // "Stop" ends it
     let out = '';
     let err = '';
     const timer = setTimeout(() => {
@@ -171,6 +173,7 @@ function runAgent({ prompt, cwd, timeoutSec = 600, maxTurns = 100, tools = ['Rea
     p.stderr.on('data', (d) => (err += d));
     p.on('error', (e) => {
       clearTimeout(timer);
+      if (stopOr(e).stopped) return reject(stopOr(e));
       reject(new Error(`Could not start "${cfg.claudeBin}": ${e.message}`));
     });
     p.on('close', (code) => {
